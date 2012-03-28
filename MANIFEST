@@ -1,0 +1,12 @@
+README
+setup.py
+coopy/__init__.py
+coopy/base.py
+coopy/decorators.py
+coopy/fileutils.py
+coopy/foundation.py
+coopy/journal.py
+coopy/network.py
+coopy/restore.py
+coopy/snapshot.py
+coopy/utils.py
