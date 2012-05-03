@@ -22,12 +22,13 @@ from journal import DiskJournal
 from restore import restore 
 from snapshot import SnapshotManager, SnapshotTimer 
 from coopy.utils import method_or_none, action_check, inject
-from network import *
+
+from network.default_select import CopyNet, CopyNetSlave
 
 CORE_LOG_PREFIX = '[CORE] '
 
-def logging_config():
-    log_file_path = os.path.join(basedir,"coopy.log")
+def logging_config(basedir="./"):
+    log_file_path = os.path.join(basedir, "coopy.log")
     result = logging.getLogger("coopy")
     result.setLevel(logging.DEBUG)
     
