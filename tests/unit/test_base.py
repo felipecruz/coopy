@@ -28,7 +28,6 @@ class TestBase(unittest.TestCase):
 
         files = os.listdir('wiki/')
         self.assertTrue('snapshot_000000000000002.dat' in files)
-        
         self.assertEquals(dummy.__class__, CoopyProxy)
         self.assertEquals(len(dummy.publisher.subscribers), 1)
 
