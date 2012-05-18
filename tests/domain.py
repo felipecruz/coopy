@@ -6,7 +6,7 @@ Created on May 19, 2010
 
 from coopy.decorators import readonly
 
-class WikiPage():
+class WikiPage(object):
     def __init__(self, id, content, last_modified, parent=None):
         self.id = id
         self.content = content
@@ -14,7 +14,7 @@ class WikiPage():
         self.last_modified = last_modified
         self.parent = parent
 
-class Wiki():
+class Wiki(object):
     def __init__(self):
         self.pages = {}
         
