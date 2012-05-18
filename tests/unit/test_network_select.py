@@ -1,6 +1,7 @@
 import pytest
 import socket
 
+from coopy.network import COPYNET_HEADER
 from coopy.network.default_select import CopyNet
 
 def tcp_actor(address, port, _type):
@@ -38,22 +39,38 @@ def test_network_select_init_close():
     with pytest.raises(socket.error):
         select.select([copynet.server], [], [], 0)
 
-@pytest.skip
+#@pytest.skip
 def test_network_select_receive():
+    from coopy.base import logging_config
+
+    logging_config(basedir="./")
+
     system = "a string represented system state"
 
     copynet = CopyNet(system, host="127.0.0.1", port=7777)
     copynet.start()
-
-    import time
-    time.sleep(2)
-
-    actor = tcp_actor("127.0.0.1", 7777, "inet")
-
-    copynet.receive("message")
     
-    data = actor.recv(128)
+    actor = tcp_actor("127.0.0.1", 7777, "inet")
+    actor.send('copynet')
+ 
+    #guarantee that the client is already connected
+    import time
+    time.sleep(0.2)
+    
+    copynet.receive("message")
+   
+    #if not error, socket is open
+    import select
+    select.select([], [], [actor], 0)
 
+    import struct, zlib, cPickle
+    size = struct.calcsize(COPYNET_HEADER)
+    header = actor.recv(size)
+    (psize, stype) = struct.unpack(COPYNET_HEADER, header)
+    data = cPickle.loads(zlib.decompress(actor.recv(psize)))
+
+    assert stype == 's'
     assert data == "message"
 
     copynet.close()
+    actor.close()
