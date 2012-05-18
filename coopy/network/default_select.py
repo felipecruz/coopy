@@ -10,7 +10,8 @@ import sys
 
 from Queue import Queue
 
-from coopy.network.network import prepare_data, CopyNetPacket, CopyNetClient
+from coopy.network.network import prepare_data, CopyNetPacket, CopyNetClient,\
+                                  CopyNetSnapshotThread
 
 COPYNET_MASTER_PREFIX = '[coopynet - master]'
 COPYNET_SLAVE_PREFIX = '[coopynet - slave]'
@@ -76,20 +77,23 @@ class CopyNet(threading.Thread):
             os.remove(COPYNET_SOCK)
         
     def receive(self, message):
+        _mdebug('Receive')
         if not self.outputs:
             return
         (header,data) = prepare_data(message)
         self.broadcast(header, data)
         
     def broadcast(self, header, data):
+       _mdebug('Broadcast')
        for copynetclient in self.clientmap.values():
             if copynetclient.state == 'r':
                 copynetclient.client.sendall(header)
                 copynetclient.client.sendall(data)
             elif copynetclient.state == 'b':
-                self.queues[copynetclient.client].put_nowait(CopyNetPacket(header,data))
+                self.queues[copynetclient.client].put_nowait(
+                                                   CopyNetPacket(header,data))
             else:
-                l.debug(COPYNET_MASTER_PREFIX + 'Unknow client state')
+                _mdebug('Unknow client state')
                 
     def send_direct(self, client, message):
         (header,data) = prepare_data(message)
@@ -101,7 +105,7 @@ class CopyNet(threading.Thread):
         self.running = True
         while self.running and self.server.fileno() > 0:
             try:
-                inr,our,exr = select([self.server], [], [], 5)
+                inr, our, exr = select([self.server], [], [], 5)
             except socket.error, e:
                 _mdebug("Select error")
 
@@ -110,41 +114,41 @@ class CopyNet(threading.Thread):
                     try:
                         client, address = self.server.accept()
                     except Exception as e:
-                        l.debug(COPYNET_MASTER_PREFIX + 'server closed, shuting down')
-                        l.debug(e)
+                        _mdebug('Server closed, shuting down')
+                        _mdebug(e.message)
                         sys.exit(0)
 
-                    l.info(COPYNET_MASTER_PREFIX + 'Server: got connection %d from %s' % (client.fileno(), address))   
+                    _minfo('Server: got connection %d from %s' % 
+                                                   (client.fileno(), address))   
                     
                     password = client.recv(20)
                     if self.password != password.rstrip():
-                        unauthdata = header = struct.pack(COPYNET_HEADER, 0, 'n')
+                        unauthdata = struct.pack(COPYNET_HEADER, 0, 'n')
                         client.sendall(unauthdata)
                         client.close()
                         break
-                    
+
+                    _minfo('Client connected')
                      
                     self.clients += 1
-                    inputs.append(client)
                     self.outputs.append(client)
-                    self.clientmap[client] = CopyNetClient(client, address, 'b')
+                    self.clientmap[client] = \
+                                    CopyNetClient(client, address, 'r')
                     self.queues[client] = Queue(999999)
-                    CopyNetSnapshotThread(self.clientmap[client], self.obj).start()
+                    #CopyNetSnapshotThread(self.clientmap[client], self.obj).start()
 
                 else:
                     try:
                         data = s.recv(1024)
                         if data:
-                            l.info(COPYNET_MASTER_PREFIX + "receivd" + str(data))
+                            _minfo("Receivd" + str(data))
                         else:
                             self.clients -= 1
                             s.close()
-                            inputs.remove(s)
                             self.outputs.remove(s)
                             del self.clientmap[s]
                                 
                     except socket.error, e:
-                        inputs.remove(s)
                         self.outputs.remove(s)
                         del self.clientmap[s]
                         

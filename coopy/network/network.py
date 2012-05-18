@@ -16,7 +16,7 @@ l = logging.getLogger("coopy")
 
 def prepare_data(data, stype='s'):
     if (isinstance(data, Action) or isinstance(data, foundation.Action)):
-        stype = 's'
+        stype = 'a'
     
     data = cPickle.dumps(data)
     compressed_data = zlib.compress(data)
