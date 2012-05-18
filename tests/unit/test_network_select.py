@@ -105,3 +105,46 @@ def test_network_select_disconnect_senders():
 
     copynet.close()
     actor.close()
+
+def test_network_select_broadcast():
+    received_msgs = []
+    from coopy.base import logging_config
+
+    logging_config(basedir="./")
+
+    system = "a string represented system state"
+
+    copynet = CopyNet(system, host="127.0.0.1", port=7777)
+    copynet.start()
+    
+    actor = tcp_actor("127.0.0.1", 7777, "inet")
+    actor.send('copynet')
+    
+    actor2 = tcp_actor("127.0.0.1", 7777, "inet")
+    actor2.send('copynet')
+
+    clients = [actor, actor2]
+ 
+    #guarantee that the client is already connected
+    import time
+    time.sleep(0.2)
+    
+    copynet.receive("message")
+   
+    #if no error, socket is open
+    import select
+    select.select(clients, clients, clients, 0)
+
+    #both clients should receive the same message
+    for cli in clients:
+        import struct, zlib, cPickle
+        size = struct.calcsize(COPYNET_HEADER)
+        header = cli.recv(size)
+        (psize, stype) = struct.unpack(COPYNET_HEADER, header)
+        data = cPickle.loads(zlib.decompress(cli.recv(psize)))
+
+        assert stype == 's'
+        assert data == "message"
+
+    copynet.close()
+    actor.close()
