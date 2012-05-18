@@ -78,3 +78,30 @@ def test_network_select_receive():
 
     copynet.close()
     actor.close()
+
+def test_network_select_disconnect_senders():
+    from coopy.base import logging_config
+
+    logging_config(basedir="./")
+
+    system = "a string represented system state"
+
+    copynet = CopyNet(system, host="127.0.0.1", port=7777)
+    copynet.start()
+    
+    actor = tcp_actor("127.0.0.1", 7777, "inet")
+    actor.send('copynet')
+ 
+    #guarantee that the client is already connected
+    import time
+    time.sleep(0.2)
+    
+    actor.send('actor should be disconnected')
+    time.sleep(0.2)
+   
+    assert 0 == copynet.clients
+    assert 0 == len(copynet.clientmap)
+    assert 0 == len(copynet.outputs)
+
+    copynet.close()
+    actor.close()

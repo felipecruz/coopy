@@ -105,7 +105,8 @@ class CopyNet(threading.Thread):
         self.running = True
         while self.running and self.server.fileno() > 0:
             try:
-                inr, our, exr = select([self.server], [], [], 5)
+                inr, our, exr = select([self.server] + self.outputs, 
+                                                                    [], [], 5)
             except socket.error, e:
                 _mdebug("Select error")
 
@@ -138,20 +139,13 @@ class CopyNet(threading.Thread):
                     #CopyNetSnapshotThread(self.clientmap[client], self.obj).start()
 
                 else:
-                    try:
-                        data = s.recv(1024)
-                        if data:
-                            _minfo("Receivd" + str(data))
-                        else:
-                            self.clients -= 1
-                            s.close()
-                            self.outputs.remove(s)
-                            del self.clientmap[s]
-                                
-                    except socket.error, e:
-                        self.outputs.remove(s)
-                        del self.clientmap[s]
-                        
+                    _mdebug('Master received data. Close client')
+                    s.recv(1024)
+                    s.close()
+                    self.clients -= 1
+                    self.outputs.remove(s)
+                    del self.clientmap[s]
+
             for s in our:
                 while not self.queues[s].empty():
                     self.send_direct(s, self.queues[s].get_nowait())
