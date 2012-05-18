@@ -153,7 +153,6 @@ class CopyNet(threading.Thread):
         self.server.close()
 
 class CopyNetSlave(threading.Thread):
-
     def __init__(self, obj, parent, host='localhost', port=5466, password='copynet', ipc=False):
         threading.Thread.__init__ (self)
         self.flag = False
@@ -192,7 +191,7 @@ class CopyNetSlave(threading.Thread):
             try:
                 inr, our, exr = select([self.sock], [],[], 5)
             except Exception as e:
-                l.debug(COPYNET_SLAVE_PREFIX + 'Error on select %s..\nShutting donw' % (e))
+                _mdebug('Error on select %s..\nShutting down' % (e))
                 sys.exit(-1)
             
             for i in inr:
