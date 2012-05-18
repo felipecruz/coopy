@@ -32,6 +32,10 @@ def test_network_select_init_close():
     system = "a string represented system state"
 
     copynet = CopyNet(system)
+    
+    #no error because socket is open
+    select.select([copynet.server], [], [], 0)
+
     copynet.close()
 
     assert copynet.running == False
@@ -59,7 +63,7 @@ def test_network_select_receive():
     
     copynet.receive("message")
    
-    #if not error, socket is open
+    #if no error, socket is open
     import select
     select.select([], [], [actor], 0)
 
