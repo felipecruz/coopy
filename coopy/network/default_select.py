@@ -145,7 +145,7 @@ class CopyNet(threading.Thread):
                                                    (client.fileno(), address))
 
                     if not self.check_if_authorized_client(client):
-                        break
+                       continue 
 
                     _minfo('Client connected')
                      
