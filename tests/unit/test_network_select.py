@@ -21,7 +21,6 @@ def test_network_select_init():
 
     assert isinstance(copynet.server, socket.socket) 
     assert len(copynet.clientmap) == 0
-    assert copynet.outputs == []
     assert copynet.queues == {}
     assert copynet.obj == system
 
@@ -101,7 +100,6 @@ def test_network_select_disconnect_senders():
     time.sleep(0.2)
    
     assert 0 == len(copynet.clientmap)
-    assert 0 == len(copynet.outputs)
 
     copynet.close()
     actor.close()
