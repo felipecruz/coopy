@@ -119,6 +119,11 @@ class CopyNet(threading.Thread):
         self.clientmap[client] = CopyNetClient(client, address, 'r')
         self.queues[client] = Queue(999999)
 
+    def disconnect(self, sock):
+        _mdebug('Master received data. Close client')
+        sock.close()
+        del self.clientmap[sock]
+
     def run(self):
         self.running = True
 
@@ -150,9 +155,7 @@ class CopyNet(threading.Thread):
                     self.initialize_client(client, address)
                     #CopyNetSnapshotThread(self.clientmap[client], self.obj).start()
                 else:
-                    _mdebug('Master received data. Close client')
-                    sock.close()
-                    del self.clientmap[sock]
+                    self.disconnect(sock)
 
             for sock in to_write:
                 while not self.queues[sock].empty():
