@@ -42,16 +42,20 @@ class CopyNet(threading.Thread):
                  ipc=False):
         
         threading.Thread.__init__(self)
+        self.obj = obj
+        self.host = host
         self.port = port
         self.max_clients = max_clients
+        self.password = password
+        self.ipc = ipc
+        
+
         self.clients = 0
         self.clientmap = {}
         self.outputs = []
         self.queues = {}
-        self.obj = obj
-        self.password = password
-        self.ipc = ipc
         
+       
         if not self.ipc:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         else:
@@ -78,13 +82,16 @@ class CopyNet(threading.Thread):
         
     def receive(self, message):
         _mdebug('Receive')
+        
         if not self.outputs:
             return
-        (header,data) = prepare_data(message)
+
+        (header, data) = prepare_data(message)
         self.broadcast(header, data)
         
     def broadcast(self, header, data):
        _mdebug('Broadcast')
+
        for copynetclient in self.clientmap.values():
             if copynetclient.state == 'r':
                 copynetclient.client.sendall(header)
@@ -96,37 +103,48 @@ class CopyNet(threading.Thread):
                 _mdebug('Unknow client state')
                 
     def send_direct(self, client, message):
-        (header,data) = prepare_data(message)
+        (header, data) = prepare_data(message)
         client.sendall(header)
         client.sendall(data)
-                   
+   
+    def check_if_authorized_client(self, client):
+        password = client.recv(20)
+
+        if self.password != password.rstrip():
+            unauthdata = struct.pack(COPYNET_HEADER, 0, 'n')
+            client.sendall(unauthdata)
+            client.close()
+            _minfo('Client rejected')
+            return False
+
+        return True
+
     def run(self):
         self.outputs = []
         self.running = True
-        while self.running and self.server.fileno() > 0:
+
+        while self.running:
+
             try:
-                inr, our, exr = select([self.server] + self.outputs, 
-                                                                    [], [], 5)
+                to_read, to_write, exeption_mode = \
+                    select([self.server] + self.outputs, [], [], 5)
             except socket.error, e:
                 _mdebug("Select error")
+                self.running = False
+                break
 
-            for s in inr:
-                if s == self.server:
+            for sock in to_read:
+                if sock == self.server:
                     try:
                         client, address = self.server.accept()
                     except Exception as e:
-                        _mdebug('Server closed, shuting down')
-                        _mdebug(e.message)
-                        sys.exit(0)
+                        _mdebug('Cannot accept client: %s'  % e.message)
+                        continue
 
                     _minfo('Server: got connection %d from %s' % 
-                                                   (client.fileno(), address))   
-                    
-                    password = client.recv(20)
-                    if self.password != password.rstrip():
-                        unauthdata = struct.pack(COPYNET_HEADER, 0, 'n')
-                        client.sendall(unauthdata)
-                        client.close()
+                                                   (client.fileno(), address))
+
+                    if not self.check_if_authorized_client(client):
                         break
 
                     _minfo('Client connected')
@@ -140,15 +158,15 @@ class CopyNet(threading.Thread):
 
                 else:
                     _mdebug('Master received data. Close client')
-                    s.recv(1024)
-                    s.close()
+                    sock.recv(1024)
+                    sock.close()
                     self.clients -= 1
-                    self.outputs.remove(s)
-                    del self.clientmap[s]
+                    self.outputs.remove(sock)
+                    del self.clientmap[sock]
 
-            for s in our:
-                while not self.queues[s].empty():
-                    self.send_direct(s, self.queues[s].get_nowait())
+            for sock in to_write:
+                while not self.queues[sock].empty():
+                    self.send_direct(sock, self.queues[sock].get_nowait())
                             
         self.server.close()
 
