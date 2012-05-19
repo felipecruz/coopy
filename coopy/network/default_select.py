@@ -48,14 +48,11 @@ class CopyNet(threading.Thread):
         self.max_clients = max_clients
         self.password = password
         self.ipc = ipc
-        
 
-        self.clients = 0
         self.clientmap = {}
         self.outputs = []
         self.queues = {}
         
-       
         if not self.ipc:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         else:
@@ -149,18 +146,14 @@ class CopyNet(threading.Thread):
 
                     _minfo('Client connected')
                      
-                    self.clients += 1
                     self.outputs.append(client)
                     self.clientmap[client] = \
                                     CopyNetClient(client, address, 'r')
                     self.queues[client] = Queue(999999)
                     #CopyNetSnapshotThread(self.clientmap[client], self.obj).start()
-
                 else:
                     _mdebug('Master received data. Close client')
-                    sock.recv(1024)
                     sock.close()
-                    self.clients -= 1
                     self.outputs.remove(sock)
                     del self.clientmap[sock]
 
