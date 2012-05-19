@@ -50,7 +50,6 @@ class CopyNet(threading.Thread):
         self.ipc = ipc
 
         self.clientmap = {}
-        self.outputs = []
         self.queues = {}
         
         if not self.ipc:
@@ -80,7 +79,7 @@ class CopyNet(threading.Thread):
     def receive(self, message):
         _mdebug('Receive')
         
-        if not self.outputs:
+        if len(self.clientmap) == 0:
             return
 
         (header, data) = prepare_data(message)
@@ -116,15 +115,18 @@ class CopyNet(threading.Thread):
 
         return True
 
+    def initialize_client(self, client, address):
+        self.clientmap[client] = CopyNetClient(client, address, 'r')
+        self.queues[client] = Queue(999999)
+
     def run(self):
-        self.outputs = []
         self.running = True
 
         while self.running:
 
             try:
                 to_read, to_write, exeption_mode = \
-                    select([self.server] + self.outputs, [], [], 5)
+                    select([self.server] + self.clientmap.keys(), [], [], 5)
             except socket.error, e:
                 _mdebug("Select error")
                 self.running = False
@@ -145,16 +147,11 @@ class CopyNet(threading.Thread):
                        continue 
 
                     _minfo('Client connected')
-                     
-                    self.outputs.append(client)
-                    self.clientmap[client] = \
-                                    CopyNetClient(client, address, 'r')
-                    self.queues[client] = Queue(999999)
+                    self.initialize_client(client, address)
                     #CopyNetSnapshotThread(self.clientmap[client], self.obj).start()
                 else:
                     _mdebug('Master received data. Close client')
                     sock.close()
-                    self.outputs.remove(sock)
                     del self.clientmap[sock]
 
             for sock in to_write:
