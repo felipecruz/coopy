@@ -30,13 +30,15 @@ _swarn = lambda x: l.warn("%s %s" % (COPYNET_SLAVE_PREFIX, x))
 COPYNET_SOCK = '/tmp/coopy.sock'
 COPYNET_HEADER = '!Ic'
 
+_HEADER_SIZE = struct.calcsize(COPYNET_HEADER)
+
 #TODO: re-write all code below!!! :) (and tests)
 
 class CopyNet(threading.Thread):
     def __init__(self, 
                  obj, 
                  host=None,
-                 port=3333, 
+                 port=5466, 
                  max_clients=5, 
                  password='copynet', 
                  ipc=False):
@@ -63,7 +65,7 @@ class CopyNet(threading.Thread):
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
         if not self.ipc:
-            self.server.bind((host,port))
+            self.server.bind((host, port))
         else:
             self.server.bind(COPYNET_SOCK)
        
@@ -130,7 +132,7 @@ class CopyNet(threading.Thread):
         while self.running:
 
             try:
-                to_read, to_write, exeption_mode = \
+                to_read, to_write, exception_mode = \
                     select([self.server] + self.clientmap.keys(), [], [], 5)
             except socket.error, e:
                 _mdebug("Select error")
@@ -164,13 +166,18 @@ class CopyNet(threading.Thread):
         self.server.close()
 
 class CopyNetSlave(threading.Thread):
-    def __init__(self, obj, parent, host='localhost', port=5466, password='copynet', ipc=False):
-        threading.Thread.__init__ (self)
-        self.flag = False
-        self.port = int(port)
-        self.host = host
-        self.obj = obj
+    def __init__(self, 
+                 parent, 
+                 host='localhost', 
+                 port=5466, 
+                 password='copynet', 
+                 ipc=False):
+
+        threading.Thread.__init__(self)
         self.parent = parent
+        self.host = host
+        self.port = port
+        self.running = False
         self.lock = threading.RLock()
 
         try:
@@ -185,48 +192,57 @@ class CopyNetSlave(threading.Thread):
             _sdebug('Slave connected to server@%d' % self.port)
         except socket.error, e:
             _sdebug("Error connecting to server %s" % (e))
-            raise Exception("Network Error: Could not connect to: %s:%d" %(host, port))
+            raise Exception("Network Error: Could not connect to: %s:%d" %
+                    (host, port))
 
     def acquire(self):
         self.lock.acquire(1)
     
     def release(self):
         self.lock.release()
-        
-    def close(self):
-        self.flag = True
-        self.sock.close()
 
+    def close(self):
+        self.running = False
+        self.sock.close()
+    
     def run(self):
-        while not self.flag and self.sock.fileno() > 0: 
+        self.running = True
+
+        while self.running: 
             try:
-                inr, our, exr = select([self.sock], [],[], 5)
+                to_read, to_write, exception_mode = \
+                    select([self.sock], [],[], 1)
             except Exception as e:
                 _mdebug('Error on select %s..\nShutting down' % (e))
-                sys.exit(-1)
+                self.running = False
+                break
             
-            for i in inr:
-                if i == self.sock:
-                    size = struct.calcsize(COPYNET_HEADER)
+            _mdebug("waitin for data..")
+
+            for sock in to_read:
+                if sock == self.sock:
                     try:
-                        data = self.sock.recv(size)
+                        data = self.sock.recv(_HEADER_SIZE)
                     except Exception as e:
-                        l.debug(e)
+                        _mdebug('Exception %s'  % e)
                         data = None
 
                     if not data:
-                        _sinfo('Shutting down')
-                        self.flag = True
+                        _mdebug('Shutting down')
+                        self.running = False
                         break
                     else:
                         try:
-                            (psize,stype) = struct.unpack(COPYNET_HEADER, data)
+                            (psize, stype) = struct.unpack(COPYNET_HEADER, data)
                         except struct.error, e:
-                            return ''
+                            self.running = False
+                            self.sock.close()
+                            raise Exception("Unexpected error")
                         if stype == 'n':
+                            self.sock.close()
                             raise Exception("Not authorized")
                             
-                        _sdebug('Reading %d bytes' % (size))                  
+                        _sdebug('Reading %d bytes' % (psize))                  
                         buf = ''
                         
                         while len(buf) < psize:
@@ -242,10 +258,11 @@ class CopyNetSlave(threading.Thread):
                             _sdebug(str(action))
                         else:
                             _sdebug('Receiving system')
-                            self.obj = cPickle.loads(str(un_data))
-                            self.parent.obj = self.obj
+                            self.parent.obj = cPickle.loads(str(un_data))
                         self.lock.release()
 
                 else:
                     _sdebug("Unexcpected")
+
+        _mdebug("Slave close")
         self.sock.close()

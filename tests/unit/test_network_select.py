@@ -2,7 +2,7 @@ import pytest
 import socket
 
 from coopy.network import COPYNET_HEADER
-from coopy.network.default_select import CopyNet
+from coopy.network.default_select import CopyNet, CopyNetSlave, _HEADER_SIZE
 
 def tcp_actor(address, port, _type):
     if _type == "inet":
@@ -11,6 +11,19 @@ def tcp_actor(address, port, _type):
     else:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) 
         s.connect(address)
+    s.setblocking(0)
+    return s
+
+def tcp_server(address, port, _type, max_clients=5):
+    if _type == "inet":
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((address, port))
+    else:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) 
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(address)
+    s.listen(max_clients)
     s.setblocking(0)
     return s
 
@@ -236,3 +249,56 @@ def test_network_select_check_if_authorized_client():
 
     actor2.close()
     copynet.close()
+
+def test_copynetslave_init():
+    class mock(object):
+        def __init__(self):
+            self.value = 0
+        def inc(self):
+            self.value += 1
+            return self.value
+    
+    server = tcp_server('127.0.0.1', 5466, "inet")
+
+    system = mock()
+    slave = CopyNetSlave(system)
+
+    slave.close()
+    assert slave.running == False
+
+    server.close()
+
+def test_copynetslave_disconnect_on_empty_data():
+    class mock(object):
+        def __init__(self):
+            self.value = 0
+        def inc(self):
+            self.value += 1
+            return self.value
+    
+    from coopy.base import logging_config
+
+    logging_config()
+
+    server = tcp_server('127.0.0.1', 5466, "inet")
+
+    system = mock()
+    slave = CopyNetSlave(system, host='127.0.0.1')
+    slave.start()
+
+    import time
+    time.sleep(0.2)
+
+    cli, address = server.accept()
+
+    time.sleep(0.2)
+    cli.sendall('1')
+
+    time.sleep(0.2)
+    assert slave.running == False
+
+    import select
+    with pytest.raises(socket.error):
+        select.select([slave.sock], [], [], 0)
+
+    server.close()
