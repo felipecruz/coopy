@@ -6,21 +6,21 @@ from coopy.network.default_select import CopyNet, CopyNetSlave, _HEADER_SIZE
 
 def tcp_actor(address, port, _type):
     if _type == "inet":
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((address, port))
     else:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) 
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(address)
     s.setblocking(0)
     return s
 
 def tcp_server(address, port, _type, max_clients=5):
     if _type == "inet":
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((address, port))
     else:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) 
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(address)
     s.listen(max_clients)
@@ -32,7 +32,7 @@ def test_network_select_init():
 
     copynet = CopyNet(system)
 
-    assert isinstance(copynet.server, socket.socket) 
+    assert isinstance(copynet.server, socket.socket)
     assert len(copynet.clientmap) == 0
     assert copynet.queues == {}
     assert copynet.obj == system
@@ -44,7 +44,7 @@ def test_network_select_init_close():
     system = "a string represented system state"
 
     copynet = CopyNet(system)
-    
+
     #no error because socket is open
     select.select([copynet.server], [], [], 0)
 
@@ -66,16 +66,16 @@ def test_network_select_receive():
 
     copynet = CopyNet(system, host="127.0.0.1", port=7777)
     copynet.start()
-    
+
     actor = tcp_actor("127.0.0.1", 7777, "inet")
     actor.send('copynet')
- 
+
     #guarantee that the client is already connected
     import time
     time.sleep(0.2)
-    
+
     copynet.receive("message")
-   
+
     #if no error, socket is open
     import select
     select.select([], [], [actor], 0)
@@ -101,17 +101,17 @@ def test_network_select_disconnect_senders():
 
     copynet = CopyNet(system, host="127.0.0.1", port=7777)
     copynet.start()
-    
+
     actor = tcp_actor("127.0.0.1", 7777, "inet")
     actor.send('copynet')
- 
+
     #guarantee that the client is already connected
     import time
     time.sleep(0.2)
-    
+
     actor.send('actor should be disconnected')
     time.sleep(0.2)
-   
+
     assert 0 == len(copynet.clientmap)
 
     copynet.close()
@@ -127,21 +127,21 @@ def test_network_select_broadcast():
 
     copynet = CopyNet(system, host="127.0.0.1", port=7777)
     copynet.start()
-    
+
     actor1 = tcp_actor("127.0.0.1", 7777, "inet")
     actor1.send('copynet')
-    
+
     actor2 = tcp_actor("127.0.0.1", 7777, "inet")
     actor2.send('copynet')
 
     clients = [actor1, actor2]
- 
+
     #guarantee that the client is already connected
     import time
     time.sleep(0.2)
-    
+
     copynet.receive("message")
-   
+
     #if no error, socket is open
     import select
     select.select(clients, clients, clients, 0)
@@ -175,10 +175,10 @@ def test_network_select_send_direct():
 
     copynet = CopyNet(system, host="127.0.0.1", port=7777)
     copynet.start()
-    
+
     actor1 = tcp_actor("127.0.0.1", 7777, "inet")
     actor1.send('copynet')
-    
+
     actor2 = tcp_actor("127.0.0.1", 7777, "inet")
     actor2.send('copynet')
 
@@ -187,7 +187,7 @@ def test_network_select_send_direct():
     #guarantee that the client is already connected
     import time
     time.sleep(0.2)
-    
+
     copynet_client1 = copynet.clientmap.values()[0]
     copynet.send_direct(copynet_client1.client, "message")
 
@@ -195,10 +195,10 @@ def test_network_select_send_direct():
 
     import struct, zlib, cPickle
     size = struct.calcsize(COPYNET_HEADER)
-    
+
     #one of the 2 reads will raise an error and the other will work
     error_count = 0
-    
+
     for actor in actors:
         try:
             header = actor.recv(size)
@@ -207,7 +207,7 @@ def test_network_select_send_direct():
             received_msgs.append(data)
         except Exception:
             error_count += 1
-    
+
     assert len(received_msgs) == 1
     assert error_count == 1
 
@@ -224,23 +224,23 @@ def test_network_select_check_if_authorized_client():
 
     copynet = CopyNet(system, host="127.0.0.1", port=7777)
     copynet.start()
-    
+
     actor1 = tcp_actor("127.0.0.1", 7777, "inet")
     actor1.send('copynet')
-    
+
     #guarantee that the client is already connected
     import time
     time.sleep(0.2)
-    
+
     copynet_client1 = copynet.clientmap.values()[0]
     actor1.send('copynet')
     assert True == copynet.check_if_authorized_client(copynet_client1.client)
-    
+
     actor1.close()
 
     actor2 = tcp_actor("127.0.0.1", 7777, "inet")
     actor2.send('copynet')
-    
+
     time.sleep(0.2)
 
     copynet_client2 = copynet.clientmap.values()[0]
@@ -257,7 +257,7 @@ def test_copynetslave_init():
         def inc(self):
             self.value += 1
             return self.value
-    
+
     server = tcp_server('127.0.0.1', 5466, "inet")
 
     system = mock()
@@ -275,7 +275,7 @@ def test_copynetslave_disconnect_on_empty_data():
         def inc(self):
             self.value += 1
             return self.value
-    
+
     from coopy.base import logging_config
 
     logging_config()
