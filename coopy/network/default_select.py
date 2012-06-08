@@ -35,14 +35,14 @@ _HEADER_SIZE = struct.calcsize(COPYNET_HEADER)
 #TODO: re-write all code below!!! :) (and tests)
 
 class CopyNet(threading.Thread):
-    def __init__(self, 
-                 obj, 
+    def __init__(self,
+                 obj,
                  host=None,
-                 port=5466, 
-                 max_clients=5, 
-                 password='copynet', 
+                 port=5466,
+                 max_clients=5,
+                 password='copynet',
                  ipc=False):
-        
+
         threading.Thread.__init__(self)
         self.obj = obj
         self.host = host
@@ -53,40 +53,40 @@ class CopyNet(threading.Thread):
 
         self.clientmap = {}
         self.queues = {}
-        
+
         if not self.ipc:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         else:
             self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        
+
         if not host:
             host = socket.gethostbyname(socket.gethostname())
-    
+
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        
+
         if not self.ipc:
             self.server.bind((host, port))
         else:
             self.server.bind(COPYNET_SOCK)
-       
+
         self.server.listen(max_clients)
         _minfo("Listening to %d" % max_clients)
- 
+
     def close(self):
         self.running = False
         self.server.close()
         if self.ipc:
             os.remove(COPYNET_SOCK)
-        
+
     def receive(self, message):
         _mdebug('Receive')
-        
+
         if len(self.clientmap) == 0:
             return
 
         (header, data) = prepare_data(message)
         self.broadcast(header, data)
-        
+
     def broadcast(self, header, data):
        _mdebug('Broadcast')
 
@@ -99,12 +99,12 @@ class CopyNet(threading.Thread):
                                                    CopyNetPacket(header,data))
             else:
                 _mdebug('Unknow client state')
-                
+
     def send_direct(self, client, message):
         (header, data) = prepare_data(message)
         client.sendall(header)
         client.sendall(data)
-   
+
     def check_if_authorized_client(self, client):
         password = client.recv(20)
 
@@ -147,11 +147,11 @@ class CopyNet(threading.Thread):
                         _mdebug('Cannot accept client: %s'  % e.message)
                         continue
 
-                    _minfo('Server: got connection %d from %s' % 
+                    _minfo('Server: got connection %d from %s' %
                                                    (client.fileno(), address))
 
                     if not self.check_if_authorized_client(client):
-                       continue 
+                       continue
 
                     _minfo('Client connected')
                     self.initialize_client(client, address)
@@ -162,15 +162,15 @@ class CopyNet(threading.Thread):
             for sock in to_write:
                 while not self.queues[sock].empty():
                     self.send_direct(sock, self.queues[sock].get_nowait())
-                            
+
         self.server.close()
 
 class CopyNetSlave(threading.Thread):
-    def __init__(self, 
-                 parent, 
-                 host='localhost', 
-                 port=5466, 
-                 password='copynet', 
+    def __init__(self,
+                 parent,
+                 host='localhost',
+                 port=5466,
+                 password='copynet',
                  ipc=False):
 
         threading.Thread.__init__(self)
@@ -187,7 +187,7 @@ class CopyNetSlave(threading.Thread):
             else:
                 self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 self.sock.connect(COPYNET_SOCK)
-            
+
             self.sock.sendall(password)
             _sdebug('Slave connected to server@%d' % self.port)
         except socket.error, e:
@@ -197,18 +197,18 @@ class CopyNetSlave(threading.Thread):
 
     def acquire(self):
         self.lock.acquire(1)
-    
+
     def release(self):
         self.lock.release()
 
     def close(self):
         self.running = False
         self.sock.close()
-    
+
     def run(self):
         self.running = True
 
-        while self.running: 
+        while self.running:
             try:
                 to_read, to_write, exception_mode = \
                     select([self.sock], [],[], 1)
@@ -216,7 +216,7 @@ class CopyNetSlave(threading.Thread):
                 _mdebug('Error on select %s..\nShutting down' % (e))
                 self.running = False
                 break
-            
+
             _mdebug("waitin for data..")
 
             for sock in to_read:
@@ -241,15 +241,15 @@ class CopyNetSlave(threading.Thread):
                         if stype == 'n':
                             self.sock.close()
                             raise Exception("Not authorized")
-                            
-                        _sdebug('Reading %d bytes' % (psize))                  
+
+                        _sdebug('Reading %d bytes' % (psize))
                         buf = ''
-                        
+
                         while len(buf) < psize:
                             buf += self.sock.recv(4096)
-                                              
+
                         un_data = zlib.decompress(buf)
-                        
+
                         self.lock.acquire(1)
                         if stype == 'a':
                             _sdebug('Receiving action')
