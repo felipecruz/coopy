@@ -32,8 +32,7 @@ def test_prepare_action():
                     'test',
                     datetime.datetime.now(),
                     args,
-                    kwargs
-                )
+                    kwargs)
 
     (header, compressed_data) = prepare_data(action)
 
