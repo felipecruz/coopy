@@ -24,14 +24,14 @@ def test_prepare_action():
     import cPickle
     import zlib
     import datetime
-    
+
     args = []
     kwargs = {}
 
-    action = Action('caller_id', 
-                    'test', 
-                    datetime.datetime.now(), 
-                    args, 
+    action = Action('caller_id',
+                    'test',
+                    datetime.datetime.now(),
+                    args,
                     kwargs
                 )
 
