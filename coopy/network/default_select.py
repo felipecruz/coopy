@@ -74,6 +74,7 @@ class CopyNet(threading.Thread):
 
     def close(self):
         self.running = False
+        self.server.shutdown(socket.SHUT_RDWR)
         self.server.close()
         if self.ipc:
             os.remove(COPYNET_SOCK)
