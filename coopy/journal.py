@@ -11,7 +11,7 @@ class DiskJournal():
         '''
         self.basedir = basedir
         self.file = None
-    
+
     def setup(self):
         '''
             configure file attribute, create pickler
@@ -19,7 +19,7 @@ class DiskJournal():
         self.file = self.current_journal_file(self.basedir)
         self.pickler = Pickler(self.file, pickle.HIGHEST_PROTOCOL)
         self.file.set_pickler(self.pickler)
-    
+
     def current_journal_file(self, basedir):
         '''
             get current file on basedir(last created one)
@@ -30,17 +30,17 @@ class DiskJournal():
         '''
 
         last_file_name = fileutils.last_log_file(self.basedir)
-        
+
         if last_file_name and os.path.getsize(self.basedir + last_file_name) \
             < fileutils.MAX_LOGFILE_SIZE:
 
             file = fileutils.RotateFileWrapper(
-                        open(self.basedir + last_file_name,'ab'), 
+                        open(self.basedir + last_file_name,'ab'),
                         self.basedir
                     )
         else:
             file = fileutils.RotateFileWrapper(
-                        open(fileutils.next_log_file(self.basedir),'wb'), 
+                        open(fileutils.next_log_file(self.basedir),'wb'),
                         self.basedir
                     )
 
@@ -54,7 +54,7 @@ class DiskJournal():
             receive a message and pickle
         '''
         self.pickler.dump(message)
-    
+
     def receive_exception(self, message):
         pass
 

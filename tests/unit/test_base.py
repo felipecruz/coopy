@@ -45,12 +45,15 @@ class TestCoopyProxy(unittest.TestCase):
 
     def test_coopyproxy_init(self):
         from coopy.base import CoopyProxy
-        
+
         import os
         os.mkdir('wiki')
-    
+
         class PassPublisher(object):
-            pass
+            def close(self):
+                pass
+            def receive(self):
+                pass
 
         proxy = CoopyProxy(Wiki(), [PassPublisher()])
 
@@ -61,13 +64,13 @@ class TestCoopyProxy(unittest.TestCase):
         self.assertTrue(hasattr(proxy, 'close'))
         self.assertTrue(hasattr(proxy, 'shutdown'))
 
-        #proxy.close()
+        proxy.close()
 
     def test_coopyproxy_start_snapshot_manager(self):
         from coopy.base import CoopyProxy
         import os
         os.mkdir('wiki')
-    
+
         class PassPublisher(object):
             def close(self):
                 pass
@@ -85,7 +88,7 @@ class TestCoopyProxy(unittest.TestCase):
         from coopy.base import CoopyProxy
         import os
         os.mkdir('wiki')
-    
+
         class PassPublisher(object):
             def close(self):
                 pass
@@ -98,32 +101,40 @@ class TestCoopyProxy(unittest.TestCase):
         self.assertTrue(hasattr(proxy, 'server'))
         self.assertTrue(proxy.server in proxy.publisher.subscribers)
         proxy.shutdown()
+        proxy.close()
 
     def test_coopyproxy_start_slave(self):
         from coopy.base import CoopyProxy
 
         import os
         os.mkdir('wiki')
-    
+
         class PassPublisher(object):
-            pass
+            def close(self):
+                pass
+            def receive(self):
+                pass
 
         proxy = CoopyProxy(Wiki(), [PassPublisher()])
-        
+
         args = ('localhost', 8012)
 
         self.assertRaises(Exception,
                           proxy.start_slave,
                           *args)
+        proxy.close()
 
     def test_coopyproxy__getattr__(self):
         from coopy.base import CoopyProxy
 
         import os
         os.mkdir('wiki')
-    
+
         class PassPublisher(object):
-            pass
+            def close(self):
+                pass
+            def receive(self):
+                pass
 
         wiki = Wiki()
 
@@ -131,9 +142,11 @@ class TestCoopyProxy(unittest.TestCase):
         wiki.__dict__['some_callable'] = lambda x: x
 
         proxy = CoopyProxy(wiki, [PassPublisher()])
-        
+
         self.assertTrue(proxy._private == "private")
         self.assertTrue(callable(proxy.some_callable))
+
+        proxy.close()
 
 if __name__ == "__main__":
     unittest.main()

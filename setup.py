@@ -12,5 +12,5 @@ setup(name='coopy',
       author='Felipe Cruz',
       author_email='felipecruz@loogica.net',
       url='http://coopy.readthedocs.org',
-      packages=['coopy'],
+      packages=['coopy', 'coopy.network'],
      )

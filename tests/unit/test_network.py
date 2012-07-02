@@ -24,16 +24,15 @@ def test_prepare_action():
     import cPickle
     import zlib
     import datetime
-    
+
     args = []
     kwargs = {}
 
-    action = Action('caller_id', 
-                    'test', 
-                    datetime.datetime.now(), 
-                    args, 
-                    kwargs
-                )
+    action = Action('caller_id',
+                    'test',
+                    datetime.datetime.now(),
+                    args,
+                    kwargs)
 
     (header, compressed_data) = prepare_data(action)
 
