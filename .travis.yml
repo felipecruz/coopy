@@ -5,4 +5,4 @@ python:
   - "3.2"
   - "pypy"
 # command to run tests
-script: py.test 
+script: make test
