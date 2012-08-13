@@ -1,6 +1,6 @@
 import os
 import pickle
-import fileutils
+from coopy import fileutils
 
 from cPickle import Pickler
 

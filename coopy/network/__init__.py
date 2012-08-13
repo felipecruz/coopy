@@ -1,1 +1,1 @@
-from network import *
+from coopy.network import *

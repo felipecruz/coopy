@@ -1,7 +1,7 @@
 import pytest
 import socket
 
-from coopy.network import COPYNET_HEADER
+from coopy.network.network import COPYNET_HEADER
 from coopy.network.default_select import CopyNet, CopyNetSlave, _HEADER_SIZE
 
 def tcp_actor(address, port, _type):
