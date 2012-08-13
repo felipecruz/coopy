@@ -1,7 +1,7 @@
 import threading
 import logging
 import pickle
-import fileutils as fu
+from coopy import fileutils as fu
 
 from os import path
 from cPickle import Pickler,Unpickler

@@ -16,7 +16,7 @@ class TestJournal(unittest.TestCase):
 
     def test_current_journal_file(self):
         journal = DiskJournal(JOURNAL_DIR)
-        expected_file_name = '%s%s' % (JOURNAL_DIR, 
+        expected_file_name = '%s%s' % (JOURNAL_DIR,
                                       'transaction_000000000000002.log')
 
         self.assertEquals(expected_file_name,
@@ -42,7 +42,7 @@ class TestJournal(unittest.TestCase):
         journal.setup()
 
         self.assertRaises(
-                            pickle.PicklingError, 
+                            pickle.PicklingError,
                             journal.receive,
                             (message)
                           )
@@ -62,9 +62,9 @@ class TestJournal(unittest.TestCase):
         self.assertEquals(JOURNAL_DIR, journal.basedir)
 
         journal.setup()
-        expected_file_name = '%s%s' % (JOURNAL_DIR, 
+        expected_file_name = '%s%s' % (JOURNAL_DIR,
                                       'transaction_000000000000002.log')
-        self.assertEquals(expected_file_name, 
+        self.assertEquals(expected_file_name,
                           journal.file.name)
 
         import cPickle

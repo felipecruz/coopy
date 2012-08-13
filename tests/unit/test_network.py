@@ -1,7 +1,7 @@
 from tests.domain import Wiki
 
 def test_prepare_data():
-    from coopy.network import prepare_data
+    from coopy.network.network import prepare_data
     from coopy.foundation import RecordClock
     from coopy.utils import inject
     import cPickle
@@ -20,7 +20,7 @@ def test_prepare_data():
 
 def test_prepare_action():
     from coopy.foundation import Action
-    from coopy.network import prepare_data
+    from coopy.network.network import prepare_data
     import cPickle
     import zlib
     import datetime
