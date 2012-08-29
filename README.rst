@@ -1,5 +1,5 @@
 coopy
------
+=====
 
 **coopy** is a simple, transparent, non-intrusive persistence library for python language. It's released under `BSD License`_
 
@@ -11,7 +11,16 @@ It is based on the techniques of system snapshotting and transaction journalling
 
 http://en.wikipedia.org/wiki/Object_prevalence
 
+Status
+------
+
+.. raw:: html
+
+    <img src="https://secure.travis-ci.org/felipecruz/coopy.png?branch=master" />
+
 Simple, transparent, non-intrusive::
+
+.. code-block:: python
 
     from coopy.base import init_persistent_system
     from tests.domain import Wiki
