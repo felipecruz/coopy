@@ -8,10 +8,10 @@ logger = logging.getLogger("coopy")
 
 DIGITS = 15
 MAX_LOGFILE_SIZE = 1024 * 100 * 10 # 1 MB
-    
+
 LOG_PREFIX = "transaction_"
 LOG_SUFIX = ".log"
-    
+
 SNAPSHOT_PREFIX = "snapshot_"
 SNAPSHOT_SUFIX = ".dat"
 
@@ -23,24 +23,24 @@ class RotateFileWrapper():
     def __init__(self, file, basedir):
         self.file = file
         self.basedir = basedir
-    
+
     def write(self, data):
         self.file.write(data)
-        
+
         ''' certifies that data will be written - performance issues? '''
         self.file.flush()
-        
+
         if os.path.getsize(self.file.name) > MAX_LOGFILE_SIZE:
             file_name = next_log_file(self.basedir)
             logger.debug("Opening: " + file_name)
             self.file.close()
             self.file = open(file_name,'wb')
-            self.pickler.clear_memo() 
-            
+            self.pickler.clear_memo()
+
     def __getattr__(self, name):
         if name == 'closed':
             return self.file.closed
-    
+
     @property
     def name(self):
         return self.file.name
@@ -60,7 +60,7 @@ def list_coopy_files(basedir, regex):
     files = os.listdir(basedir)
     if not files:
         return None
-    files = filter(regex.search, files)  
+    files = filter(regex.search, files)
     if not files:
         return None
     return sorted(files)
@@ -94,7 +94,7 @@ def lastest_snapshot_number(basedir):
         return 1
     number = SNAPSHOT_REGEX.match(last_file)
     return int(number.group(1))
-    
+
 
 def lastest_log_number(basedir):
     last_file = last_log_file(basedir)
@@ -134,7 +134,7 @@ def next_snapshot_file(basedir):
 def next_log_file(basedir):
     number = next_number(basedir)
     return to_log_file(basedir, number)
- 
+
 
 def last_log_files(basedir):
     files = list_log_files(basedir)
