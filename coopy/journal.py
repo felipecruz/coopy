@@ -1,8 +1,12 @@
+import six
 import os
 import pickle
 from coopy import fileutils
 
-from cPickle import Pickler
+if six.PY3:
+    from pickle import Pickler
+else:
+    from cPickle import Pickler
 
 class DiskJournal():
     def __init__(self, basedir):

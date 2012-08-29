@@ -1,10 +1,15 @@
+import six
 import threading
 import logging
 import pickle
 from coopy import fileutils as fu
 
 from os import path
-from cPickle import Pickler,Unpickler
+
+if six.PY3:
+    from pickle import Pickler, Unpickler
+else:
+    from cPickle import Pickler, Unpickler
 
 logger = logging.getLogger("coopy")
 
@@ -20,7 +25,7 @@ class SnapshotManager(object):
         self.basedir = basedir
 
     def take_snapshot(self, object):
-        file = open(fu.next_snapshot_file(self.basedir),"wb")
+        file = open(fu.next_snapshot_file(self.basedir), "wb")
         logger.debug("Taking snapshot on: " + file.name)
         pickler = Pickler(file, pickle.HIGHEST_PROTOCOL)
         pickler.dump(object)
