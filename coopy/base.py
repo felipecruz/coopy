@@ -7,23 +7,28 @@ __author__ = "Felipe Cruz <felipecruz@loogica.net>"
 __license__ = "BSD"
 __version__ = "0.5a"
 
+import six
 import os
 import logging
-import thread
 import threading
 import types
+
+if six.PY3:
+    import _thread as thread
+else:
+    import thread
 
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
-import fileutils
-from foundation import Action, RecordClock, Publisher
-from journal import DiskJournal
-from restore import restore
-from snapshot import SnapshotManager, SnapshotTimer
+from coopy import fileutils
+from coopy.foundation import Action, RecordClock, Publisher
+from coopy.journal import DiskJournal
+from coopy.restore import restore
+from coopy.snapshot import SnapshotManager, SnapshotTimer
 from coopy.utils import method_or_none, action_check, inject
 
-from network.default_select import CopyNet, CopyNetSlave
+from coopy.network.default_select import CopyNet, CopyNetSlave
 
 CORE_LOG_PREFIX = '[CORE] '
 
@@ -49,7 +54,7 @@ def init_persistent_system(obj, basedir=None):
                 "Must input a valid object if there's no snapshot files")
 
     # if obj is a class, change obj to an insance
-    if isinstance(obj, type) or isinstance(obj, types.ClassType):
+    if isinstance(obj, type):
         obj = obj()
 
     # first step is to check basedir argument. if isn't defined
@@ -156,7 +161,11 @@ class CoopyProxy():
                 #record all calls to clock.now()
                 self.obj._clock = RecordClock()
 
-                action = Action(thread.get_ident(),
+                if six.PY3:
+                    thread_ident = thread.get_ident()
+                else:
+                    thread_ident = thread.get_ident()
+                action = Action(thread_ident,
                                 name,
                                 datetime.now(),
                                 args,

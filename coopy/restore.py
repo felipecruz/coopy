@@ -1,9 +1,15 @@
+import six
 import logging
-import fileutils
 
-from snapshot import SnapshotManager
-from foundation import RestoreClock
-from cPickle import Unpickler, BadPickleGet
+from coopy import fileutils
+from coopy.snapshot import SnapshotManager
+from coopy.foundation import RestoreClock
+
+if six.PY3:
+    from pickle import Unpickler, UnpicklingError
+    BadPickleGet = UnpicklingError
+else:
+    from cPickle import Unpickler, BadPickleGet
 
 logger = logging.getLogger("coopy")
 LOG_PREFIX = '[RESTORE] '

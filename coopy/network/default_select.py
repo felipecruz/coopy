@@ -1,14 +1,20 @@
+import six
 from select import select
 import os
 import socket
 import zlib
 import struct
-import cPickle
+
+if six.PY3:
+    import pickle
+    from queue import Queue
+else:
+    import cPickle as pickle
+    from Queue import Queue
 import threading
 import logging
 import sys
 
-from Queue import Queue
 
 from coopy.network.network import prepare_data, CopyNetPacket, CopyNetClient,\
                                   CopyNetSnapshotThread
@@ -40,7 +46,7 @@ class CopyNet(threading.Thread):
                  host=None,
                  port=5466,
                  max_clients=5,
-                 password='copynet',
+                 password=b'copynet',
                  ipc=False):
 
         threading.Thread.__init__(self)
@@ -74,7 +80,10 @@ class CopyNet(threading.Thread):
 
     def close(self):
         self.running = False
-        self.server.shutdown(socket.SHUT_RDWR)
+        try:
+            self.server.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
         self.server.close()
         if self.ipc:
             os.remove(COPYNET_SOCK)
@@ -110,7 +119,7 @@ class CopyNet(threading.Thread):
         password = client.recv(20)
 
         if self.password != password.rstrip():
-            unauthdata = struct.pack(COPYNET_HEADER, 0, 'n')
+            unauthdata = struct.pack(COPYNET_HEADER, 0, b'n')
             client.sendall(unauthdata)
             client.close()
             _minfo('Client rejected')
@@ -134,8 +143,8 @@ class CopyNet(threading.Thread):
 
             try:
                 to_read, to_write, exception_mode = \
-                    select([self.server] + self.clientmap.keys(), [], [], 5)
-            except socket.error, e:
+                    select([self.server] + list(self.clientmap.keys()), [], [], 5)
+            except socket.error as e:
                 _mdebug("Select error")
                 self.running = False
                 break
@@ -171,7 +180,7 @@ class CopyNetSlave(threading.Thread):
                  parent,
                  host='localhost',
                  port=5466,
-                 password='copynet',
+                 password=b'copynet',
                  ipc=False):
 
         threading.Thread.__init__(self)
@@ -191,7 +200,7 @@ class CopyNetSlave(threading.Thread):
 
             self.sock.sendall(password)
             _sdebug('Slave connected to server@%d' % self.port)
-        except socket.error, e:
+        except socket.error as e:
             _sdebug("Error connecting to server %s" % (e))
             raise Exception("Network Error: Could not connect to: %s:%d" %
                     (host, port))
@@ -235,7 +244,7 @@ class CopyNetSlave(threading.Thread):
                     else:
                         try:
                             (psize, stype) = struct.unpack(COPYNET_HEADER, data)
-                        except struct.error, e:
+                        except struct.error as e:
                             self.running = False
                             self.sock.close()
                             raise Exception("Unexpected error")
@@ -254,12 +263,12 @@ class CopyNetSlave(threading.Thread):
                         self.lock.acquire(1)
                         if stype == 'a':
                             _sdebug('Receiving action')
-                            action = cPickle.loads(str(un_data))
+                            action = picke.loads(str(un_data))
                             action.execute_action(self.parent.obj)
                             _sdebug(str(action))
                         else:
                             _sdebug('Receiving system')
-                            self.parent.obj = cPickle.loads(str(un_data))
+                            self.parent.obj = pickle.loads(str(un_data))
                         self.lock.release()
 
                 else:

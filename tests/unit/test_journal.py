@@ -1,3 +1,4 @@
+import six
 import unittest
 
 import os
@@ -67,9 +68,12 @@ class TestJournal(unittest.TestCase):
         self.assertEquals(expected_file_name,
                           journal.file.name)
 
-        import cPickle
+        if six.PY3:
+            import pickle
+        else:
+            import cPickle as pickle
         # test hack
-        pickle_class = cPickle.Pickler(open(expected_file_name, 'rb'))\
+        pickle_class = pickle.Pickler(open(expected_file_name, 'rb'))\
                                                             .__class__
         self.assertTrue(isinstance(journal.pickler, pickle_class))
 

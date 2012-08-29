@@ -4,7 +4,11 @@ def test_prepare_data():
     from coopy.network.network import prepare_data
     from coopy.foundation import RecordClock
     from coopy.utils import inject
-    import cPickle
+    import six
+    if six.PY3:
+        import pickle
+    else:
+        import cPickle as pickle
     import zlib
 
     wiki = Wiki()
@@ -13,7 +17,7 @@ def test_prepare_data():
 
     (header, compressed_data) = prepare_data(wiki)
 
-    copy_wiki = cPickle.loads(zlib.decompress(compressed_data))
+    copy_wiki = pickle.loads(zlib.decompress(compressed_data))
 
     assert copy_wiki.get_page('test').id == 'test'
     assert copy_wiki.get_page('test').content == 'test content'
@@ -21,7 +25,11 @@ def test_prepare_data():
 def test_prepare_action():
     from coopy.foundation import Action
     from coopy.network.network import prepare_data
-    import cPickle
+    import six
+    if six.PY3:
+        import pickle
+    else:
+        import cPickle as pickle
     import zlib
     import datetime
 
@@ -36,7 +44,7 @@ def test_prepare_action():
 
     (header, compressed_data) = prepare_data(action)
 
-    copy_action = cPickle.loads(zlib.decompress(compressed_data))
+    copy_action = pickle.loads(zlib.decompress(compressed_data))
 
     assert action.caller_id == copy_action.caller_id
     assert action.action == copy_action.action

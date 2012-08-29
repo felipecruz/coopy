@@ -1,6 +1,12 @@
+import six
 import zlib
 import struct
-import cPickle
+
+if six.PY3:
+    import pickle
+else:
+    import cPickle as pickle
+
 import threading
 import logging
 
@@ -14,15 +20,15 @@ COPYNET_HEADER = '!Ic'
 
 l = logging.getLogger("coopy")
 
-def prepare_data(data, stype='s'):
+def prepare_data(data, stype=b's'):
     if (isinstance(data, Action) or isinstance(data, foundation.Action)):
-        stype = 'a'
-    
-    data = cPickle.dumps(data)
+        stype = b'a'
+
+    data = pickle.dumps(data)
     compressed_data = zlib.compress(data)
     value = len(compressed_data)
     header = struct.pack(COPYNET_HEADER, value, stype)
-   
+
     return (header, compressed_data)
 
 class CopyNetClient():
@@ -30,12 +36,12 @@ class CopyNetClient():
         self.client = client
         self.address = address
         self.state = state
-        
+
 class CopyNetPacket():
     def __init__(self, header, data):
         self.header = header
         self.data = data
-        
+
 class CopyNetSnapshotThread(threading.Thread):
     def __init__(self, net_client, obj):
             threading.Thread.__init__ (self)

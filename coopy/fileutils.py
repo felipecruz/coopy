@@ -159,7 +159,7 @@ def name_to_dir(basedir):
     return basedir
 
 def obj_to_dir_name(obj):
-    if isinstance(obj, type) or isinstance(obj, types.ClassType):
+    if isinstance(obj, type):
         basedir = obj.__name__.lower()
     else:
         basedir = obj.__class__.__name__.lower()
