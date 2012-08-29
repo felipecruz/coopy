@@ -1,4 +1,5 @@
 import six
+import sys
 import pytest
 import socket
 
@@ -7,7 +8,7 @@ from coopy.network.default_select import CopyNet, CopyNetSlave, _HEADER_SIZE
 
 _str_to_bytes = lambda x: x.encode('utf-8') if type(x) != bytes else x
 
-if six.PY3:
+if six.PY3 or 'PyPy' in sys.version:
     socket_select_error = ValueError
 else:
     socket_select_error = socket.error
