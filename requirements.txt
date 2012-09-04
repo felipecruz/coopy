@@ -1,2 +1,3 @@
 pytest
 six
+pytest-cov
