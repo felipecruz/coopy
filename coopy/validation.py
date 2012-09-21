@@ -30,5 +30,6 @@ def validate_date_datetime_calls(function):
     node = NodeVisitor()
     try:
         node.visit(tree)
+        return True
     except:
         return False
