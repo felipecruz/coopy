@@ -39,12 +39,12 @@ class DiskJournal():
             < fileutils.MAX_LOGFILE_SIZE:
 
             file = fileutils.RotateFileWrapper(
-                        open(self.basedir + last_file_name,'ab'),
+                        open(self.basedir + last_file_name, 'ab'),
                         self.basedir
                     )
         else:
             file = fileutils.RotateFileWrapper(
-                        open(fileutils.next_log_file(self.basedir),'wb'),
+                        open(fileutils.next_log_file(self.basedir), 'wb'),
                         self.basedir
                     )
 
