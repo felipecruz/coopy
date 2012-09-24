@@ -20,9 +20,10 @@ LOG_REGEX = re.compile("transaction_(\d{15})\.log", re.IGNORECASE)
 FILE_REGEX = re.compile("(transaction|snapshot)_(\d{15})\..{3}", re.IGNORECASE)
 
 class RotateFileWrapper():
-    def __init__(self, file, basedir):
+    def __init__(self, file, basedir, max_size=MAX_LOGFILE_SIZE):
         self.file = file
         self.basedir = basedir
+        self.max_size = max_size
 
     def write(self, data):
         self.file.write(data)
@@ -30,9 +31,11 @@ class RotateFileWrapper():
         ''' certifies that data will be written - performance issues? '''
         self.file.flush()
 
-        if os.path.getsize(self.file.name) > MAX_LOGFILE_SIZE:
+        if os.path.getsize(self.file.name) > self.max_size:
             file_name = next_log_file(self.basedir)
             logger.debug("Opening: " + file_name)
+            self.file.flush()
+            os.fsync(self.file.fileno())
             self.file.close()
             self.file = open(file_name,'wb')
             self.pickler.clear_memo()
@@ -40,6 +43,12 @@ class RotateFileWrapper():
     def __getattr__(self, name):
         if name == 'closed':
             return self.file.closed
+        elif name == "flush":
+            import os
+            self.file.flush()
+            os.fsync(self.file.fileno())
+        else:
+            return getattr(self.file, name)
 
     @property
     def name(self):
