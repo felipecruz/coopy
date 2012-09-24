@@ -1,6 +1,8 @@
 import os
 import unittest
 import shutil
+import six
+
 import coopy
 import coopy.fileutils as fu
 from ..domain import Wiki
@@ -309,18 +311,18 @@ class RotateFileWrapperTest(unittest.TestCase):
         shutil.rmtree(TEST_DIR)
 
     def test_rotate_file_write_close(self):
-        _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'w'), TEST_DIR)
-        data = "a byte sequence!"
+        _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'wb'), TEST_DIR)
+        data = b"a byte sequence!"
         _file.write(data)
         _file.close()
 
         self.assertTrue(_file.closed)
 
-        raw_file = open(TEST_DIR + 'file.log', 'r')
+        raw_file = open(TEST_DIR + 'file.log', 'rb')
         self.assertEqual(raw_file.read(), data)
 
     def test_rotate_file_rotate(self):
-        _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'w'),
+        _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'wb'),
                                      TEST_DIR,
                                      max_size=1024)
         class PicklerMock(object):
@@ -331,14 +333,20 @@ class RotateFileWrapperTest(unittest.TestCase):
 
         self.assertEqual(len(os.listdir(TEST_DIR)), 1)
 
-        data = "a" * 1025
+        if six.PY3:
+            data = b"a" * 1025
+        else:
+            data = "a" * 1025
         _file.write(data)
 
         self.assertEqual(len(os.listdir(TEST_DIR)), 2)
 
-        second_data = "b" * 1000
-        _file.write(second_data)
+        if six.PY3:
+            second_data = b"b" * 1000
+        else:
+            second_data = "b" * 1000
 
+        _file.write(second_data)
         files = os.listdir(TEST_DIR)
         self.assertEqual(len(files), 2)
 
@@ -347,7 +355,7 @@ class RotateFileWrapperTest(unittest.TestCase):
         _file.close()
 
         self.assertTrue(_file.closed)
-        raw_file_a = open(TEST_DIR + "file.log", 'r').read()
-        raw_file_b = open(TEST_DIR + "transaction_000000000000002.log", 'r').read()
+        raw_file_a = open(TEST_DIR + "file.log", 'rb').read()
+        raw_file_b = open(TEST_DIR + "transaction_000000000000002.log", 'rb').read()
         self.assertEqual(raw_file_a, data)
         self.assertEqual(raw_file_b, second_data)
