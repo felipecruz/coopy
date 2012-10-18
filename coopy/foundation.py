@@ -1,4 +1,5 @@
 from datetime import datetime
+from time import localtime
 
 class RecordClock(object):
     def __init__(self):
