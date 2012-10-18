@@ -8,17 +8,20 @@ class NodeVisitor(ast.NodeVisitor):
         # block datetime.today()
         if node.func.value.id == "datetime" and \
            node.func.attr == "today":
-            raise Exception("This function calls datetime.today() - use clock.now()")
+            raise Exception("This function calls datetime.today()"
+                            "- use clock.now()")
 
         # block datetime.now()
         if node.func.value.id == "datetime" and \
            node.func.attr == "now":
-            raise Exception("This function calls datetime.now() - use clock.now()")
+            raise Exception("This function calls datetime.now()"
+                            "- use clock.now()")
 
         # block datetime.utcnow()
         if node.func.value.id == "datetime" and \
            node.func.attr == "utcnow":
-            raise Exception("This function calls datetime.utcnow() - use clock.now()")
+            raise Exception("This function calls datetime.utcnow()"
+                            " - use clock.now()")
         self._continue(node)
 
     def _continue(self, stmt):
