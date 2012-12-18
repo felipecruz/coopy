@@ -14,11 +14,29 @@ http://en.wikipedia.org/wiki/Object_prevalence
 Status
 ------
 
+Current version - 0.3.1
+
 coopy is compatible with py2.6, py2.7, py3.2 and pypy.
 
 CI builds:
 
 [![Build Status](https://secure.travis-ci.org/felipecruz/coopy.png)](http://travis-ci.org/felipecruz/coopy)
+
+Install
+-------
+
+```sh
+$ pip install coopy
+```
+
+or
+
+
+```sh
+$ git clone https://github.com/felipecruz/coopy.git
+$ cd coopy
+$ python setup.py install
+```
 
 Using
 -----
@@ -45,7 +63,7 @@ persistent_todo_list.add_task("Some Task Name", "A Task Description")
 Documentation
 -------------
 
-Soon at - http://coopy.readthedocs.org
+http://coopy.readthedocs.org
 
 Tests
 -----
@@ -69,6 +87,38 @@ And then:
 
 `make coverage`
 
+LICENSE
+-------
+
+```
+Copyright (c) 2009/2012, Loogica - Felipe João Pontes da Cruz - felipecruz@loogica.net
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, 
+       this list of conditions and the following disclaimer.
+    
+    2. Redistributions in binary form must reproduce the above copyright 
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    3. Neither the name of copycat nor the names of its contributors may be used
+       to endorse or promote products derived from this software without
+       specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
 
 Contribute
 ----------
