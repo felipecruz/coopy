@@ -4,6 +4,7 @@ Created on May 20, 2010
 @author: felipe
 '''
 
+from setuptools import find_packages
 from distutils.core import setup
 
 setup(name='coopy',
@@ -12,4 +13,5 @@ setup(name='coopy',
       author='Felipe Cruz',
       author_email='felipecruz@loogica.net',
       url='http://coopy.readthedocs.org',
-      packages=['coopy', 'coopy/network'])
+      packages=find_packages(),
+      install_requires=['six'])
