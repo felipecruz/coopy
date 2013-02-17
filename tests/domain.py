@@ -17,10 +17,10 @@ class WikiPage(object):
 class Wiki(object):
     def __init__(self):
         self.pages = {}
-        
+
     def create_page(self, id, content, parent):
         page = WikiPage(id, content, self._clock.now(), parent)
-        
+
         if not id in self.pages:
             self.pages[id] = page
         else:
@@ -41,7 +41,7 @@ class Wiki(object):
         page = self.add_history(old_page, page)
         self.pages[page_id] = page
 
-        
+
     def add_history(self, old_page, page):
         page.history = old_page.history
         page.history.append(old_page)
@@ -52,3 +52,8 @@ class Wiki(object):
         import time
         time.sleep(0.1)
         self.dt2 = self._clock.now()
+
+class BadWiki(Wiki):
+    def bad_method(self):
+        from datetime import date
+        dt = date.today()
