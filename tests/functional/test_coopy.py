@@ -66,10 +66,20 @@ class TestCoopy(unittest.TestCase):
 
         new_wiki.close()
 
-    def test_bad_wiki(self):
-        from ..domain import BadWiki
+    def test_bad_system(self):
+        '''
+            Because calls to datetime.{now(),utcnow()} or to date.today()
+            aren't allowed. Use the clock:
+            http://coopy.readthedocs.org/en/latest/use_clock.html
+        '''
+        from ..domain import Wiki
         import coopy.base
         from coopy.error import PrevalentError
+
+        class BadWiki(Wiki):
+            def bad_method(self):
+                from datetime import date
+                dt = date.today()
 
         self.assertRaises(PrevalentError,
                           coopy.base.init_persistent_system,
