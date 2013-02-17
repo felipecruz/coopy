@@ -33,6 +33,15 @@ Right code::
 Clock API
 `````````
 
+Clock-aware code validation
+---------------------------
+
+coopy has a validation mechanism that will not accept obvious code errors such as
+calling `datetime.now()` inside a system method.
+
+API
+---
+
 Take note that a ``_clock`` attribute is injected on your system instance and the API is
 always called via ``self._clock``.
 
