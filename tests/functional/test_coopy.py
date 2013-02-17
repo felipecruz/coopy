@@ -65,3 +65,12 @@ class TestCoopy(unittest.TestCase):
         self.assertEqual(dt2, new_wiki.dt2)
 
         new_wiki.close()
+
+    def test_bad_wiki(self):
+        from ..domain import BadWiki
+        import coopy.base
+        from coopy.error import PrevalentError
+
+        self.assertRaises(PrevalentError,
+                          coopy.base.init_persistent_system,
+                              *[BadWiki], **dict(basedir=TEST_DIR))
