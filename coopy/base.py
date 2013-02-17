@@ -161,10 +161,7 @@ class CoopyProxy():
                 #record all calls to clock.now()
                 self.obj._clock = RecordClock()
 
-                if six.PY3:
-                    thread_ident = thread.get_ident()
-                else:
-                    thread_ident = thread.get_ident()
+                thread_ident = thread.get_ident()
                 action = Action(thread_ident,
                                 name,
                                 datetime.now(),
