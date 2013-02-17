@@ -1,27 +1,51 @@
 import ast
+import inspect
+import logging
+
+from .error import PrevalentError
+
+logger = logging.getLogger(__name__)
+
+FORBIDDEN_OBJECTS = ('datetime', 'date')
+
+DATE_FUNCS = ('today',)
+
+DATETIME_FUNCS = ('now', 'utcnow')
+
+FORBIDDEN_FUNCS = DATE_FUNCS + DATETIME_FUNCS
 
 class NodeVisitor(ast.NodeVisitor):
     def generic_visit(self, node):
         self._continue(node)
 
     def visit_Call(self, node):
-        # block datetime.today()
-        if node.func.value.id == "datetime" and \
-           node.func.attr == "today":
-            raise Exception("This function calls datetime.today()"
-                            "- use clock.now()")
+        if not hasattr(node.func, 'value'):
+            '''
+                Ignore calls from nodes with no 'value' attribute,
+                like constructors calls MyClass()
+            '''
+            return
+        if isinstance(node.func.value, ast.Attribute):
+            '''
+                In this case we can't be sure if it's a call from a date or
+                datetime instance
+            '''
+            if node.func.value.attr == "_clock":
+                '''
+                    A call to self._clock.method() wich is ok.
+                '''
+                return
+            elif node.func.attr in FORBIDDEN_FUNCS:
+                logger.warn("Dont call now(), utcnow() nor today() from date"
+                            " or datetime objects. Use the clock instead.")
+        elif node.func.value.id in FORBIDDEN_OBJECTS and \
+           node.func.attr in FORBIDDEN_FUNCS:
+            '''
+                Bad calls: date.today(), datetime.now(), datetime.utcnow()
+            '''
+            raise Exception("This function calls %s.%s()- use clock.%s()" % \
+                            (node.func.value.id, node.func.attr, node.func.attr))
 
-        # block datetime.now()
-        if node.func.value.id == "datetime" and \
-           node.func.attr == "now":
-            raise Exception("This function calls datetime.now()"
-                            "- use clock.now()")
-
-        # block datetime.utcnow()
-        if node.func.value.id == "datetime" and \
-           node.func.attr == "utcnow":
-            raise Exception("This function calls datetime.utcnow()"
-                            " - use clock.now()")
         self._continue(node)
 
     def _continue(self, stmt):
