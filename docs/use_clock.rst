@@ -26,5 +26,31 @@ Right code::
     from coopy import clock
     def create_page(self, wikipage):
         page = None
-        wikipage.last_modify = clock.now()
+        wikipage.last_modify = self._clock.now()
         ....
+
+
+Clock API
+`````````
+
+Take note that a ``_clock`` attribute is injected on your system instance and the API is
+always called via ``self._clock``.
+
+For Clock instances
+
+.. function:: clock.now()
+    Return datetime.now()
+
+    :rtype: datetime
+
+
+.. function:: clock.utcnow()
+    Return datetime.now()
+
+    :rtype: datetime
+
+
+.. function:: clock.today()
+    Return date.today()
+
+    :rtype: date
