@@ -46,7 +46,7 @@ def restore(system, basedir):
     logger.debug(LOG_PREFIX + "Actions re-execution")
     for action in actions:
         try:
-            system._clock = RestoreClock(action.timestamps)
+            system._clock = RestoreClock(action.results)
             action.execute_action(system)
         except Exception as e:
             logger.debug(LOG_PREFIX + 'Error executing :' + str(action))

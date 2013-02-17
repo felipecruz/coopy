@@ -184,7 +184,7 @@ class CoopyProxy():
                     raise e
 
                 #restore clock
-                action.timestamps = self._clock.timestamps
+                action.results = self.obj._clock.results
 
                 if not readonly:
                     self.publisher.publish(action)
