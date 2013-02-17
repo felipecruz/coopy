@@ -1,9 +1,3 @@
-'''
-Created on May 19, 2010
-
-@author: felipe
-'''
-
 from coopy.decorators import readonly
 
 class WikiPage(object):
@@ -52,8 +46,3 @@ class Wiki(object):
         import time
         time.sleep(0.1)
         self.dt2 = self._clock.now()
-
-class BadWiki(Wiki):
-    def bad_method(self):
-        from datetime import date
-        dt = date.today()
