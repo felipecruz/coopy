@@ -27,6 +27,7 @@ from coopy.journal import DiskJournal
 from coopy.restore import restore
 from coopy.snapshot import SnapshotManager, SnapshotTimer
 from coopy.utils import method_or_none, action_check, inject
+from coopy.validation import validate_system
 
 from coopy.network.default_select import CopyNet, CopyNetSlave
 
@@ -56,6 +57,8 @@ def init_persistent_system(obj, basedir=None):
     # if obj is a class, change obj to an insance
     if isinstance(obj, type):
         obj = obj()
+
+    validate_system(obj)
 
     # first step is to check basedir argument. if isn't defined
     # coopy will create a directory name based on system class
@@ -161,10 +164,7 @@ class CoopyProxy():
                 #record all calls to clock.now()
                 self.obj._clock = RecordClock()
 
-                if six.PY3:
-                    thread_ident = thread.get_ident()
-                else:
-                    thread_ident = thread.get_ident()
+                thread_ident = thread.get_ident()
                 action = Action(thread_ident,
                                 name,
                                 datetime.now(),
@@ -187,7 +187,7 @@ class CoopyProxy():
                     raise e
 
                 #restore clock
-                action.timestamps = self._clock.timestamps
+                action.results = self.obj._clock.results
 
                 if not readonly:
                     self.publisher.publish(action)

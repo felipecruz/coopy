@@ -50,4 +50,4 @@ def test_prepare_action():
     assert action.action == copy_action.action
     assert action.args == copy_action.args
     assert action.kwargs == copy_action.kwargs
-    assert action.timestamps == copy_action.timestamps
+    assert action.results == copy_action.results
