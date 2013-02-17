@@ -24,6 +24,7 @@ that you want to persist state across method calls that modifies it's internal
 state::
 
     from coopy.base import init_persistent_system
+
     class Todo(object):
         def __init__(self):
             self.tasks = []
@@ -39,10 +40,17 @@ Check out how coopy works with this little :doc:`tutorial` and then...
 
 It's very important to know how coopy works, to use it. Check out :doc:`basics`
 
+
+Restrictions
+------------
+
+This should not affect end-user code. To get datetime or date objects you
+need to get from an internal clock. Check this page :doc:`use_clock`
+
 Status
 ------
 
-coopy is compatible with py2.6, py2.7, py3.2 and pypy.
+coopy is compatible with py2.6, py2.7, py3.2, py3.3 and pypy.
 
 contribute
 ----------
