@@ -60,6 +60,12 @@ persistent_todo_list = init_persistent_system(Todo())
 persistent_todo_list.add_task("Some Task Name", "A Task Description")
 ```
 
+Restrictions
+------------
+
+This should not affect end-user code. To get datetime or date objects you
+need to get from an internal clock. Check [How to use Clock](coopy.readthedocs.org/en/latest/use_clock.html)
+
 Documentation
 -------------
 
