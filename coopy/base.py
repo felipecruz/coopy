@@ -27,6 +27,7 @@ from coopy.journal import DiskJournal
 from coopy.restore import restore
 from coopy.snapshot import SnapshotManager, SnapshotTimer
 from coopy.utils import method_or_none, action_check, inject
+from coopy.validation import validate_system
 
 from coopy.network.default_select import CopyNet, CopyNetSlave
 
@@ -56,6 +57,8 @@ def init_persistent_system(obj, basedir=None):
     # if obj is a class, change obj to an insance
     if isinstance(obj, type):
         obj = obj()
+
+    validate_system(obj)
 
     # first step is to check basedir argument. if isn't defined
     # coopy will create a directory name based on system class

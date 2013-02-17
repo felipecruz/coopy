@@ -58,5 +58,23 @@ def validate_date_datetime_calls(function):
     try:
         node.visit(tree)
         return True
-    except:
+    except Exception as e:
         return False
+
+def unindent_source(source_lines):
+    source = source_lines[0]
+    unindent_level = len(source) - len(source.lstrip())
+    return "\n".join([line[unindent_level:] for line in source_lines])
+
+def validate_system(system_instance):
+    for (method_name, method) in inspect.getmembers(system_instance,
+                                                    predicate=inspect.ismethod):
+        if method_name.startswith("__") and method_name.endswith("__"):
+            continue
+        fixed_source = unindent_source(inspect.getsourcelines(method)[0])
+        valid = validate_date_datetime_calls(fixed_source)
+        if not valid:
+            raise PrevalentError("%s contains methods with invalid calls "\
+                                 "on method %s:\n%s" % (system_instance,
+                                                        method_name,
+                                                        fixed_source))
