@@ -54,3 +54,15 @@ def test_validate_system():
 
     with pytest.raises(PrevalentError) as error:
         validate_system(BadSystem())
+
+def test_validate_system_method_with_subscript():
+    class GoodSystem(object):
+        def __init__(self):
+            self.data = []
+
+        def ok_method(self):
+            temp = []
+            temp_el = temp[0]
+            element = self.data[0]
+
+    assert validate_system(GoodSystem())
