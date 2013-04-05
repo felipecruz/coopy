@@ -84,4 +84,3 @@ def validate_system(system_instance):
                                                         method_name,
                                                         fixed_source))
     return True
-
