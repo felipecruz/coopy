@@ -1,5 +1,4 @@
-coopy
-=====
+# coopy
 
 **coopy** is a simple, transparent, non-intrusive persistence library for python language. It's released under BSD License
 
@@ -11,10 +10,9 @@ It is based on the techniques of system snapshotting and transaction journalling
 
 http://en.wikipedia.org/wiki/Object_prevalence
 
-Status
-------
+## Status
 
-Current version - 0.4beta
+Current version - 0.4.1beta
 
 coopy is compatible with py2.6, py2.7, py3.2, py3.3 and pypy.
 
@@ -22,8 +20,7 @@ CI builds:
 
 [![Build Status](https://secure.travis-ci.org/felipecruz/coopy.png)](http://travis-ci.org/felipecruz/coopy)
 
-Install
--------
+## Install
 
 ```sh
 $ pip install coopy
@@ -38,8 +35,7 @@ $ cd coopy
 $ python setup.py install
 ```
 
-Using
------
+## Using
 
 Simple, transparent and non-intrusive. Note that ``Todo`` could be any class
 that you want to persist state across method calls that modifies it's internal
@@ -60,21 +56,29 @@ persistent_todo_list = init_persistent_system(Todo())
 persistent_todo_list.add_task("Some Task Name", "A Task Description")
 ```
 
-Restrictions
-------------
+## Restrictions
 
 This should not affect end-user code
 
 To get datetime or date objects you need to get from an internal clock.
 Check [How to use Clock](http://coopy.readthedocs.org/en/latest/use_clock.html)
 
-Documentation
--------------
+## Documentation
 
 http://coopy.readthedocs.org
 
-Tests
------
+## Cases
+
+### RioBus
+
+http://riobus.loogica.net/
+
+All (~1800) Bus lines from RJ (State), Brazil, each Bus Line with a list
+of tuples (street, city_name, direction). All in memory. Running since Sep 2012.
+
+System(Domain) Class: https://github.com/loogica/riobus/blob/master/riobus.py
+
+## Tests
 
 First time:
 
@@ -84,8 +88,7 @@ To actually run the tests:
 
 `make test`
 
-Coverage Report
----------------
+## Coverage Report
 
 First time:
 
@@ -95,8 +98,7 @@ And then:
 
 `make coverage`
 
-LICENSE
--------
+# LICENSE
 
 ```
 Copyright (c) 2009/2012, Loogica - Felipe João Pontes da Cruz - felipecruz@loogica.net
