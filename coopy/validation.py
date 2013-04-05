@@ -38,6 +38,11 @@ class NodeVisitor(ast.NodeVisitor):
             elif node.func.attr in FORBIDDEN_FUNCS:
                 logger.warn("Dont call now(), utcnow() nor today() from date"
                             " or datetime objects. Use the clock instead.")
+        elif isinstance(node.func.value, ast.Subscript):
+            '''
+                Ignore var[something] pattern
+            '''
+            return
         elif node.func.value.id in FORBIDDEN_OBJECTS and \
            node.func.attr in FORBIDDEN_FUNCS:
             '''
