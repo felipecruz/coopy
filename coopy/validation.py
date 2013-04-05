@@ -83,3 +83,5 @@ def validate_system(system_instance):
                                  "on method %s:\n%s" % (system_instance,
                                                         method_name,
                                                         fixed_source))
+    return True
+
