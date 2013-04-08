@@ -2,7 +2,7 @@ from setuptools import find_packages
 from distutils.core import setup
 
 setup(name='coopy',
-      version='0.4.1b',
+      version='0.4.2b',
       description='coopy - plain objects persistence/prevalence tool',
       author='Felipe Cruz',
       author_email='felipecruz@loogica.net',
