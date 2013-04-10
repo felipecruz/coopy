@@ -199,6 +199,12 @@ class CoopyProxy():
             return system
         return method
 
+    def basedir_abspath(self):
+        disk_journals = (journal for journal in self.publisher.subscribers
+                                             if hasattr(journal, 'basedir'))
+        return [os.path.join(os.path.abspath(os.getcwd()), journal.basedir)
+                for journal in disk_journals]
+
     def take_snapshot(self):
         if self.slave:
             self.slave.acquire()
