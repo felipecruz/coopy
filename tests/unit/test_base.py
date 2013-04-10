@@ -33,6 +33,32 @@ class TestBase(unittest.TestCase):
 
         dummy.close()
 
+    def test_base_basedir_abspath(self):
+        import os
+        import tempfile
+        from coopy.base import init_system, init_persistent_system, CoopyProxy
+        from coopy.journal import DiskJournal
+
+        dummy = init_persistent_system(Wiki, basedir='wiki/')
+
+        current_dir = os.path.abspath(os.getcwd())
+        self.assertEquals([current_dir + "/wiki/"],
+                          dummy.basedir_abspath())
+
+        dummy.close()
+
+        dir1 = tempfile.mkdtemp()
+        dir2 = tempfile.mkdtemp()
+
+        j1 = DiskJournal(dir1)
+        j2 = DiskJournal(dir2)
+
+        subscribers = [j1, j2]
+
+        dummy2 = init_system(Wiki, subscribers)
+        self.assertTrue(dir1 in dummy2.basedir_abspath())
+        self.assertTrue(dir2 in dummy2.basedir_abspath())
+
 
 class TestCoopyProxy(unittest.TestCase):
     def tearDown(self):
