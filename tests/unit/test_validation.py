@@ -65,4 +65,7 @@ def test_validate_system_method_with_subscript():
             temp_el = temp[0]
             element = self.data[0]
 
+        def ok2_method(self):
+            return ''.join([])
+
     assert validate_system(GoodSystem())
