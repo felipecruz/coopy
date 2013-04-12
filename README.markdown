@@ -12,7 +12,7 @@ http://en.wikipedia.org/wiki/Object_prevalence
 
 ## Status
 
-Current version - 0.4.2beta
+Current version - 0.4.3beta
 
 coopy is compatible with py2.6, py2.7, py3.2, py3.3 and pypy.
 
