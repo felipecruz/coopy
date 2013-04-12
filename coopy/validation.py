@@ -43,6 +43,11 @@ class NodeVisitor(ast.NodeVisitor):
                 Ignore var[something] pattern
             '''
             return
+        elif isinstance(node.func.value, ast.Str):
+            '''
+                ignore ''.join([]) patterns
+            '''
+            return
         elif node.func.value.id in FORBIDDEN_OBJECTS and \
            node.func.attr in FORBIDDEN_FUNCS:
             '''
