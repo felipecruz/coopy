@@ -1,4 +1,4 @@
-from coopy.decorators import readonly, abort_exception
+from coopy.decorators import readonly, abort_exception, unlocked
 
 class WikiPage(object):
     def __init__(self, id, content, last_modified, parent=None):
@@ -50,3 +50,7 @@ class Wiki(object):
     @abort_exception
     def check_abort_exception(self):
         raise Exception("Abort Exception")
+
+    @unlocked
+    def unlocked_method(self):
+        pass
