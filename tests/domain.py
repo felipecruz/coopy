@@ -1,4 +1,4 @@
-from coopy.decorators import readonly
+from coopy.decorators import readonly, abort_exception
 
 class WikiPage(object):
     def __init__(self, id, content, last_modified, parent=None):
@@ -46,3 +46,7 @@ class Wiki(object):
         import time
         time.sleep(0.1)
         self.dt2 = self._clock.now()
+
+    @abort_exception
+    def check_abort_exception(self):
+        raise Exception("Abort Exception")

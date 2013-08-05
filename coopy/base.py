@@ -157,6 +157,7 @@ class CoopyProxy():
             raise Exception('This is a slave/read-only instance.')
 
         def method(*args, **kwargs):
+            exception = None
             try:
                 if not unlocked:
                     self.lock.acquire(1)
@@ -171,7 +172,6 @@ class CoopyProxy():
                                 args,
                                 kwargs)
                 system = None
-
                 if not readonly:
                     self.publisher.publish_before(action)
 
@@ -184,17 +184,20 @@ class CoopyProxy():
                                 'Aborting action' + str(action))
                     if not abort_exception:
                         self.publisher.publish_exception(action)
-                    raise e
+                    exception = e
 
                 #restore clock
                 action.results = self.obj._clock.results
 
-                if not readonly:
+                if not readonly and not abort_exception:
                     self.publisher.publish(action)
 
             finally:
                 if not unlocked:
                     self.lock.release()
+
+            if exception:
+                raise exception
 
             return system
         return method

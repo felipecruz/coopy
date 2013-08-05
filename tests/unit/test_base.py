@@ -1,4 +1,5 @@
 import unittest
+import pytest
 from ..domain import Wiki
 
 class TestBase(unittest.TestCase):
@@ -19,6 +20,8 @@ class TestBase(unittest.TestCase):
 
         self.assertEquals(dummy.__class__, CoopyProxy)
         self.assertEquals(dummy.publisher.subscribers, dummy_subscribers)
+
+
 
     def test_base_persistent(self):
         import os
@@ -171,6 +174,35 @@ class TestCoopyProxy(unittest.TestCase):
 
         self.assertTrue(proxy._private == "private")
         self.assertTrue(callable(proxy.some_callable))
+
+        proxy.close()
+
+    def test_coopyproxy_abort_exception(self):
+        from coopy.base import CoopyProxy
+
+        import os
+        os.mkdir('wiki')
+
+        class PassPublisher(object):
+            def __init__(self):
+                self.messages = []
+            def close(self):
+                pass
+            def receive(self, message):
+                self.messages.append(message)
+            def receive_before(self, message):
+                self.messages.append(message)
+            def receive_exception(self, message):
+                self.messages.append(message)
+
+
+        publisher = PassPublisher()
+        proxy = CoopyProxy(Wiki(), [publisher])
+
+        with pytest.raises(Exception):
+            proxy.check_abort_exception()
+
+        self.assertEquals(1, len(publisher.messages))
 
         proxy.close()
 
