@@ -2,6 +2,12 @@ import unittest
 import pytest
 from ..domain import Wiki
 
+import six
+if six.PY3:
+    from unittest import mock
+else:
+    import mock
+
 class TestBase(unittest.TestCase):
     def tearDown(self):
         import shutil
@@ -204,6 +210,41 @@ class TestCoopyProxy(unittest.TestCase):
 
         self.assertEquals(1, len(publisher.messages))
 
+        proxy.close()
+
+    def test_coopyproxy_unlocked(self):
+        from coopy.base import CoopyProxy
+
+        import os
+        os.mkdir('wiki')
+
+        class PassPublisher(object):
+            def close(self):
+                pass
+            def receive(self, message):
+                pass
+            def receive_before(self, message):
+                pass
+            def receive_exception(self, message):
+                pass
+
+        proxy = CoopyProxy(Wiki(), [PassPublisher()])
+        proxy.create_page('id', 'content', None)
+
+        # we're checking that system remains unlocked after a method execution
+        # thus raising a RuntimeError on a release()
+        with pytest.raises(RuntimeError):
+            proxy.lock.release()
+
+
+        # mock testing
+        proxy.lock = mock.MagicMock()
+        proxy.create_page('id', 'content', None)
+        proxy.lock.acquire.assert_called_with(1)
+        proxy.lock.release.assert_called()
+
+        proxy.unlocked_method()
+        proxy.lock.acquire.assert_not_called()
         proxy.close()
 
 if __name__ == "__main__":
