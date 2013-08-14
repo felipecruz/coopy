@@ -84,3 +84,16 @@ class TestCoopy(unittest.TestCase):
         self.assertRaises(PrevalentError,
                           coopy.base.init_persistent_system,
                               *[BadWiki], **dict(basedir=TEST_DIR))
+
+    def test_enable_clock(self):
+        from coopy.tests.utils import TestSystemMixin
+        class DummyWiky():
+            def __init__(self):
+                pass
+
+        dummy_wiki = DummyWiky()
+        assert not hasattr(dummy_wiki, '_clock')
+        TestSystemMixin().enable_clock(dummy_wiki)
+        assert hasattr(dummy_wiki, '_clock')
+
+
