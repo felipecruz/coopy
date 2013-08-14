@@ -97,3 +97,16 @@ class TestCoopy(unittest.TestCase):
         assert hasattr(dummy_wiki, '_clock')
 
 
+    def test_mock_clock(self):
+        import datetime
+        from coopy.tests.utils import TestSystemMixin
+        class DummyWiky():
+            def __init__(self):
+                pass
+
+        dt = datetime.datetime.now()
+        dummy_wiki = DummyWiky()
+        assert not hasattr(dummy_wiki, '_clock')
+        TestSystemMixin().mock_clock(dummy_wiki, dt)
+        assert hasattr(dummy_wiki, '_clock')
+        assert dt == dummy_wiki._clock.now()
