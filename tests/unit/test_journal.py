@@ -7,6 +7,7 @@ import shutil
 from coopy.journal import DiskJournal
 
 JOURNAL_DIR = 'journal_test/'
+CURRENT_DIR = os.getcwd()
 
 class TestJournal(unittest.TestCase):
     def setUp(self):
@@ -16,7 +17,7 @@ class TestJournal(unittest.TestCase):
         shutil.rmtree(JOURNAL_DIR)
 
     def test_current_journal_file(self):
-        journal = DiskJournal(JOURNAL_DIR)
+        journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
         expected_file_name = '%s%s' % (JOURNAL_DIR,
                                       'transaction_000000000000002.log')
 
@@ -39,7 +40,7 @@ class TestJournal(unittest.TestCase):
                 raise pickle.PicklingError()
 
         message = Message('test message')
-        journal = DiskJournal(JOURNAL_DIR)
+        journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
         journal.setup()
 
         self.assertRaises(
@@ -49,7 +50,7 @@ class TestJournal(unittest.TestCase):
                           )
 
     def test_close(self):
-        journal = DiskJournal(JOURNAL_DIR)
+        journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
         self.assertTrue(not journal.file)
 
         journal.setup()
@@ -59,7 +60,7 @@ class TestJournal(unittest.TestCase):
         self.assertTrue(journal.file.closed)
 
     def test_setup(self):
-        journal = DiskJournal(JOURNAL_DIR)
+        journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
         self.assertEquals(JOURNAL_DIR, journal.basedir)
 
         journal.setup()
