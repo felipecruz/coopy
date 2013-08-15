@@ -1,8 +1,11 @@
+import os
+import six
 import unittest
+
 import pytest
+
 from ..domain import Wiki
 
-import six
 if six.PY3:
     from unittest import mock
 else:
@@ -59,8 +62,8 @@ class TestBase(unittest.TestCase):
         dir1 = tempfile.mkdtemp()
         dir2 = tempfile.mkdtemp()
 
-        j1 = DiskJournal(dir1)
-        j2 = DiskJournal(dir2)
+        j1 = DiskJournal(dir1, os.getcwd())
+        j2 = DiskJournal(dir2, os.getcwd())
 
         subscribers = [j1, j2]
 

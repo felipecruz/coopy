@@ -68,7 +68,7 @@ def init_persistent_system(obj, basedir=None):
     # convert some string to a valid directory name
     basedir = fileutils.name_to_dir(basedir)
 
-    # get looger
+    system_data_path = os.getcwd()
 
     # check if basedir exists, if not, create it
     try:
@@ -87,6 +87,7 @@ def init_persistent_system(obj, basedir=None):
 
     # inject clock on system object
     inject(obj, '_clock', RecordClock())
+    inject(obj, '_system_data_path', system_data_path)
 
     # RestoreHelper will recover a system state based on snapshots and
     # transations files extracting actions executed previously and
@@ -97,7 +98,7 @@ def init_persistent_system(obj, basedir=None):
     delta = end - start
     logger.info(CORE_LOG_PREFIX + "spent " + str(delta) + "microseconds")
 
-    journal = DiskJournal(basedir)
+    journal = DiskJournal(basedir, system_data_path)
     journal.setup()
 
     snapshot_manager = SnapshotManager(basedir)

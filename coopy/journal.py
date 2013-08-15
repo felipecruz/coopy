@@ -9,12 +9,13 @@ else:
     from cPickle import Pickler
 
 class DiskJournal():
-    def __init__(self, basedir):
+    def __init__(self, basedir, system_data_path):
         '''
             set basedir and declare file attribute
         '''
         self.basedir = basedir
         self.file = None
+        self.system_data_path = system_data_path
 
     def setup(self):
         '''
@@ -39,14 +40,14 @@ class DiskJournal():
             < fileutils.MAX_LOGFILE_SIZE:
 
             file = fileutils.RotateFileWrapper(
-                        open(self.basedir + last_file_name, 'ab'),
-                        self.basedir
-                    )
+                       open(self.basedir + last_file_name, 'ab'),
+                       self.basedir,
+                       self.system_data_path)
         else:
             file = fileutils.RotateFileWrapper(
-                        open(fileutils.next_log_file(self.basedir), 'wb'),
-                        self.basedir
-                    )
+                       open(fileutils.next_log_file(self.basedir), 'wb'),
+                       self.basedir,
+                       self.system_data_path)
 
         return file
 
