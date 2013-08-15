@@ -12,10 +12,16 @@ TEST_DIR = 'fileutils_test/'
 class TestFileUtils(unittest.TestCase):
 
     def setUp(self):
-        os.mkdir(TEST_DIR)
+        try:
+            os.mkdir(TEST_DIR)
+        except:
+            pass
 
     def tearDown(self):
-        shutil.rmtree(TEST_DIR)
+        try:
+            shutil.rmtree(TEST_DIR)
+        except:
+            pass
 
     def test_number_as_string(self):
         self.assertEqual(fu.number_as_string(0),'000000000000000')
@@ -311,7 +317,9 @@ class RotateFileWrapperTest(unittest.TestCase):
         shutil.rmtree(TEST_DIR)
 
     def test_rotate_file_write_close(self):
-        _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'wb'), TEST_DIR)
+        _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'wb'),
+                                     TEST_DIR,
+                                     os.getcwd())
         data = b"a byte sequence!"
         _file.write(data)
         _file.close()
@@ -324,6 +332,7 @@ class RotateFileWrapperTest(unittest.TestCase):
     def test_rotate_file_rotate(self):
         _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'wb'),
                                      TEST_DIR,
+                                     os.getcwd(),
                                      max_size=1024)
         class PicklerMock(object):
             def clear_memo(self):
@@ -350,8 +359,6 @@ class RotateFileWrapperTest(unittest.TestCase):
         files = os.listdir(TEST_DIR)
         self.assertEqual(len(files), 2)
 
-        print(files)
-
         _file.close()
 
         self.assertTrue(_file.closed)
@@ -359,3 +366,19 @@ class RotateFileWrapperTest(unittest.TestCase):
         raw_file_b = open(TEST_DIR + "transaction_000000000000002.log", 'rb').read()
         self.assertEqual(raw_file_a, data)
         self.assertEqual(raw_file_b, second_data)
+
+    def test_guarantee_cwd(self):
+        _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'wb'),
+                                     TEST_DIR,
+                                     os.getcwd())
+
+        os.chdir('/tmp')
+
+        data = b"a byte sequence!"
+        _file.write(data)
+        _file.close()
+
+        self.assertTrue(_file.closed)
+
+        raw_file = open(TEST_DIR + 'file.log', 'rb')
+        self.assertEqual(raw_file.read(), data)
