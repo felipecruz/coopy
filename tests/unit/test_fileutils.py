@@ -10,7 +10,6 @@ from ..domain import Wiki
 TEST_DIR = 'fileutils_test/'
 
 class TestFileUtils(unittest.TestCase):
-
     def setUp(self):
         try:
             os.mkdir(TEST_DIR)
@@ -311,10 +310,16 @@ class TestFileUtils(unittest.TestCase):
 
 class RotateFileWrapperTest(unittest.TestCase):
     def setUp(self):
-        os.mkdir(TEST_DIR)
+        try:
+            os.mkdir(TEST_DIR)
+        except:
+            pass
 
     def tearDown(self):
-        shutil.rmtree(TEST_DIR)
+        try:
+            shutil.rmtree(TEST_DIR)
+        except:
+            pass
 
     def test_rotate_file_write_close(self):
         _file = fu.RotateFileWrapper(open(TEST_DIR + 'file.log', 'wb'),
@@ -372,6 +377,7 @@ class RotateFileWrapperTest(unittest.TestCase):
                                      TEST_DIR,
                                      os.getcwd())
 
+        current_dir = os.getcwd()
         os.chdir('/tmp')
 
         data = b"a byte sequence!"
@@ -380,5 +386,6 @@ class RotateFileWrapperTest(unittest.TestCase):
 
         self.assertTrue(_file.closed)
 
+        os.chdir(current_dir)
         raw_file = open(TEST_DIR + 'file.log', 'rb')
         self.assertEqual(raw_file.read(), data)
