@@ -250,5 +250,33 @@ class TestCoopyProxy(unittest.TestCase):
         proxy.lock.acquire.assert_not_called()
         proxy.close()
 
+    def test_coopyproxy_take_snapshot(self):
+        from coopy.base import CoopyProxy
+
+        import os
+        os.mkdir('wiki')
+
+        class PassPublisher(object):
+            def close(self):
+                pass
+            def receive(self, message):
+                pass
+            def receive_before(self, message):
+                pass
+            def receive_exception(self, message):
+                pass
+
+        proxy = CoopyProxy(Wiki(), [PassPublisher()])
+
+        # mock testing
+        proxy.lock = mock.MagicMock()
+        proxy.create_page('id', 'content', None)
+
+        proxy.take_snapshot()
+
+        proxy.lock.acquire.assert_called()
+        proxy.lock.release.assert_called()
+        proxy.close()
+
 if __name__ == "__main__":
     unittest.main()
