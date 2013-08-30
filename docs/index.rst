@@ -71,6 +71,7 @@ contents
    basics
    use_clock
    method_decorators
+   snapshots
    util_api
    client_server
    replication

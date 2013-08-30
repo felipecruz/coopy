@@ -212,8 +212,12 @@ class CoopyProxy():
     def take_snapshot(self):
         if self.slave:
             self.slave.acquire()
+
+        self.lock.acquire()
         if self.snapshot_manager:
             self.snapshot_manager.take_snapshot(self.obj)
+        self.lock.release()
+
         if self.slave:
             self.slave.release()
 
