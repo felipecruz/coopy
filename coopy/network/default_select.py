@@ -66,7 +66,11 @@ class CopyNet(threading.Thread):
             self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
         if not host:
-            host = socket.gethostbyname(socket.gethostname())
+            try:
+                host = socket.gethostbyname(socket.gethostname())
+            except Exception as e:
+                _mwarn("Error on gethostname %s" % (str(e)))
+                host = "127.0.0.1"
 
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
