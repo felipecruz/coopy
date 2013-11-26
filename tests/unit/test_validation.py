@@ -66,6 +66,7 @@ def test_validate_system_method_with_subscript():
             element = self.data[0]
 
         def ok2_method(self):
+            os.urandom(16).encode('hex')
             return ''.join([])
 
     assert validate_system(GoodSystem())

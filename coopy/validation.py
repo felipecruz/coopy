@@ -48,13 +48,14 @@ class NodeVisitor(ast.NodeVisitor):
                 ignore ''.join([]) patterns
             '''
             return
-        elif node.func.value.id in FORBIDDEN_OBJECTS and \
-           node.func.attr in FORBIDDEN_FUNCS:
-            '''
-                Bad calls: date.today(), datetime.now(), datetime.utcnow()
-            '''
-            raise Exception("This function calls %s.%s()- use clock.%s()" % \
-                            (node.func.value.id, node.func.attr, node.func.attr))
+        elif hasattr(node.func.value, 'id'):
+            if node.func.value.id in FORBIDDEN_OBJECTS and \
+               node.func.attr in FORBIDDEN_FUNCS:
+                '''
+                    Bad calls: date.today(), datetime.now(), datetime.utcnow()
+                '''
+                raise Exception("This function calls %s.%s()- use clock.%s()" % \
+                                (node.func.value.id, node.func.attr, node.func.attr))
 
         self._continue(node)
 
