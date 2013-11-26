@@ -5,7 +5,7 @@ Created on Dec 6, 2011
 '''
 __author__ = "Felipe Cruz <felipecruz@loogica.net>"
 __license__ = "BSD"
-__version__ = "0.5a"
+__version__ = "0.4.6b"
 
 import six
 import os
