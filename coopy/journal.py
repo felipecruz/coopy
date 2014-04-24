@@ -4,11 +4,11 @@ import pickle
 from coopy import fileutils
 
 if six.PY3:
-    from pickle import Pickler
+    from pickle import Pickler, dumps
 else:
-    from cPickle import Pickler
+    from cPickle import Pickler, dumps
 
-class DiskJournal():
+class DiskJournal(object):
     def __init__(self, basedir, system_data_path):
         '''
             set basedir and declare file attribute
@@ -69,3 +69,52 @@ class DiskJournal():
         '''
         if not self.file.closed:
             self.file.close()
+
+def sign_data(private_key_loc, data):
+    '''
+    param: private_key_loc Path to your private key
+    param: package Data to be signed
+    return: base64 encoded signature
+    '''
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import PKCS1_v1_5
+    from Crypto.Hash import SHA256
+    from base64 import b64encode, b64decode
+    key = open(private_key_loc, "r").read()
+    rsakey = RSA.importKey(key)
+    signer = PKCS1_v1_5.new(rsakey)
+    digest = SHA256.new()
+    # It's being assumed the data is base64 encoded, so it's decoded before updating the digest
+    digest.update(b64decode(data))
+    sign = signer.sign(digest)
+    return b64encode(sign)
+
+def verify_sign(public_key_loc, signature, data):
+    '''
+    Verifies with a public key from whom the data came that it was indeed
+    signed by their private key
+    param: public_key_loc Path to public key
+    param: signature String signature to be verified
+    return: Boolean. True if the signature is valid; False otherwise.
+    '''
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import PKCS1_v1_5
+    from Crypto.Hash import SHA256
+    from base64 import b64decode
+    pub_key = open(public_key_loc, "r").read()
+    rsakey = RSA.importKey(pub_key)
+    signer = PKCS1_v1_5.new(rsakey)
+    digest = SHA256.new()
+    # Assumes the data is base64 encoded to begin with
+    digest.update(b64decode(data))
+    if signer.verify(digest, b64decode(signature)):
+        return True
+    return False
+
+class SecureJournal(DiskJournal):
+    def receive(self, message):
+        from base64 import b64encode, b64decode
+        pickled_message_bytes = b64encode(dumps(message))
+        signature = sign_data("private.key", pickled_message_bytes)
+        self.pickler.dump(pickled_message_bytes)
+        return signature

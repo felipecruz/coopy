@@ -1,10 +1,15 @@
+import pickle
 import six
-import unittest
-
 import os
 import shutil
+import unittest
 
-from coopy.journal import DiskJournal
+try:
+    import mock
+except:
+    from unittest import mock
+
+from coopy.journal import DiskJournal, SecureJournal, verify_sign
 
 JOURNAL_DIR = 'journal_test/'
 CURRENT_DIR = os.getcwd()
@@ -31,8 +36,7 @@ class TestJournal(unittest.TestCase):
         self.assertEquals(new_file_name,
                           journal.current_journal_file(JOURNAL_DIR).name)
 
-    def test_receive(self):
-        import pickle
+    def test_receive_calls_pickle(self):
         class Message(object):
             def __init__(self, value):
                 self.value = value
@@ -43,11 +47,28 @@ class TestJournal(unittest.TestCase):
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
         journal.setup()
 
-        self.assertRaises(
-                            pickle.PicklingError,
-                            journal.receive,
-                            (message)
-                          )
+        self.assertRaises(pickle.PicklingError, journal.receive, (message))
+
+    def test_receive_calls_pickle_mock(self):
+        message = "message"
+        name = 'coopy.journal.Pickler'
+        pickler_mock = mock.MagicMock()
+        journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
+        journal.setup()
+        journal.pickler = pickler_mock
+        journal.receive(message)
+        pickler_mock.dump.assert_called_with(message)
+
+    def test_secure_receive_calls_pickle_mock(self):
+        message = "message"
+        name = 'coopy.journal.Pickler'
+        pickler_mock = mock.MagicMock()
+        journal = SecureJournal(JOURNAL_DIR, CURRENT_DIR)
+        journal.setup()
+        journal.pickler = pickler_mock
+        signature = journal.receive(message)
+        bytes_message = pickler_mock.dump.call_args_list[0][0][0] # UOU! :D
+        self.assertTrue(verify_sign("public.key", signature, bytes_message))
 
     def test_close(self):
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
