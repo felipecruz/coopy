@@ -1,6 +1,9 @@
 import six
 import os
 import pickle
+
+from base64 import b64encode, b64decode
+
 from coopy import fileutils
 
 if six.PY3:
@@ -112,9 +115,30 @@ def verify_sign(public_key_loc, signature, data):
     return False
 
 class SecureJournal(DiskJournal):
+    def __init__(self, basedir, system_data_path):
+        super(SecureJournal, self).__init__(basedir, system_data_path)
+        self.signatures = []
+
+    def setup(self):
+        super(SecureJournal, self).setup()
+        self.last_file_id = self.file.name
+        self.sig_file_name = self.last_file_id.replace('transaction', 'signatures')
+        self.sig_file = open(self.sig_file_name, 'w')
+
     def receive(self, message):
-        from base64 import b64encode, b64decode
+        if self.last_file_id != self.file.name:
+            self.sig_file.close()
+            self.last_file_id = self.file.name
+            self.sig_file_name = self.last_file_id.replace('transaction', 'signatures')
+            self.sig_file = open(self.sig_file_name, 'w')
+
         pickled_message_bytes = b64encode(dumps(message))
         signature = sign_data("private.key", pickled_message_bytes)
         self.pickler.dump(pickled_message_bytes)
-        return signature
+        self.signatures.append(signature)
+        self.sig_file.write("{}\n".format(signature))
+
+    def close(self):
+        super(SecureJournal, self).close()
+        if not self.sig_file.closed:
+            self.sig_file.close()
