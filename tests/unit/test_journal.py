@@ -59,14 +59,22 @@ class TestJournal(unittest.TestCase):
         journal.receive(message)
         pickler_mock.dump.assert_called_with(message)
 
-    def test_secure_receive_calls_pickle_mock(self):
+    def test_securejournal_init(self):
+        pickler_mock = mock.MagicMock()
+        journal = SecureJournal(JOURNAL_DIR, CURRENT_DIR)
+        journal.setup()
+        self.assertEqual([], journal.signatures)
+
+    def test_securejoutnal_receive_calls_pickle_mock(self):
         message = "message"
         name = 'coopy.journal.Pickler'
         pickler_mock = mock.MagicMock()
         journal = SecureJournal(JOURNAL_DIR, CURRENT_DIR)
         journal.setup()
         journal.pickler = pickler_mock
-        signature = journal.receive(message)
+        journal.receive(message)
+        journal.close()
+        signature = open(journal.sig_file_name, "r").read()
         bytes_message = pickler_mock.dump.call_args_list[0][0][0] # UOU! :D
         self.assertTrue(verify_sign("public.key", signature, bytes_message))
 
