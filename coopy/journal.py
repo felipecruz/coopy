@@ -73,6 +73,7 @@ class DiskJournal(object):
         if not self.file.closed:
             self.file.close()
 
+
 def sign_data(private_key_loc, data):
     '''
     param: private_key_loc Path to your private key
@@ -87,10 +88,10 @@ def sign_data(private_key_loc, data):
     rsakey = RSA.importKey(key)
     signer = PKCS1_v1_5.new(rsakey)
     digest = SHA256.new()
-    # It's being assumed the data is base64 encoded, so it's decoded before updating the digest
     digest.update(b64decode(data))
     sign = signer.sign(digest)
     return b64encode(sign)
+
 
 def verify_sign(public_key_loc, signature, data):
     '''
@@ -108,16 +109,30 @@ def verify_sign(public_key_loc, signature, data):
     rsakey = RSA.importKey(pub_key)
     signer = PKCS1_v1_5.new(rsakey)
     digest = SHA256.new()
-    # Assumes the data is base64 encoded to begin with
     digest.update(b64decode(data))
     if signer.verify(digest, b64decode(signature)):
         return True
     return False
 
+
+def generate_RSA(bits=2048):
+    '''
+    Generate an RSA keypair with an exponent of 65537 in PEM format
+    param: bits The key length in bits
+    Return private key and public key
+    '''
+    from Crypto.PublicKey import RSA
+    new_key = RSA.generate(bits, e=65537)
+    public_key = new_key.publickey().exportKey("PEM")
+    private_key = new_key.exportKey("PEM")
+    return private_key, public_key
+
+
 class SecureJournal(DiskJournal):
-    def __init__(self, basedir, system_data_path):
+    def __init__(self, private_key_file, basedir, system_data_path):
         super(SecureJournal, self).__init__(basedir, system_data_path)
         self.signatures = []
+        self.private_key_file = private_key_file
 
     def setup(self):
         super(SecureJournal, self).setup()
@@ -133,7 +148,7 @@ class SecureJournal(DiskJournal):
             self.sig_file = open(self.sig_file_name, 'w')
 
         pickled_message_bytes = b64encode(dumps(message))
-        signature = sign_data("private.key", pickled_message_bytes)
+        signature = sign_data(self.private_key_file.name, pickled_message_bytes)
         self.pickler.dump(pickled_message_bytes)
         self.signatures.append(signature)
         self.sig_file.write("{}\n".format(signature))

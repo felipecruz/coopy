@@ -9,7 +9,8 @@ try:
 except:
     from unittest import mock
 
-from coopy.journal import DiskJournal, SecureJournal, verify_sign
+from coopy.journal import (DiskJournal, SecureJournal, verify_sign,
+                           generate_RSA)
 
 JOURNAL_DIR = 'journal_test/'
 CURRENT_DIR = os.getcwd()
@@ -59,25 +60,6 @@ class TestJournal(unittest.TestCase):
         journal.receive(message)
         pickler_mock.dump.assert_called_with(message)
 
-    def test_securejournal_init(self):
-        pickler_mock = mock.MagicMock()
-        journal = SecureJournal(JOURNAL_DIR, CURRENT_DIR)
-        journal.setup()
-        self.assertEqual([], journal.signatures)
-
-    def test_securejoutnal_receive_calls_pickle_mock(self):
-        message = "message"
-        name = 'coopy.journal.Pickler'
-        pickler_mock = mock.MagicMock()
-        journal = SecureJournal(JOURNAL_DIR, CURRENT_DIR)
-        journal.setup()
-        journal.pickler = pickler_mock
-        journal.receive(message)
-        journal.close()
-        signature = open(journal.sig_file_name, "r").read()
-        bytes_message = pickler_mock.dump.call_args_list[0][0][0] # UOU! :D
-        self.assertTrue(verify_sign("public.key", signature, bytes_message))
-
     def test_close(self):
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
         self.assertTrue(not journal.file)
@@ -106,4 +88,42 @@ class TestJournal(unittest.TestCase):
         pickle_class = pickle.Pickler(open(expected_file_name, 'rb'))\
                                                             .__class__
         self.assertTrue(isinstance(journal.pickler, pickle_class))
+
+class TestSecureJournal(TestJournal):
+    def setUp(self):
+        import tempfile
+        os.mkdir(JOURNAL_DIR)
+        self.priv_file = open('priv.key', 'w')
+        self.pub_file = open('pub.key', 'w')
+        priv, pub = generate_RSA()
+        self.priv_file.write(priv)
+        self.pub_file.write(pub)
+        self.priv_file.close()
+        self.pub_file.close()
+        self.priv_file = open('priv.key', 'r')
+        self.pub_file = open('pub.key', 'r')
+
+    def tearDown(self):
+        shutil.rmtree(JOURNAL_DIR)
+        os.unlink('priv.key')
+        os.unlink('pub.key')
+
+    def test_securejournal_init(self):
+        pickler_mock = mock.MagicMock()
+        journal = SecureJournal(self.priv_file, JOURNAL_DIR, CURRENT_DIR)
+        journal.setup()
+        self.assertEqual([], journal.signatures)
+
+    def test_securejoutnal_receive_calls_pickle_mock(self):
+        message = "message"
+        name = 'coopy.journal.Pickler'
+        pickler_mock = mock.MagicMock()
+        journal = SecureJournal(self.priv_file, JOURNAL_DIR, CURRENT_DIR)
+        journal.setup()
+        journal.pickler = pickler_mock
+        journal.receive(message)
+        journal.close()
+        signature = open(journal.sig_file_name, "r").read()
+        bytes_message = pickler_mock.dump.call_args_list[0][0][0] # UOU! :D
+        self.assertTrue(verify_sign(self.pub_file.name, signature, bytes_message))
 
