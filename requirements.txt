@@ -2,3 +2,4 @@ pytest
 six
 pytest-cov
 mock
+pycrypto
