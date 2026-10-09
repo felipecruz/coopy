@@ -29,6 +29,7 @@ from coopy.foundation import Action, RecordClock, Publisher
 from coopy.journal import DiskJournal
 from coopy.integrity import Integrity, IDENTITY_FILE, validate_secret
 from coopy.restore import recover, RecoveryResult, RecoveryReport
+from coopy.serialization import Serializer, ActionSchemas
 from coopy.snapshot import SnapshotManager, SnapshotTimer
 from coopy.utils import method_or_none, action_check, inject
 from coopy.validation import validate_system
@@ -72,33 +73,51 @@ PathLike = str | os.PathLike[str]
 def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
                            recovery: Literal["strict"] = "strict",
                            durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None) -> T: ...
+                           secret: bytes | None = None,
+                           serializer: Serializer | None = None,
+                           schemas: ActionSchemas | None = None) -> T: ...
 
 @overload
 def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
                            recovery: Literal["strict"] = "strict",
                            durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None) -> T: ...
+                           secret: bytes | None = None,
+                           serializer: Serializer | None = None,
+                           schemas: ActionSchemas | None = None) -> T: ...
 
 @overload
 def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
                            recovery: Literal["salvage"],
                            durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None) -> RecoveryResult[T]: ...
+                           secret: bytes | None = None,
+                           serializer: Serializer | None = None,
+                           schemas: ActionSchemas | None = None) -> RecoveryResult[T]: ...
 
 @overload
 def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
                            recovery: Literal["salvage"],
                            durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None) -> RecoveryResult[T]: ...
+                           secret: bytes | None = None,
+                           serializer: Serializer | None = None,
+                           schemas: ActionSchemas | None = None) -> RecoveryResult[T]: ...
 
 @overload
-def init_persistent_system(obj: type[T] | T, basedir: PathLike | None = None, *,
+def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
                            recovery: str, durability: str = "buffered",
-                           secret: bytes | None = None) -> T | RecoveryResult[T]: ...
+                           secret: bytes | None = None,
+                           serializer: Serializer | None = None,
+                           schemas: ActionSchemas | None = None) -> T | RecoveryResult[T]: ...
+@overload
+def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
+                           recovery: str, durability: str = "buffered",
+                           secret: bytes | None = None,
+                           serializer: Serializer | None = None,
+                           schemas: ActionSchemas | None = None) -> T | RecoveryResult[T]: ...
 
 def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recovery: str = "strict",
-                           durability: str = "buffered", secret: bytes | None = None) -> Any:
+                           durability: str = "buffered", secret: bytes | None = None,
+                           serializer: Serializer | None = None,
+                           schemas: ActionSchemas | None = None) -> Any:
     validate_secret(secret)
     if recovery not in ("strict", "salvage"):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
@@ -129,7 +148,7 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
     # Salvage inspects existing storage without creating checkpoints/journals.
     if recovery == "salvage":
         inject(obj, '_clock', RecordClock())
-        return recover(obj, basedir, mode="salvage", secret=secret)
+        return recover(obj, basedir, mode="salvage", secret=secret, serializer=serializer, schemas=schemas)
 
     # check if basedir exists, if not, create it
     try:
@@ -150,7 +169,7 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
         integrity = Integrity.open(basedir, secret, create=True, durability=durability)
     if not fileutils.last_snapshot_file(basedir) and (secret is None or new_signed):
         logger.info(CORE_LOG_PREFIX + "No snapshot files..")
-        SnapshotManager(basedir, durability=durability, integrity=integrity).take_snapshot(obj)
+        SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer).take_snapshot(obj)
 
     # measure restore time
     start = time.perf_counter()
@@ -163,7 +182,7 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
     # RestoreHelper will recover a system state based on snapshots and
     # transations files extracting actions executed previously and
     # re-executing them again
-    result = recover(obj, basedir, mode=recovery, secret=secret)
+    result = recover(obj, basedir, mode=recovery, secret=secret, serializer=serializer, schemas=schemas)
     obj = result.system
 
     delta = time.perf_counter() - start
@@ -172,12 +191,12 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
     if secret is not None:
         integrity = Integrity.open(basedir, secret)
     journal = DiskJournal(basedir, system_data_path, durability=durability,
-                          integrity=integrity)
+                          integrity=integrity, serializer=serializer)
     journal.setup()
 
-    snapshot_manager = SnapshotManager(basedir, durability=durability, integrity=integrity)
+    snapshot_manager = SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer)
 
-    proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager)
+    proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager, schemas=schemas)
     proxy.recovery_report = result.report
     return proxy
 
@@ -187,7 +206,8 @@ def init_system(obj: Any, subscribers: list[Any]) -> CoopyProxy:
     return proxy
 
 class CoopyProxy():
-    def __init__(self, obj: Any, subscribers: list[Any], snapshot_manager: SnapshotManager | None = None) -> None:
+    def __init__(self, obj: Any, subscribers: list[Any], snapshot_manager: SnapshotManager | None = None, schemas: ActionSchemas | None = None) -> None:
+        self.schemas = schemas if schemas is not None else ActionSchemas()
         self._closed = False
         self.recovery_report = RecoveryReport()
         self.server: Any = None
@@ -300,6 +320,7 @@ class CoopyProxy():
                                 datetime.now(),
                                 args,
                                 kwargs)
+                action.schema_version = self.schemas.version(name)
                 system = None
                 if not readonly:
                     self.publisher.publish_before(action)

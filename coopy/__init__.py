@@ -5,3 +5,8 @@ from .base import init_persistent_system as open, logging_config as logging_conf
 from .error import CoopyError as CoopyError
 
 __all__ = ["open", "init_persistent_system", "control", "logging_config", "CoopyError"]
+
+from .serialization import (Serializer as Serializer, PickleSerializer as PickleSerializer,
+                            JsonSerializer as JsonSerializer, TypeRegistry as TypeRegistry,
+                            ActionSchemas as ActionSchemas, SerializationError as SerializationError)
+__all__ += ["Serializer", "PickleSerializer", "JsonSerializer", "TypeRegistry", "ActionSchemas", "SerializationError"]

@@ -1,4 +1,7 @@
-"""Strict recovery and explicit, non-writing salvage of trusted pickle storage."""
+"""Strict recovery and explicit, non-writing salvage of serialized storage."""
+import copy
+import inspect
+
 from pathlib import Path
 from coopy.error import CoopyError, ConfigurationError
 
@@ -61,13 +64,15 @@ class RecoveryError(CoopyError, RuntimeError):
                          f"(record {issue.position.record}): {issue.detail}")
 
 
-def recover(system, basedir, mode='strict', *, secret=None):
+def recover(system, basedir, mode='strict', *, secret=None, serializer=None, schemas=None):
     """Replay in order, stopping at the first detected defect.
 
     Strict mode raises without returning state. Salvage returns an inspection
     result, never a writable proxy. A divergent method may already have changed
     that result's state; the report marks it and excludes it from replayed.
     """
+    from coopy.serialization import ActionSchemas
+    schemas = schemas if schemas is not None else ActionSchemas()
     validate_secret(secret)
     if mode not in ('strict', 'salvage'):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
@@ -117,9 +122,10 @@ def recover(system, basedir, mode='strict', *, secret=None):
     try:
         if integrity is None:
             report.checkpoint = fileutils.last_snapshot_file(basedir)
-            recovered = SnapshotManager(basedir).recover_snapshot()
+            recovered = SnapshotManager(basedir, serializer=serializer).recover_snapshot()
         else:
-            recovered = Unpickler(BytesIO(snapshot_payload)).load()
+            recovered = (Unpickler(BytesIO(snapshot_payload)).load() if serializer is None
+                         else serializer.loads(snapshot_payload))
         if recovered is None:
             raise ValueError('No usable checkpoint found')
     except Exception as error:
@@ -137,7 +143,7 @@ def recover(system, basedir, mode='strict', *, secret=None):
             try:
                 with (BytesIO(verified_journals[filename]) if integrity is not None
                       else open(filename, 'rb')) as journal:
-                    unpickler = Unpickler(journal)
+                    unpickler = Unpickler(journal) if serializer is None else serializer.reader(journal)
                     record = 0
                     while True:
                         position = RecoveryPosition(filename, journal.tell(), record + 1)
@@ -154,13 +160,19 @@ def recover(system, basedir, mode='strict', *, secret=None):
                                 action = unpickler.load()
                             else:
                                 payload = integrity.read(journal, filename)
-                                action = Unpickler(BytesIO(payload)).load()
+                                action = (Unpickler(BytesIO(payload)).load() if serializer is None
+                                          else serializer.loads(payload))
                             if not isinstance(action, Action):
                                 raise ValueError('Journal record is not an Action')
                             if not isinstance(action.action, str):
                                 raise ValueError('Action name is not a string')
                             if not isinstance(action.args, (tuple, list)) or not isinstance(action.kwargs, dict):
                                 raise ValueError('Invalid action arguments')
+                            # Do not mutate memoized legacy records while migrating.
+                            action = copy.copy(action)
+                            upgraded = schemas.upgrade(action)
+                            if upgraded:
+                                inspect.signature(getattr(recovered, action.action)).bind(*action.args, **action.kwargs)
                             raised = getattr(action, 'raised', None)
                             if raised is not None and type(raised) is not bool:
                                 raise ValueError('Invalid action outcome metadata')
@@ -199,6 +211,6 @@ def recover(system, basedir, mode='strict', *, secret=None):
         recovered._clock = current_clock
 
 
-def restore(system, basedir, *, secret=None):
+def restore(system, basedir, *, secret=None, serializer=None, schemas=None):
     """Compatibility entry point, now strict; use recover for reports/salvage."""
-    return recover(system, basedir, secret=secret).system
+    return recover(system, basedir, secret=secret, serializer=serializer, schemas=schemas).system

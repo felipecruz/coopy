@@ -16,7 +16,8 @@ from os import path
 logger = logging.getLogger("coopy")
 
 class SnapshotManager(object):
-    def __init__(self, basedir, durability="buffered", integrity=None):
+    def __init__(self, basedir, durability="buffered", integrity=None, serializer=None):
+        self.serializer = serializer
         self.integrity = integrity
         self.durability = durability
         self.basedir = Path(basedir)
@@ -37,9 +38,12 @@ class SnapshotManager(object):
                                              delete=False) as file:
                 temporary = file.name
                 if self.integrity is None:
-                    Pickler(file, pickle.HIGHEST_PROTOCOL).dump(object)
+                    writer = (Pickler(file, pickle.HIGHEST_PROTOCOL) if self.serializer is None
+                              else self.serializer.writer(file))
+                    writer.dump(object)
                 else:
-                    payload = pickle.dumps(object, pickle.HIGHEST_PROTOCOL)
+                    payload = (pickle.dumps(object, pickle.HIGHEST_PROTOCOL) if self.serializer is None
+                               else self.serializer.dumps(object))
                     file.write(self.integrity.encode(payload, destination))
                 file.flush()
                 os.fsync(file.fileno())
@@ -71,8 +75,13 @@ class SnapshotManager(object):
                 payload = self.integrity.read(file, file.name)
                 if file.read(1):
                     raise IntegrityError('Trailing bytes after signed snapshot')
-                return Unpickler(BytesIO(payload)).load()
-            return Unpickler(file).load()
+                return (Unpickler(BytesIO(payload)).load() if self.serializer is None
+                        else self.serializer.loads(payload))
+            reader = Unpickler(file) if self.serializer is None else self.serializer.reader(file)
+            result = reader.load()
+            if file.read(1):
+                raise ValueError("Trailing bytes after snapshot")
+            return result
 
 
 class SnapshotTimer(threading.Thread):

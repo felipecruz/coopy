@@ -8,7 +8,8 @@ from pickle import Pickler
 from coopy import fileutils
 
 class DiskJournal():
-    def __init__(self, basedir, system_data_path, durability="buffered", integrity=None):
+    def __init__(self, basedir, system_data_path, durability="buffered", integrity=None, serializer=None):
+        self.serializer = serializer
         self.integrity = integrity
         if durability not in ("buffered", "sync"):
             raise ConfigurationError("durability must be 'buffered' or 'sync'")
@@ -27,7 +28,8 @@ class DiskJournal():
         '''
         try:
             self.file = self.current_journal_file(self.basedir)
-            self.pickler = Pickler(self.file, pickle.HIGHEST_PROTOCOL)
+            self.pickler = (Pickler(self.file, pickle.HIGHEST_PROTOCOL) if self.serializer is None
+                            else self.serializer.writer(self.file))
             self.file.set_pickler(self.pickler)
         except Exception as error:
             self._failed(error)
@@ -35,7 +37,7 @@ class DiskJournal():
     def current_journal_file(self, basedir):
         # Never append a fresh pickler's memo to an existing pickle stream.
         # Also guarantees that reopened journals follow the latest snapshot.
-        file = open(fileutils.next_log_file(fileutils.name_to_dir(self.basedir)), 'xb')
+        file = open(fileutils.next_log_file(self.basedir), 'xb')
         try:
             if self.durability == 'sync':
                 fileutils.sync_directory(self.basedir)
@@ -54,7 +56,7 @@ class DiskJournal():
         number = fileutils.get_number(os.path.basename(snapshot_path)) + 1
         number = max(number, fileutils.next_number(self.basedir))
         self.file.rotate(fileutils.to_log_file(
-            fileutils.name_to_dir(self.basedir), number))
+            self.basedir, number))
 
     def _failed(self, error):
         self.failure = error
@@ -84,7 +86,8 @@ class DiskJournal():
             if self.integrity is None:
                 self.pickler.dump(message)
             else:
-                payload = pickle.dumps(message, pickle.HIGHEST_PROTOCOL)
+                payload = (pickle.dumps(message, pickle.HIGHEST_PROTOCOL) if self.serializer is None
+                           else self.serializer.dumps(message))
                 self.file.write(self.integrity.encode(
                     payload, self.file.name, self.file.tell()))
             if self.durability == 'sync':

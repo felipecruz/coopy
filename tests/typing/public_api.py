@@ -27,3 +27,8 @@ if TYPE_CHECKING:
     with coopy.control(coopy.open(Todo)) as managed:
         assert_type(managed, Todo)
         assert_type(managed.add("milk"), int)
+    assert_type(coopy.open(Todo, serializer=coopy.JsonSerializer(), schemas=coopy.ActionSchemas()), Todo)
+    assert_type(coopy.open(Todo(), recovery="salvage"), RecoveryResult[Todo])
+    mode: str = "strict"
+    assert_type(coopy.open(Todo, recovery=mode), Todo | RecoveryResult[Todo])
+    assert_type(coopy.open(Todo(), recovery=mode), Todo | RecoveryResult[Todo])

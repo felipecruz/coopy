@@ -47,7 +47,7 @@ class RotateFileWrapper():
 
     def rotate_if_needed(self):
         if self.file.tell() > self.max_size:
-            self.rotate(next_log_file(name_to_dir(self.rotation_dir)))
+            self.rotate(next_log_file(self.rotation_dir))
 
     def rotate(self, file_name):
         self.flush()
