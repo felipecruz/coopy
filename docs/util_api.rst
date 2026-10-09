@@ -1,4 +1,4 @@
-.. _usage:
+.. _util_api:
 
 Utilitary API
 =============
@@ -7,7 +7,14 @@ There are some utilitary methods to help you.
 
 Given::
 
-    wiki = init_system(Wiki)
+    from coopy.base import init_persistent_system
+    from wiki import Wiki  # the tutorial domain
+
+    wiki = init_persistent_system(Wiki, basedir="wiki-data")
+    try:
+        paths = wiki.basedir_abspath()
+    finally:
+        wiki.close()
 
 
 .. function:: basedir_abspath()

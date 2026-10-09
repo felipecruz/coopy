@@ -1,35 +1,38 @@
 .. _replication:
 
 Master/slave replication
-=======================
+============================
+
+.. warning::
+
+   Replication is experimental and **incomplete until roadmap F13 is accepted**.
+   F5 supplied bootstrap and catch-up code, described below, but F13 remains
+   open. This example demonstrates the current API, not a production recovery
+   or failover guarantee.
 
 A new slave receives a snapshot of the populated master, then replays the
 ordered actions queued during transfer. Snapshot capture holds the same lock as
 proxy mutations. Socket writes happen outside that lock, so a slow transfer
 does not hold up domain writes. Live updates continue in the same packet queue.
 
-Start a master with an existing proxy::
+Experimental local example
+------------------------------
 
-    from coopy.base import init_persistent_system
+This runnable example uses the tutorial's ``wiki.py`` alongside
+``replication.py``. Run it only on a trusted host/network; the master listener
+binds the host's resolved address, falling back to loopback if resolution
+fails. It uses an OS-selected port and closes both endpoints.
 
-    master = init_persistent_system(Wiki, basedir="master-data")
-    master.start_master(port=8012, password="shared-secret")
+.. literalinclude:: examples/replication.py
+   :language: python
 
-Start a read-only slave without a local persistence directory::
-
-    from coopy.base import init_system
-
-    replica = init_system(Wiki(), [])
-    connection = replica.start_slave("master-host", 8012,
-                                     password="shared-secret")
-    if not connection.wait_until_synchronized(timeout=30):
-        replica.close()
-        raise RuntimeError(connection.error or "Bootstrap timed out")
-    page = replica.get_page("Home")  # an @readonly domain method
-    replica.close()
+``init_persistent_system`` supplies the master's local persistence.
+``init_system(Wiki(), [])`` creates an ephemeral slave with no local journal
+or snapshot manager; it is not a durable restart recipe. Use readonly domain
+queries after waiting for synchronization.
 
 Readiness and failures
-----------------------
+--------------------------
 
 ``start_slave`` returns immediately after connecting and starting its receiver.
 ``connection.synchronized`` becomes true only after the snapshot and every
@@ -50,7 +53,7 @@ bootstrap again; it is never automatically promoted. Closing a proxy stops its
 receiver; ``master.shutdown()`` stops its listener and disconnects its slaves.
 
 Protocol and limits
--------------------
+-----------------------
 
 Upgrade master and slaves together. Authentication now sends a four-byte
 network-order password length followed by the password (up to 4096 bytes),

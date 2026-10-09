@@ -3,35 +3,24 @@
 Snapshots
 =========
 
-Motivation
-----------
+Taking checkpoints
+------------------
 
-If your domain is really active and generates tons of logs, we suggest you to take snapshots from your domain periodically. A snapshot allows you to delete your logs older then it's timestamp and make the restore process faster.
-Today, while taking a snapshot the domain is *locked*. It's fairly common setup a local slave just for taking snapshots.
+Snapshots reduce recovery replay by storing the current domain state. Use
+``proxy.take_snapshot()`` for a manual checkpoint. To schedule checkpoints,
+call ``proxy.start_snapshot_manager(seconds)`` once; the first attempt occurs
+after that interval. ``proxy.close()`` stops and joins the timer. Stop
+application writers before closing. Close does not take a final snapshot.
 
-Example
--------
+The :doc:`tutorial` contains a runnable example with manual checkpoints, timer
+setup/cleanup, and close/reopen recovery. Snapshot serialization holds the
+domain lock and can pause writes. Replication remains incomplete pending F13;
+do not depend on a slave as a durable snapshot service.
 
-Example::
-
-    from coopy.base import init_persistent_system
-
-    persistent_todo_list = init_persistent_system(Todo())
-    persistent_todo_list.add_task("Some Task Name", "A Task Description")
-
-    # Take snapshot
-    persistent_todo_list.take_snapshot()
-
-
-API
----
-
-For domain instances
-
-.. function:: domain.take_snapshot()
-    Takes the domain snapshot.
-
-
+Retain the full directory until you have verified a stopped-system backup and
+restore. There is no automatic pruning. File numbers, not timestamps, determine
+which journals are required. Never delete later-numbered journals needed by
+the checkpoint you intend to recover.
 
 Checkpoint recovery
 -------------------

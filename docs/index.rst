@@ -19,26 +19,10 @@ http://en.wikipedia.org/wiki/Object_prevalence
 Using
 -----
 
-Simple, transparent and non-intrusive. Note that ``Todo`` could be any class
-that you want to persist state across method calls that modifies it's internal
-state::
-
-    from coopy.base import init_persistent_system
-
-    class Todo(object):
-        def __init__(self):
-            self.tasks = []
-
-        def add_task(self, name, description):
-            task = dict(name=name, description=description)
-            self.tasks.append(task)
-
-    persistent_todo_list = init_persistent_system(Todo())
-    persistent_todo_list.add_task("Some Task Name", "A Task Description")
-
-Check out how coopy works with this little :doc:`tutorial` and then...
-
-It's very important to know how coopy works, to use it. Check out :doc:`basics`
+Follow the executable :doc:`tutorial` to open a persistent domain, record
+mutations and clock values, take a checkpoint, close, and reopen it. Read
+:doc:`usage` for the current durability and recovery contract and :doc:`basics`
+for the storage model.
 
 
 Restrictions

@@ -1,65 +1,43 @@
 .. _use_clock:
 
-How to Use Clock
-================
+Recorded clock values
+=====================
 
-Date problem
-````````````
+Each method invocation through the proxy gets a fresh ``self._clock``. Use it
+inside domain methods; it is not a package-level import or a clock to use in
+``__init__``. The journal stores the ordered results of clock calls, not just
+the action's timestamp. Recovery returns those results in order, so multiple
+calls in one action retain their individual values.
 
-**coopy** is based on re-execute actions performed in the past. When you call datetime.now() inside an 'business' method, when your actions are executed in restore process, datetime.now() will be executed again. This behaviour will produce unexpected results.
+The tutorial's domain uses all three supported methods:
 
-Why use Clock?
-``````````````
+.. literalinclude:: examples/wiki.py
+   :language: python
+   :pyobject: Wiki.create_page
 
-Clock uses **coopy** timestamp. When you execute a 'business' method, coopy takes the current timestamp and persist inside action object. Clock object has his timestamp updated with action timestamp so in a restore process, Clock will have the original timestamp, and not the timestamp from the re-execution process.
+.. list-table:: Clock API (no arguments)
+   :header-rows: 1
 
+   * - Method
+     - Result
+   * - ``self._clock.now()``
+     - Naive local ``datetime``.
+   * - ``self._clock.utcnow()``
+     - Naive UTC ``datetime`` (no timezone attached).
+   * - ``self._clock.today()``
+     - Local ``date``.
 
-Wrong code::
+The executable :doc:`tutorial` verifies that all three values from a call after
+the checkpoint survive journal replay unchanged. Replay must make the same
+clock calls in the same order. Changing domain code or branches can consume
+the recorded results incorrectly. Randomness and external I/O are not captured
+by this clock; see :doc:`usage`.
 
-    def create_page(self, wikipage):
-        page = None
-        wikipage.last_modify = datetime.now()
-        ....
+Clock-aware validation
+----------------------
 
-Right code::
-
-    from coopy import clock
-    def create_page(self, wikipage):
-        page = None
-        wikipage.last_modify = self._clock.now()
-        ....
-
-
-Clock API
-`````````
-
-Clock-aware code validation
----------------------------
-
-coopy has a validation mechanism that will not accept obvious code errors such as
-calling ``datetime.now()`` inside a system method.
-
-API
----
-
-Take note that a ``_clock`` attribute is injected on your system instance and the API is
-always called via ``self._clock``.
-
-For Clock instances
-
-.. function:: clock.now()
-    Return datetime.now()
-
-    :rtype: datetime
-
-
-.. function:: clock.utcnow()
-    Return datetime.now()
-
-    :rtype: datetime
-
-
-.. function:: clock.today()
-    Return date.today()
-
-    :rtype: date
+Initialization checks available method source for obvious direct uses such as
+``datetime.now()`` and ``date.today()``. Some patterns only warn, and aliases,
+helpers, or missing source can escape detection. Passing validation does not
+prove deterministic behavior. For isolated domain tests, inject a test clock;
+see :doc:`util_api`.

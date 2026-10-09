@@ -64,7 +64,7 @@ release = '0.5.0'
 
 # List of directories, relative to source directory, that shouldn't be searched
 # for source files.
-exclude_trees = []
+exclude_patterns = ['build', '_build']
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 #default_role = None
@@ -91,7 +91,7 @@ pygments_style = 'tango'
 
 # The theme to use for HTML and HTML Help pages.  Major themes that come with
 # Sphinx are currently 'default' and 'sphinxdoc'.
-html_theme = 'default'
+html_theme = 'classic'
 html_theme_options = {
     "rightsidebar" : "true",
     "relbarbgcolor" : "white",

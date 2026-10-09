@@ -27,6 +27,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]
+docs = ["sphinx>=7,<9"]
 
 [project.urls]
 Homepage = "https://github.com/felipecruz/coopy"

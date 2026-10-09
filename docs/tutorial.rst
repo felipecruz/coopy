@@ -1,37 +1,38 @@
-1 minute coopy tutorial
-=========================
+Persistence and recovery tutorial
+=====================================
 
-**coopy** enforces you to implement code in the object-oriented way. Imagine a wiki system::
+A persistent system wraps a domain object in a proxy. Call methods on that
+proxy to record mutations. Keep the domain class in an importable Python module
+so pickle can find the same class when another process reopens the directory.
+The maintained example uses ``docs/examples/wiki.py``:
 
-    class WikiPage():
-        def __init__(self, id, content):
-            self.id = id
-            self.content = content
-            self.history = []
-            self.last_modify = datetime.datetime.now()
+.. literalinclude:: examples/wiki.py
+   :language: python
 
-    class Wiki():
-        def __init__(self):
-            self.pages = {}
-        def create_page(self, page_id, content):
-            page = None
-            if page_id in self.pages:
-                page = self.pages[page_id]
-            if not page:
-                page = WikiPage(page_id, content)
-                self.pages[page_id] = page	    
-            return page
+``@readonly`` excludes queries from journaling; it does not enforce immutability.
+This query returns a copy whose values are immutable. ``@abort_exception``
+records successful calls and omits failed ones, so validation happens before
+mutation. The injected ``self._clock`` records each time value for replay.
+There is no ``from coopy import clock`` import.
 
-It's very easy to implement a wiki system thinking only on it's objects. Let's move forward::
+Open, checkpoint, close, and reopen
+---------------------------------------
 
-    from coopy import init_system
-    wiki = init_system(Wiki(), "/path/to/somedir")
-    wiki.create_page('My First Page', 'My First Page Content')
+Save the following as ``persistence.py`` alongside ``wiki.py``. It uses a
+temporary data directory, checks snapshot state plus later journal entries,
+verifies recorded clock values, and writes again after reopening:
 
-That's all you need to use coopy. If you stop your program and run again::
+.. literalinclude:: examples/persistence.py
+   :language: python
 
-    from coopy import init_system
-    wiki = init_system(Wiki(), "/path/to/somedir")
-    page = wiki.pages['My First Page']
+From an installed source checkout, run ``python docs/examples/persistence.py``.
+Both ``Wiki`` (a no-argument class) and ``Wiki()`` (an instance) are accepted by
+``coopy.base.init_persistent_system``. Use a stable, dedicated directory in a
+real application; the temporary directory here is deleted when the example
+finishes. Reopening from another process requires the same importable domain
+module and compatible code and dependencies. Always stop application writers
+and call ``close()`` before reopening; close does not take a final snapshot.
 
-If you want to know how coopy works, check out :doc:`basics` 
+For the storage contract and recovery precautions, read :doc:`usage` and
+:doc:`snapshots`. See :doc:`method_decorators` for failure behavior and
+:doc:`use_clock` for deterministic time handling.

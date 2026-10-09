@@ -46,3 +46,24 @@ Coverage report::
     coopy/validation                  45      1    98%
     --------------------------------------------------
     TOTAL                            749    108    86%
+
+Maintained documentation examples
+---------------------------------
+
+Install the test and documentation dependencies from the repository root::
+
+    python -m pip install -e ".[test,docs]"
+
+Execute the sources included in the guide and build HTML with warnings treated
+as errors::
+
+    python -m pytest tests/functional/test_documentation.py
+    python -m sphinx -W --keep-going -b html docs build/docs
+
+The examples run in subprocesses with temporary working and data directories.
+They cover close/reopen, checkpoint plus journal recovery, all recorded clock
+methods, readonly copies, decorator failures, and experimental replication.
+A separate process also reopens the tutorial's importable domain. The replication
+example needs local socket access and does not close the remaining F13 scope.
+CI runs these tests and the Sphinx build. The generated guide is at
+``build/docs/index.html``.
