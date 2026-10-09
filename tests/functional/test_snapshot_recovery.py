@@ -4,6 +4,7 @@ import pickle
 import subprocess
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from unittest.mock import patch
 
@@ -46,6 +47,86 @@ def test_repeated_checkpoints_and_reopen(tmp_path):
     ledger = open_ledger(tmp_path)
     assert ledger.entries == expected
     ledger.close()
+
+
+@pytest.mark.parametrize('timed', [False, True], ids=['manual', 'timer'])
+@pytest.mark.parametrize('boundary', ['rotation', 'publication'])
+def test_checkpoint_excludes_concurrent_write_until_publication(tmp_path, timed, boundary):
+    ledger = open_ledger(tmp_path)
+    ledger.add('A')
+    journal = ledger.publisher.subscribers[0]
+    old_journal = journal.file.name
+    old_snapshot = fileutils.last_snapshot_file(str(tmp_path))
+    reached = threading.Event()
+    proceed = threading.Event()
+    writer_started = threading.Event()
+    if boundary == 'rotation':
+        target, attribute = journal, 'checkpoint'
+    else:
+        target, attribute = os, 'replace'
+    original = getattr(target, attribute)
+
+    def pause(*args):
+        reached.set()
+        assert proceed.wait(5), 'checkpoint was not released'
+        return original(*args)
+
+    def write():
+        writer_started.set()
+        ledger.add('B')
+
+    try:
+        with patch.object(target, attribute, pause), ThreadPoolExecutor(2) as pool:
+            snapshot = None
+            if timed:
+                ledger.start_snapshot_manager(0.01)
+            else:
+                snapshot = pool.submit(ledger.take_snapshot)
+            try:
+                assert reached.wait(5)
+                # Test from another thread: RLock reentrancy must not disguise
+                # a checkpoint that released the domain lock too early.
+                acquired = ledger.lock.acquire(blocking=False)
+                if acquired:
+                    ledger.lock.release()
+                assert not acquired
+                assert fileutils.last_snapshot_file(str(tmp_path)) == old_snapshot
+                if boundary == 'publication':
+                    assert journal.file.name != old_journal
+                writer = pool.submit(write)
+                assert writer_started.wait(5)
+                assert not writer.done()
+            finally:
+                if timed:
+                    # Prevent another timer tick from checkpointing B.
+                    ledger.snapshot_timer.finished.set()
+                proceed.set()
+            if snapshot:
+                snapshot.result(timeout=5)
+            else:
+                ledger.snapshot_timer.stop()
+            writer.result(timeout=5)
+
+        snapshot_name = fileutils.last_snapshot_file(str(tmp_path))
+        assert fileutils.get_number(os.path.basename(old_journal)) < fileutils.get_number(snapshot_name)
+        assert fileutils.get_number(snapshot_name) < fileutils.get_number(os.path.basename(journal.file.name))
+        assert SnapshotManager(str(tmp_path)).recover_snapshot().entries == ['A']
+    finally:
+        ledger.close()
+
+    ledger = open_ledger(tmp_path)
+    try:
+        assert ledger.entries == ['A', 'B']
+        ledger.add('C')
+        ledger.take_snapshot()
+        ledger.add('D')
+    finally:
+        ledger.close()
+    ledger = open_ledger(tmp_path)
+    try:
+        assert ledger.entries == ['A', 'B', 'C', 'D']
+    finally:
+        ledger.close()
 
 
 def test_timer_checkpoint_and_retry_after_failure(tmp_path):
@@ -181,3 +262,48 @@ def test_legacy_numbered_pickle_stream_is_preserved(tmp_path):
     ledger = open_ledger(tmp_path)
     assert ledger.entries == [shared, shared, 'new stream', 'new checkpoint']
     ledger.close()
+
+
+@pytest.mark.parametrize('old_log_number', [3, 4])
+def test_legacy_checkpoint_selection_does_not_replay_earlier_or_equal_logs(tmp_path, old_log_number):
+    saved = Ledger()
+    saved.add('A')
+    snapshot = tmp_path / 'snapshot_000000000000004.dat'
+    snapshot.write_bytes(pickle.dumps(saved, protocol=2))
+    old_log = tmp_path / ('transaction_%015d.log' % old_log_number)
+    with old_log.open('wb') as file:
+        pickler = pickle.Pickler(file, protocol=2)
+        # Old writers could append after a checkpoint to a lower-numbered
+        # stream. There is no offset identifying that tail: preserve the
+        # established selection rule instead of guessing and duplicating A.
+        for value in ['A', 'ambiguous old tail']:
+            pickler.dump(Action(1, 'add', datetime(2020, 1, 1), (value,), {}))
+
+    expected = ['A']
+    for number in [5, 6]:
+        shared = ['legacy', number]
+        log = tmp_path / ('transaction_%015d.log' % number)
+        with log.open('wb') as file:
+            pickler = pickle.Pickler(file, protocol=2)
+            for _ in range(2):
+                pickler.dump(Action(1, 'add', datetime(2020, 1, 1), (shared,), {}))
+                expected.append(shared)
+    originals = {file: file.read_bytes() for file in tmp_path.iterdir()}
+
+    ledger = open_ledger(tmp_path)
+    try:
+        assert ledger.entries == expected
+        assert ledger.entries[1] is ledger.entries[2]
+        assert ledger.entries[3] is ledger.entries[4]
+        assert ledger.entries[1] is not ledger.entries[3]
+        ledger.add('B')
+        ledger.take_snapshot()
+        ledger.add('C')
+    finally:
+        ledger.close()
+    assert all(file.read_bytes() == data for file, data in originals.items())
+    ledger = open_ledger(tmp_path)
+    try:
+        assert ledger.entries == expected + ['B', 'C']
+    finally:
+        ledger.close()
