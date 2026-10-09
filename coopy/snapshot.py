@@ -23,6 +23,11 @@ class SnapshotManager(object):
         self.basedir = basedir
 
     def take_snapshot(self, object, before_publish=None):
+        """Publish only a fully written, synced, and closed snapshot.
+
+        The caller coordinates journals via before_publish while holding its
+        domain lock. A failed publication must leave those journals intact.
+        """
         destination = fu.next_snapshot_file(self.basedir)
         # The temporary name cannot be discovered as a checkpoint. Keep it on
         # the same filesystem so publication is a single atomic rename.
@@ -38,9 +43,18 @@ class SnapshotManager(object):
             if before_publish:
                 before_publish(destination)
             os.replace(temporary, destination)
+            temporary = None
         finally:
-            if temporary and os.path.exists(temporary):
-                os.unlink(temporary)
+            if temporary:
+                try:
+                    os.unlink(temporary)
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    # Cleanup is best effort: preserve the snapshot failure
+                    # for the caller. This hidden file cannot become a checkpoint.
+                    logger.warning("Unable to remove incomplete snapshot %s",
+                                   temporary, exc_info=True)
 
     def recover_snapshot(self):
         last_snapshot = fu.last_snapshot_file(self.basedir)

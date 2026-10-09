@@ -3,6 +3,7 @@ import os
 import pickle
 import subprocess
 import sys
+import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -167,13 +168,14 @@ def test_failed_snapshot_retains_checkpoint_and_journals(tmp_path, failure):
             self.file = file
 
         def dump(self, obj):
-            if failure == 'write':
-                self.file.write(b'partial pickle')
-                raise OSError('disk full')
-            raise pickle.PicklingError('not serializable')
+            self.file.write(b'partial pickle')
+            raise OSError('disk full')
 
     journal = ledger.publisher.subscribers[0]
-    if failure in ('serialization', 'write'):
+    if failure == 'serialization':
+        injection = patch.object(Ledger, '__getstate__', create=True,
+                                 side_effect=pickle.PicklingError('not serializable'))
+    elif failure == 'write':
         injection = patch('coopy.snapshot.Pickler', FailingPickler)
     elif failure == 'fsync':
         injection = patch('coopy.snapshot.os.fsync', side_effect=OSError('sync failed'))
@@ -198,26 +200,138 @@ def test_failed_snapshot_retains_checkpoint_and_journals(tmp_path, failure):
     ledger.close()
 
 
-def test_interruption_before_publication(tmp_path):
+@pytest.mark.parametrize('failure', ['write', 'flush', 'close'])
+@pytest.mark.parametrize('cleanup_fails', [False, True])
+def test_snapshot_file_failure_preserves_original_error_and_recovery(
+        tmp_path, failure, cleanup_fails, caplog):
+    ledger = open_ledger(tmp_path)
+    ledger.add('checkpoint')
+    ledger.take_snapshot()
+    previous = fileutils.last_snapshot_file(str(tmp_path))
+    previous_bytes = (tmp_path / previous).read_bytes()
+    ledger.add('journal tail')
+    journals = {name: (tmp_path / name).read_bytes()
+                for name in fileutils.list_log_files(str(tmp_path))}
+    original_factory = tempfile.NamedTemporaryFile
+    original_unlink = os.unlink
+    error = OSError('injected snapshot ' + failure + ' failure')
+
+    class FailingFile:
+        # Use the real Pickler and real temporary file, failing at file I/O.
+        def __init__(self, *args, **kwargs):
+            self.file = original_factory(*args, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self.file, name)
+
+        def __enter__(self):
+            return self
+
+        def write(self, data):
+            if failure == 'write':
+                self.file.write(data[:len(data) // 2])
+                self.file.flush()
+                raise error
+            return self.file.write(data)
+
+        def flush(self):
+            if failure == 'flush':
+                raise error
+            return self.file.flush()
+
+        def __exit__(self, *args):
+            self.file.close()
+            if failure == 'close':
+                raise error
+
+    def unlink(filename):
+        if cleanup_fails and os.path.basename(filename).startswith('.coopy-snapshot-'):
+            raise PermissionError('injected cleanup failure')
+        return original_unlink(filename)
+
+    try:
+        with patch('coopy.snapshot.tempfile.NamedTemporaryFile', FailingFile), \
+                patch('coopy.snapshot.os.unlink', unlink), \
+                pytest.raises(OSError) as caught:
+            ledger.take_snapshot()
+        assert caught.value is error
+        assert fileutils.last_snapshot_file(str(tmp_path)) == previous
+        assert (tmp_path / previous).read_bytes() == previous_bytes
+        assert SnapshotManager(str(tmp_path)).recover_snapshot().entries == ['checkpoint']
+        assert {name: (tmp_path / name).read_bytes()
+                for name in fileutils.list_log_files(str(tmp_path))} == journals
+        assert bool(list(tmp_path.glob('.coopy-snapshot-*'))) == cleanup_fails
+        if cleanup_fails:
+            assert 'Unable to remove incomplete snapshot' in caplog.text
+        ledger.add('after failure')
+    finally:
+        ledger.close()
+
+    ledger = open_ledger(tmp_path)
+    try:
+        assert ledger.entries == ['checkpoint', 'journal tail', 'after failure']
+        ledger.take_snapshot()
+        ledger.add('after retry')
+    finally:
+        ledger.close()
+    ledger = open_ledger(tmp_path)
+    try:
+        assert ledger.entries == ['checkpoint', 'journal tail', 'after failure', 'after retry']
+    finally:
+        ledger.close()
+
+
+@pytest.mark.parametrize('boundary', ['write', 'rotation', 'publication'])
+def test_interruption_before_publication(tmp_path, boundary):
+    ledger = open_ledger(tmp_path)
+    ledger.add('checkpoint')
+    ledger.take_snapshot()
+    ledger.add('previous journal')
+    ledger.close()
+    previous = fileutils.last_snapshot_file(str(tmp_path))
+    previous_bytes = (tmp_path / previous).read_bytes()
+    journals = {name: (tmp_path / name).read_bytes()
+                for name in fileutils.list_log_files(str(tmp_path))}
     script = '''
-import os, sys
+import os, sys, tempfile
 from unittest.mock import patch
 from tests.functional.test_snapshot_recovery import open_ledger
 ledger = open_ledger(sys.argv[1])
 ledger.add('survives interruption')
-with patch('coopy.snapshot.os.replace', side_effect=lambda *args: os._exit(17)):
+boundary = sys.argv[2]
+original_factory = tempfile.NamedTemporaryFile
+def interrupted_file(*args, **kwargs):
+    file = original_factory(*args, **kwargs)
+    def write(data):
+        file.file.write(data[:len(data) // 2])
+        file.file.flush()
+        os._exit(17)
+    file.write = write
+    return file
+if boundary == 'write':
+    injection = patch('coopy.snapshot.tempfile.NamedTemporaryFile', interrupted_file)
+elif boundary == 'rotation':
+    injection = patch.object(ledger.publisher.subscribers[0], 'checkpoint',
+                             side_effect=lambda *args: os._exit(17))
+else:
+    injection = patch('coopy.snapshot.os.replace', side_effect=lambda *args: os._exit(17))
+with injection:
     ledger.take_snapshot()
 '''
-    result = subprocess.run([sys.executable, '-c', script, str(tmp_path)], timeout=10)
+    result = subprocess.run([sys.executable, '-c', script, str(tmp_path), boundary], timeout=10)
     assert result.returncode == 17
     assert list(tmp_path.glob('.coopy-snapshot-*'))
+    assert fileutils.last_snapshot_file(str(tmp_path)) == previous
+    assert (tmp_path / previous).read_bytes() == previous_bytes
+    assert SnapshotManager(str(tmp_path)).recover_snapshot().entries == ['checkpoint']
+    assert all((tmp_path / name).read_bytes() == data for name, data in journals.items())
     ledger = open_ledger(tmp_path)
-    assert ledger.entries == ['survives interruption']
+    assert ledger.entries == ['checkpoint', 'previous journal', 'survives interruption']
     ledger.add('after restart')
     ledger.take_snapshot()
     ledger.close()
     ledger = open_ledger(tmp_path)
-    assert ledger.entries == ['survives interruption', 'after restart']
+    assert ledger.entries == ['checkpoint', 'previous journal', 'survives interruption', 'after restart']
     ledger.close()
 
 

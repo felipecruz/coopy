@@ -52,13 +52,17 @@ Repeated snapshots, timer snapshots, and new writes after reopening follow the
 same rule. Use the proxy's ``take_snapshot()`` for a running persistent system;
 the low-level ``SnapshotManager`` alone does not coordinate its journal or lock.
 
-Snapshots are written and synced to a temporary file in the data directory,
-then published with an atomic rename. A serialization, write, or publication
+Snapshots are written, flushed, synced, and closed in a temporary file in the
+data directory, then published with an atomic rename. A serialization, write,
+flush, close, journal-rotation, or publication
 failure leaves the previous checkpoint and its journals available. Manual
 snapshot failures propagate to the caller; the timer logs failures and retries
-at its next interval. An interrupted snapshot may leave a hidden
-``.coopy-snapshot-*`` file; recovery ignores it. Remove such files only while the
-system is stopped.
+at its next interval. Temporary-file cleanup is best effort: a cleanup failure
+is logged without replacing the original snapshot error. An interruption or
+cleanup failure may leave a hidden ``.coopy-snapshot-*`` file; recovery ignores
+it, even if it contains a complete pickle. Remove such files only while the
+system is stopped. Keep the previous checkpoint and all later-numbered journals
+after a failed snapshot; journal rotation alone does not publish a checkpoint.
 
 Existing numbered snapshot and journal formats retain their interpretation.
 This cannot repair an old checkpoint whose earlier-numbered journal already
