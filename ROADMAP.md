@@ -114,11 +114,21 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Limitation | Power-loss durability and mutations bypassing the proxy lock remain outside the checkpoint guarantee; other Python/OS combinations were not run locally. |
   | Next step | Run the supported Python and operating-system CI matrix. |
 
-- [ ] **F8 — Journal successful abort-decorated calls.** `CoopyProxy.__getattr__` currently suppresses every `@abort_exception` action, including success. Suppress journaling only when the decorated call raises. Accept when a successful decorated mutation survives restart, a failing decorated call is omitted and its exception reaches the caller, and ordinary failing calls retain their existing journal behavior. Document that this decorator does not roll back in-memory mutations or external effects; add tests for readonly interaction.
+- [x] **F8 — Journal successful abort-decorated calls.** `CoopyProxy.__getattr__` currently suppresses every `@abort_exception` action, including success. Suppress journaling only when the decorated call raises. Accept when a successful decorated mutation survives restart, a failing decorated call is omitted and its exception reaches the caller, and ordinary failing calls retain their existing journal behavior. Document that this decorator does not roll back in-memory mutations or external effects; add tests for readonly interaction.
+  Complexity assessment before implementation: M; clear requirements across about seven implementation files in proxy dispatch, decorator documentation, and unit/restart tests, plus roadmap tracking and job notes. Readonly exclusion takes precedence in either decorator order; existing pre-call notifications and ordinary exception journaling remain unchanged. No unresolved specification ambiguity.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | M |
+  | Details | Successful non-readonly abort-decorated calls now publish normally; failed decorated calls stay out of the journal and propagate their exception, including false-valued exceptions. Ordinary failure journaling, pre-call notifications, and readonly exclusion in both decorator orders are preserved. Updated decorator and replication documentation. |
+  | Commit | `fd31b31041db89c1b9c851b666c0be1e87ec5bb7` — implements F8 dispatch, regression tests, and documentation. |
+  | Validation | 106 tests passed on Python 3.12.2/macOS with DeprecationWarning as error; full suite used local socket access. Added 17 cases covering subscriber outcomes, exception identity, readonly orders, journal records, clock replay in a fresh process, and snapshot capture after failure. Final explicit outcome-table refinement: 15 unit cases passed. AIFlow roadmap check and git diff --check passed. |
+  | Limitation | The decorator does not roll back in-memory mutations or external effects; later snapshots can retain failed-call mutations, and live replicas can differ after such failures. |
+  | Limitation | Successful calls omitted by older code cannot be reconstructed from missing journal entries. |
+  | Limitation | Other supported Python/OS combinations were not run locally. |
+  | Next step | Run the supported Python and operating-system CI matrix. |
 
 - [ ] **F9 — Keep the previous checkpoint usable when snapshot creation fails.** `SnapshotManager.take_snapshot` opens the final numbered file before serialization succeeds; recovery then selects that incomplete file. Publish a snapshot only after a complete successful write, keeping incomplete work out of snapshot discovery. Accept with injected serialization/write failures and interruption before publication: the previous checkpoint remains loadable, necessary journals remain available, and successful checkpoint publication still passes F7's restart cases. Depends on F7 for coordinated journal boundaries.
 
