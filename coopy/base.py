@@ -17,7 +17,7 @@ from datetime import datetime
 from coopy import __version__, fileutils
 from coopy.foundation import Action, RecordClock, Publisher
 from coopy.journal import DiskJournal
-from coopy.restore import restore
+from coopy.restore import recover
 from coopy.snapshot import SnapshotManager, SnapshotTimer
 from coopy.utils import method_or_none, action_check, inject
 from coopy.validation import validate_system
@@ -54,7 +54,9 @@ def _to_password(password):
     return password
 
 
-def init_persistent_system(obj, basedir=None):
+def init_persistent_system(obj, basedir=None, *, recovery="strict"):
+    if recovery not in ("strict", "salvage"):
+        raise ValueError("recovery must be 'strict' or 'salvage'")
     logging_config()
 
     # a system object is needed in order to coopy work
@@ -78,6 +80,11 @@ def init_persistent_system(obj, basedir=None):
 
     system_data_path = os.getcwd()
 
+    # Salvage inspects existing storage without creating checkpoints/journals.
+    if recovery == "salvage":
+        inject(obj, '_clock', RecordClock())
+        return recover(obj, basedir, mode="salvage")
+
     # check if basedir exists, if not, create it
     try:
         os.listdir(basedir)
@@ -100,7 +107,8 @@ def init_persistent_system(obj, basedir=None):
     # RestoreHelper will recover a system state based on snapshots and
     # transations files extracting actions executed previously and
     # re-executing them again
-    obj = restore(obj, basedir)
+    result = recover(obj, basedir, mode=recovery)
+    obj = result.system
 
     delta = time.perf_counter() - start
     logger.info(CORE_LOG_PREFIX + "restore spent %.6f seconds" % delta)
@@ -110,7 +118,9 @@ def init_persistent_system(obj, basedir=None):
 
     snapshot_manager = SnapshotManager(basedir)
 
-    return CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager)
+    proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager)
+    proxy.recovery_report = result.report
+    return proxy
 
 def init_system(obj, subscribers):
     # return a coopy proxy instead of a system instance

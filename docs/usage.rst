@@ -95,11 +95,40 @@ For a controlled restart:
 #. Reopen the directory with the same importable domain classes. Recovery picks
    the highest numbered snapshot and journals with strictly higher numbers.
    Keep their names and ordering intact; never concatenate pickle streams.
-#. Inspect ``coopy.log`` and verify application invariants before serving users.
-   Current recovery logs several decoding and replay failures and continues;
-   ``EOFError`` is treated as end-of-file even for a truncated record. Some
-   divergence is not detected. A returned proxy is not proof of complete
-   recovery. Strict recovery and explicit salvage reporting remain F11 work.
+#. Open with ``recovery="strict"`` (the default). A detected decoding error,
+   truncated record, missing method, or changed success/failure outcome raises
+   ``coopy.restore.RecoveryError`` before a proxy or new journal is created.
+   Inspect ``error.report`` for the checkpoint, replay count, and stopping
+   position (file, byte offset, one-based record number, and method name).
+
+For an explicit salvage inspection, use::
+
+    result = init_persistent_system(Domain, basedir="data", recovery="salvage")
+    print(result.report)
+    recovered_domain = result.system
+
+Salvage returns a ``RecoveryResult``, not a proxy, and does not create or modify
+storage. It stops at the first defect across all journal files; later records
+are never skipped into. ``report.replayed`` counts completed matching actions;
+``expected_failures`` counts actions that raised both originally and on replay.
+``report.stop`` describes the defect, or is ``None`` when EOF was reached cleanly.
+A broken checkpoint returns ``system=None``; older checkpoints are not tried.
+If a divergent method already ran, ``stop.state_may_be_changed`` is true:
+inspection state can include that attempted action's mutations. There is no
+rollback. Reconcile and export inspected state into a separate data directory
+using application-specific tooling; do not serve it as a recovered live system.
+
+A strict proxy exposes its ``recovery_report`` too. ``complete`` means replay
+reached the end without a detected defect, not that determinism was proven.
+``legacy_actions`` identifies records with missing/None outcome metadata. Their
+successful replay is allowed but unverified; an exception stops recovery.
+Current records store only a success/failure boolean: an expected exception is
+consumed during replay, but its type/message and return values cannot be
+compared. Original application exceptions still reach callers of live methods.
+Unframed, unsigned pickle storage cannot detect all corruption, removed whole
+records, or changed outcomes that still have the same success/failure status.
+Strict mode does not make untrusted pickle storage safe. Replay itself can
+repeat external effects even when recovery ultimately raises.
 
 Keep the full directory until a backup and restore have been verified. There is
 no automatic retention policy. Consult :doc:`snapshots` for checkpoint failure
