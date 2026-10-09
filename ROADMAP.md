@@ -194,11 +194,21 @@ Provisional later plan, not a scheduled release. Goal: callers can distinguish c
   | Limitation | A persistence exception can leave memory changed and a record absent, partial, or fully persisted; it does not imply rollback or make blind retry safe. Snapshot directory sync can fail after the complete checkpoint becomes visible; prior files remain available. |
   | Next step | Run the supported Python/OS CI matrix and validate power-loss behavior on the intended deployment filesystem. |
 
-- [ ] **F13 — Bootstrap slaves from a consistent state and ordered updates.** Wire snapshot transfer and catch-up into the master/slave lifecycle so a late joiner receives existing state before subsequent actions and is not exposed as synchronized early. Accept an integration test with a populated master, a new slave, concurrent writes during transfer, and recorded clock values: after catch-up, state matches with no missing or duplicate actions. Authentication rejection, fragmented packets, and interrupted bootstrap must leave the slave explicitly unsynchronized. This remains trusted-peer replication; automatic failover and durable slave restart are outside this item's scope.
+- [x] **F13 — Bootstrap slaves from a consistent state and ordered updates.** Wire snapshot transfer and catch-up into the master/slave lifecycle so a late joiner receives existing state before subsequent actions and is not exposed as synchronized early. Accept an integration test with a populated master, a new slave, concurrent writes during transfer, and recorded clock values: after catch-up, state matches with no missing or duplicate actions. Authentication rejection, fragmented packets, and interrupted bootstrap must leave the slave explicitly unsynchronized. This remains trusted-peer replication; automatic failover and durable slave restart are outside this item's scope.
+  Complexity assessment before implementation: M; clear acceptance criteria, with F5 already supplying snapshot capture and ordered catch-up. Estimated five core implementation/tracking files across lifecycle guards, transport, tests, and documentation, plus related guide corrections and job notes. Synchronization means all actions before the catch-up marker are applied; later updates remain asynchronous. Fragmented delivery must stay unsynchronized until the complete marker arrives.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | M |
+  | Details | Accepted F5 snapshot/catch-up with a persistent populated master. Connection failure, shutdown, and cancellation retain unsynchronized guards; overlapping receivers and slave promotion are rejected. Explicit reconnect requires fresh bootstrap. Nine implementation files across runtime, tests, and documentation. |
+  | Commit | `a25dfb129f8f97e0e8e600780c8438290769eae5` — implements F13 lifecycle hardening and acceptance coverage. |
+  | Validation | 162 tests passed on Python 3.12.2/macOS with DeprecationWarning as error, including concurrent transfer writes, exact event/clock equality, fragmented authentication/snapshot delivery, interrupted action/ready packets, rejection, shutdown races, and reconnect. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
+  | Limitation | Trusted-peer compressed pickle protocol; upgrade master and slaves together. Live updates remain asynchronous; automatic reconnect/failover and durable slave restart are outside scope. |
+  | Limitation | Pending queues are unbounded in memory and snapshot serialization pauses mutations. Direct object access and unlocked methods bypass proxy protection. Other supported Python/OS combinations were not run locally. |
+  | Next step | Add a configurable pending-byte limit and disconnect slow slaves that exceed it. |
+  | Next step | Run the supported Python and operating-system CI matrix. |
 
 ## Validation record
 
