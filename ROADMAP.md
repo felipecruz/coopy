@@ -295,13 +295,21 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Next step | Run the Linux Python 3.10–3.14 CI matrix with both compression extras to verify the native fork path. |
   | Next step | Publish blocking-versus-fork pause and memory measurements on supported single-threaded Linux deployment hardware before claiming fork performance improvements. |
 
-- [ ] **F19 — Support asynchronous callers and free-threaded Python (1.5).** Add an asyncio facade such as `AsyncPersistent` that executes writes on one dedicated writer thread and exposes awaitable domain methods such as `await todo.add("milk")`, avoiding event-loop blocking on the proxy's `threading.RLock`. Add free-threaded Python 3.13t/3.14t CI coverage and document reader guarantees when the GIL no longer protects domain-object reads. Acceptance: asynchronous writes remain ordered and replay to the same state, event-loop responsiveness is tested during writes, shutdown and error propagation are defined, and free-threaded tests exercise concurrent readers and writers. Document the limits of direct object access and unlocked methods.
+- [x] **F19 — Support asynchronous callers and free-threaded Python (1.5).** Add an asyncio facade such as `AsyncPersistent` that executes writes on one dedicated writer thread and exposes awaitable domain methods such as `await todo.add("milk")`, avoiding event-loop blocking on the proxy's `threading.RLock`. Add free-threaded Python 3.13t/3.14t CI coverage and document reader guarantees when the GIL no longer protects domain-object reads. Acceptance: asynchronous writes remain ordered and replay to the same state, event-loop responsiveness is tested during writes, shutdown and error propagation are defined, and free-threaded tests exercise concurrent readers and writers. Document the limits of direct object access and unlocked methods.
+  Complexity assessment before implementation: L; clear acceptance criteria across an estimated 9–11 files in async dispatch/lifecycle, exports/typing, concurrency tests, CI, and docs. Unspecified cancellation, shutdown, and reader behavior were resolved as accepted work continuing, drain-and-join cleanup, and serialized queries.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
-  | Details | Source: FUTURE.md §1.5 — Concurrency |
-  | Next step | Coordinate typing and cleanup with F15/F16 and batching with F18. |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | L |
+  | Details | Added AsyncPersistent with one dedicated writer, ordered awaitable domain methods and queries, off-loop open/checkpoint/close, cancellation-safe accepted work, defined errors, and drain-and-join shutdown. Added GIL-disabled 3.13t/3.14t Linux/macOS CI and explicit reader/direct-access/unlocked guarantees. Ten implementation files. |
+  | Commit | `091c7bac2acfebdc9ae4acb8cd34282719e8a2e2` — implements F19. |
+  | Validation | Python 3.12.2/macOS: 308 passed, 31 skipped (30 native fork cases and one no-GIL assertion); includes 14 new async/concurrency cases. Seven-module mypy, installed-wheel typing, Python 3.10 async checkpoint/replay smoke, Sphinx warnings-as-errors, diff checks, and AIFlow validation passed. Full suite required local socket access. |
+  | Limitation | Free-threaded interpreters were unavailable locally; the configured hosted jobs have not been executed here. Free-threaded CI omits optional compression extensions. |
+  | Limitation | The queue is unbounded and has no forced shutdown timeout. Accepted writes continue after caller cancellation; applications must bound concurrency and await close before stopping the loop. |
+  | Limitation | The facade belongs to one event loop, exposes synchronous public domain methods with dynamic typing, and offers blocking checkpoints only; timer and replication controls are not exposed. A positive group-commit delay adds latency without batching facade calls. |
+  | Next step | Run the four hosted Python 3.13t/3.14t Linux/macOS jobs and verify the GIL-disabled assertions and concurrent reader/writer tests pass. |
 
 - [ ] **F20 — Strengthen development tooling and generated documentation (1.6).** Adopt ruff linting and formatting in CI and pre-commit. Add Hypothesis property-based tests generating sequences of method calls, snapshots, and restarts, asserting that restored state equals live state. Establish a measured coverage baseline and a CI gate that prevents regression. Configure Dependabot for GitHub Actions versions. Keep Sphinx and generate an API reference from the type hints. Acceptance: lint/format and property checks run in CI, coverage below the agreed baseline fails the gate, the Actions update configuration is valid, and the generated reference builds with warnings treated as errors.
 
