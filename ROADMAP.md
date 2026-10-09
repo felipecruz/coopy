@@ -145,11 +145,20 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Limitation | Power-loss durability, pre-existing corrupted checkpoints, and mutations bypassing the proxy lock are outside this guarantee. Other supported Python/OS combinations were not run locally. |
   | Next step | Run the supported Python and operating-system CI matrix. |
 
-- [ ] **F10 — Provide a working persistence and recovery guide.** `docs/usage.rst` and `docs/tutorial.rst` use obsolete init_system signatures/imports; clock and replication examples also disagree with code. Replace them with current `coopy.base.init_persistent_system` examples covering close/reopen, `_clock`, readonly methods, snapshots, and decorator semantics. Accept when maintained examples execute in temporary directories, the Sphinx documentation builds, and replication is explicitly marked incomplete until F13. Explain mutable-object escape paths, trusted pickle storage, replay side effects, and the current durability contract without changing README.md.
+- [x] **F10 — Provide a working persistence and recovery guide.** `docs/usage.rst` and `docs/tutorial.rst` use obsolete init_system signatures/imports; clock and replication examples also disagree with code. Replace them with current `coopy.base.init_persistent_system` examples covering close/reopen, `_clock`, readonly methods, snapshots, and decorator semantics. Accept when maintained examples execute in temporary directories, the Sphinx documentation builds, and replication is explicitly marked incomplete until F13. Explain mutable-object escape paths, trusted pickle storage, replay side effects, and the current durability contract without changing README.md.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | M |
+  | Details | Replaced obsolete guides with tested current APIs for close/reopen, clocks, readonly copies, checkpoints, and decorator outcomes. Documented trusted pickle storage, mutable escapes, replay effects, and durability limits; marked replication incomplete until F13. Added Sphinx CI and repaired the legacy theme. Estimated 15–18 files across docs/examples/checks; final scope was 20 implementation files, with no runtime or README changes. |
+  | Commit | `9818b8fdb2ff9556fdf7583f512c7b3d0f844b57` — implements F10. |
+  | Validation | 118 tests passed on Python 3.12.2/macOS with DeprecationWarning as error and local sockets; final documentation checks: 4 passed, including a fresh-process reopen. Sphinx 8.2.3 HTML build passed with warnings as errors; AIFlow and git diff checks passed; README unchanged. |
+  | Limitation | Replication remains experimental pending F13; the runnable example validates bootstrap only, not production recovery or failover. |
+  | Limitation | Current recovery may continue after errors (F11), and ordinary journal completion has no synchronous power-loss durability guarantee (F12). |
+  | Limitation | Hosted CI, other supported Python/OS combinations, and Sphinx 7 were not run locally. |
+  | Next step | Run the hosted documentation job and supported Python/OS test matrix. |
 
 ## v0.6.0 — Expose recovery guarantees and complete slave bootstrap
 
