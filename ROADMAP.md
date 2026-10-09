@@ -311,13 +311,22 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Limitation | The facade belongs to one event loop, exposes synchronous public domain methods with dynamic typing, and offers blocking checkpoints only; timer and replication controls are not exposed. A positive group-commit delay adds latency without batching facade calls. |
   | Next step | Run the four hosted Python 3.13t/3.14t Linux/macOS jobs and verify the GIL-disabled assertions and concurrent reader/writer tests pass. |
 
-- [ ] **F20 — Strengthen development tooling and generated documentation (1.6).** Adopt ruff linting and formatting in CI and pre-commit. Add Hypothesis property-based tests generating sequences of method calls, snapshots, and restarts, asserting that restored state equals live state. Establish a measured coverage baseline and a CI gate that prevents regression. Configure Dependabot for GitHub Actions versions. Keep Sphinx and generate an API reference from the type hints. Acceptance: lint/format and property checks run in CI, coverage below the agreed baseline fails the gate, the Actions update configuration is valid, and the generated reference builds with warnings treated as errors.
+- [x] **F20 — Strengthen development tooling and generated documentation (1.6).** Adopt ruff linting and formatting in CI and pre-commit. Add Hypothesis property-based tests generating sequences of method calls, snapshots, and restarts, asserting that restored state equals live state. Establish a measured coverage baseline and a CI gate that prevents regression. Configure Dependabot for GitHub Actions versions. Keep Sphinx and generate an API reference from the type hints. Acceptance: lint/format and property checks run in CI, coverage below the agreed baseline fails the gate, the Actions update configuration is valid, and the generated reference builds with warnings treated as errors.
+  Complexity assessment before implementation: M; clear requirements across about ten tooling, test, and documentation files, plus mechanical formatting of roughly 59 Python files. Components: lint/pre-commit, CI/dependencies, persistence property tests, coverage policy, and Sphinx API generation. The unspecified coverage threshold uses the measured full-package baseline rounded down to 93%; no alternate target was supplied.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
-  | Details | Source: FUTURE.md §1.6 — Tooling |
-  | Next step | Generated API documentation follows F15's annotations; foundational tooling can begin independently. |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | M |
+  | Details | Added pinned Ruff lint/import sorting/formatting and pre-commit hooks, CI quality/release gates, eight Hypothesis state-machine configurations, malformed-storage regression tests, a measured 93% package coverage floor, weekly Actions Dependabot updates, and Sphinx autosummary/autodoc from annotations and overloads. Applied the formatter across existing Python sources; 65 implementation files. |
+  | Commit | `573682037d9405dbba6f18bd9373ff0fe55fc593` — implements F20. |
+  | Validation | Python 3.12.2/macOS: 329 passed, 31 skipped; coverage 93.27% (1,747/1,873 statements), with a verified failing under-coverage gate. Ruff and both pre-commit hooks passed. Mypy, installed-wheel typing, Python 3.10 syntax/recovery smoke, YAML schema validation, clean staged-source Sphinx warnings-as-errors, diff checks, and AIFlow validation passed. The property oracle rejected an injected lost journal tail. |
+  | Limitation | Coverage is a fixed line-coverage floor, not an automatic ratchet or branch/subprocess coverage; network cleanup timing can slightly change results. |
+  | Limitation | Generated properties cover sequential clean restarts, not power loss or concurrent schedules; existing fault/concurrency tests remain. Dynamic domain methods and unannotated internals cannot provide a complete typed API reference. |
+  | Limitation | Hosted Linux/macOS Python 3.10–3.14 and free-threaded jobs were not run here; native fork and GIL-disabled assertions account for local skips. Dependabot pull-request creation requires the configuration on the default branch and was not observed locally. |
+  | Next step | Run the hosted CI matrix to confirm coverage and stateful tests on every supported interpreter/platform, including native Linux fork and free-threaded jobs. |
+  | Next step | Install the pre-commit hooks in contributor checkouts and review the first scheduled Dependabot Actions update after pushing to the default branch. |
 
 - [ ] **F21 — Harden password comparison and remove empty network backends (1.7).** Replace the replication password's ordinary inequality comparison with `hmac.compare_digest`. Document that the password is still transmitted in plain text and remains a stopgap pending the encrypted transport proposed in FUTURE.md §2.2. Delete the empty `coopy/network/linux_epoll.py` and `coopy/network/osx_kqueue.py` placeholders; use standard-library `selectors` or a future pyzmq transport if platform-specific polling is needed. Acceptance: valid and invalid password authentication tests pass with constant-time comparison, no imports depend on the deleted modules, and documentation does not imply transport encryption.
 
