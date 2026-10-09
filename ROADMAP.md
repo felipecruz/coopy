@@ -164,17 +164,35 @@ Planned corrective version, not a release claim. Goal: users can install the pac
 
 Provisional later plan, not a scheduled release. Goal: callers can distinguish complete recovery from partial state and use replication with a defined synchronization boundary. Exit criterion: the selected recovery/durability contracts are documented and fault-tested, and a slave joining a populated master reaches matching state through concurrent updates.
 
-- [ ] **F11 — Make incomplete recovery visible to callers.** `restore.py` logs several decoding/replay failures and continues, while EOFError is always treated as ordinary end-of-file. Provide an explicit strict recovery path that refuses to expose a usable proxy after detected corruption or divergence, plus an explicitly chosen salvage path reporting what was recovered and where it stopped. Accept fixtures for a truncated record, corrupt middle record, missing method, originally successful action now failing, and originally failing action now succeeding; preserve expected exceptions and identify legacy actions lacking outcome metadata. Depends on F7 and F9 so checkpoint defects do not masquerade as recovery policy.
+- [x] **F11 — Make incomplete recovery visible to callers.** `restore.py` logs several decoding/replay failures and continues, while EOFError is always treated as ordinary end-of-file. Provide an explicit strict recovery path that refuses to expose a usable proxy after detected corruption or divergence, plus an explicitly chosen salvage path reporting what was recovered and where it stopped. Accept fixtures for a truncated record, corrupt middle record, missing method, originally successful action now failing, and originally failing action now succeeding; preserve expected exceptions and identify legacy actions lacking outcome metadata. Depends on F7 and F9 so checkpoint defects do not masquerade as recovery policy.
+  Complexity assessment before implementation: M; Clear acceptance fixtures; estimated five implementation files across recovery, initialization, tests, and documentation, plus tracking and job notes. API ambiguities resolved with strict recovery by default and explicit salvage returning inspection state and a report. Boolean outcome compatibility is retained and legacy records are identified.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | M |
+  | Details | Strict initialization raises RecoveryError before exposing a proxy on detected corruption or divergence. Explicit salvage returns inspection state and a report with checkpoint, replay/expected-failure counts, legacy positions, and the first stopping file, offset, record, and method; it creates no journal. Final implementation: four files. |
+  | Commit | `a0fe35f377532a709c8f129a1c30c6a11a07ed3c` — implements F11. |
+  | Validation | Full suite: 132 passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access. Fourteen new recovery cases cover truncated/corrupt records, missing methods, both outcome reversals, expected exceptions, legacy metadata, invalid checkpoints, and salvage storage preservation. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
+  | Limitation | Legacy outcomes are unverified; current boolean metadata cannot compare exception types/messages or return values. Unsigned pickle cannot detect all corruption or whole-record removal and still requires trusted storage. |
+  | Limitation | Salvage state can include mutations from the divergent attempted action, explicitly flagged in the report; replay side effects cannot be rolled back. Historical checkpoint-selection constraints remain unchanged. |
+  | Next step | Run the supported Python and operating-system CI matrix. |
 
-- [ ] **F12 — Offer an explicit synchronous durability contract.** `RotateFileWrapper.write` flushes user-space buffers, but normal action completion does not call fsync; its close method simply closes the file. Add an opt-in synchronous policy that acknowledges a journaled mutation only after the configured disk synchronization succeeds, retaining a documented buffered mode. Accept fault-injected write/flush/fsync failures with no false success, observable synchronization in synchronous mode, and restart checks across journal rotation. Clearly report that a persistence failure may leave memory changed; do not promise rollback. Depends on F7 and F9 for coherent checkpoint handling.
+- [x] **F12 — Offer an explicit synchronous durability contract.** `RotateFileWrapper.write` flushes user-space buffers, but normal action completion does not call fsync; its close method simply closes the file. Add an opt-in synchronous policy that acknowledges a journaled mutation only after the configured disk synchronization succeeds, retaining a documented buffered mode. Accept fault-injected write/flush/fsync failures with no false success, observable synchronization in synchronous mode, and restart checks across journal rotation. Clearly report that a persistence failure may leave memory changed; do not promise rollback. Depends on F7 and F9 for coherent checkpoint handling.
+  Complexity assessment before implementation: M; Clear fault and restart criteria; estimated seven implementation files across journal/file I/O, proxy guards, checkpoints, tests, and documentation, plus tracking and job notes. Policy ambiguity resolved with buffered default and opt-in sync using os.fsync; failures report potentially changed memory without rollback.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | M |
+  | Details | Added durability="sync" with complete-record flush/fsync before acknowledgment, synchronous close, and directory synchronization for journal creation/rotation and checkpoint publication. Buffered mode remains default. PersistenceError reports potentially changed memory and prevents further proxy mutations/checkpoints after journal failure. Final implementation: nine files. |
+  | Commit | `e838fc7a1f19f2b380d445b9a4fe010746a4e8d3` — implements F12. |
+  | Validation | Full suite: 152 passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access; final focused durability suite: 21 passed after adding checkpoint directory-sync failure coverage. Includes write/short-write/flush/fsync faults, close/setup/rotation failures, whole-record sync observation, and separate-process restart after os._exit across rotation/checkpoint. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
+  | Limitation | The contract is successful os.fsync, subject to POSIX filesystem/device guarantees; actual power loss and other Python/OS combinations were not tested. Unsupported directory sync fails instead of downgrading. |
+  | Limitation | A persistence exception can leave memory changed and a record absent, partial, or fully persisted; it does not imply rollback or make blind retry safe. Snapshot directory sync can fail after the complete checkpoint becomes visible; prior files remain available. |
+  | Next step | Run the supported Python/OS CI matrix and validate power-loss behavior on the intended deployment filesystem. |
 
 - [ ] **F13 — Bootstrap slaves from a consistent state and ordered updates.** Wire snapshot transfer and catch-up into the master/slave lifecycle so a late joiner receives existing state before subsequent actions and is not exposed as synchronized early. Accept an integration test with a populated master, a new slave, concurrent writes during transfer, and recorded clock values: after catch-up, state matches with no missing or duplicate actions. Authentication rejection, fragmented packets, and interrupted bootstrap must leave the slave explicitly unsynchronized. This remains trusted-peer replication; automatic failover and durable slave restart are outside this item's scope.
 
