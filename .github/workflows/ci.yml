@@ -44,6 +44,8 @@ jobs:
           python -m pip install build twine
           python -m build
           python -m twine check --strict dist/*
+      - name: Verify descriptions and installed persistence
+        run: python scripts/check_distributions.py
       - name: Check tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
