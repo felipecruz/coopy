@@ -1,4 +1,7 @@
 """Strict recovery and explicit, non-writing salvage of trusted pickle storage."""
+from pathlib import Path
+from coopy.error import CoopyError, ConfigurationError
+
 from typing import Generic, TypeVar
 
 T = TypeVar("T")
@@ -49,7 +52,7 @@ class RecoveryResult(Generic[T]):
     report: RecoveryReport
 
 
-class RecoveryError(RuntimeError):
+class RecoveryError(CoopyError, RuntimeError):
     def __init__(self, report):
         self.report = report
         issue = report.stop
@@ -67,8 +70,8 @@ def recover(system, basedir, mode='strict', *, secret=None):
     """
     validate_secret(secret)
     if mode not in ('strict', 'salvage'):
-        raise ValueError("recovery must be 'strict' or 'salvage'")
-    basedir = fileutils.name_to_dir(basedir)
+        raise ConfigurationError("recovery must be 'strict' or 'salvage'")
+    basedir = Path(basedir)
     current_clock = system._clock
     report = RecoveryReport()
     recovered = None
@@ -84,11 +87,11 @@ def recover(system, basedir, mode='strict', *, secret=None):
     if secret is not None:
         # Authenticate the entire recovery input before constructing ANY
         # Unpickler. Retain exactly these bytes to avoid a verify/reopen race.
-        position = RecoveryPosition(basedir + IDENTITY_FILE, 0, 0)
+        position = RecoveryPosition(str(basedir / IDENTITY_FILE), 0, 0)
         try:
             integrity = Integrity.open(basedir, secret)
             report.checkpoint = fileutils.last_snapshot_file(basedir)
-            position = RecoveryPosition(basedir + (report.checkpoint or ''), 0, 0)
+            position = RecoveryPosition(str(basedir / (report.checkpoint or '')), 0, 0)
             if report.checkpoint is None:
                 raise IntegrityError('Missing signed checkpoint')
             with open(position.file, 'rb') as file:
@@ -120,7 +123,7 @@ def recover(system, basedir, mode='strict', *, secret=None):
         if recovered is None:
             raise ValueError('No usable checkpoint found')
     except Exception as error:
-        return stop(RecoveryPosition(basedir + (report.checkpoint or ''), 0, 0),
+        return stop(RecoveryPosition(str(basedir / (report.checkpoint or '')), 0, 0),
                     'checkpoint', error)
 
     try:
@@ -128,7 +131,7 @@ def recover(system, basedir, mode='strict', *, secret=None):
             files = (list(verified_journals) if integrity is not None
                      else fileutils.last_log_files(basedir) or [])
         except Exception as error:
-            return stop(RecoveryPosition(basedir, 0, 0), 'read', error)
+            return stop(RecoveryPosition(str(basedir), 0, 0), 'read', error)
         for filename in files:
             position = RecoveryPosition(filename, 0, 1)
             try:

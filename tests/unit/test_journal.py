@@ -1,3 +1,4 @@
+from pathlib import Path
 import pickle
 import unittest
 
@@ -61,7 +62,7 @@ class TestJournal(unittest.TestCase):
 
     def test_setup(self):
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
-        self.assertEqual(JOURNAL_DIR, journal.basedir)
+        self.assertEqual(Path(JOURNAL_DIR), journal.basedir)
 
         journal.setup()
         expected_file_name = '%s%s' % (JOURNAL_DIR,

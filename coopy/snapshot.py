@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import threading
 import logging
 import pickle
@@ -17,14 +19,7 @@ class SnapshotManager(object):
     def __init__(self, basedir, durability="buffered", integrity=None):
         self.integrity = integrity
         self.durability = durability
-        if len(basedir) > 0:
-            basedir = basedir.replace('\\','/')
-            if not basedir.endswith('/'):
-                basedir += '/'
-        else:
-            basedir =  './'
-
-        self.basedir = basedir
+        self.basedir = Path(basedir)
 
     def take_snapshot(self, object, before_publish=None):
         """Publish only a fully written, synced, and closed snapshot.

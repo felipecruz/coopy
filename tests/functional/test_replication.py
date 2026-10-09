@@ -32,7 +32,7 @@ def test_populated_master_concurrent_catchup_clock_and_live_replay(monkeypatch, 
     cached_write = replica.add
     for i in range(10):
         master.add(i)
-    master.start_master(port=0, password='fragment-safe password longer than 20 bytes')
+    master.start_primary(port=0, password='fragment-safe password longer than 20 bytes')
     host, port = master.master.server.getsockname()
     transfer_started = threading.Event()
     continue_transfer = threading.Event()
@@ -50,7 +50,7 @@ def test_populated_master_concurrent_catchup_clock_and_live_replay(monkeypatch, 
 
     monkeypatch.setattr(master.master, '_write_client', pause_during_transfer)
     try:
-        slave = replica.start_slave(host, port,
+        slave = replica.start_replica(host, port,
                                    password='fragment-safe password longer than 20 bytes')
         assert transfer_started.wait(3)
         assert not slave.synchronized
@@ -94,23 +94,23 @@ def test_explicit_reconnect_replaces_stale_state_with_fresh_bootstrap():
     master = CoopyProxy(Timeline(), [])
     replica = CoopyProxy(Timeline(), [])
     master.add(0)
-    master.start_master(port=0)
+    master.start_primary(port=0)
     address = master.master.server.getsockname()
     try:
-        first = replica.start_slave(*address)
+        first = replica.start_replica(*address)
         assert first.wait_until_synchronized(3)
         cached_read = replica.read
         with pytest.raises(RuntimeError, match='already'):
-            replica.start_slave(*address)
+            replica.start_replica(*address)
         with pytest.raises(RuntimeError, match='active master'):
-            master.start_slave(*address)
+            master.start_replica(*address)
         with pytest.raises(RuntimeError, match='already'):
-            master.start_master(port=0)
+            master.start_primary(port=0)
         replica.shutdown()
         with pytest.raises(RuntimeError, match='not synchronized'):
             cached_read()
         master.add(1)
-        second = replica.start_slave(*address)
+        second = replica.start_replica(*address)
         assert second is not first
         assert second.wait_until_synchronized(3)
         assert not first.synchronized

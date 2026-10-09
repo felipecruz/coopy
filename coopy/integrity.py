@@ -8,6 +8,7 @@ import os
 import struct
 
 from coopy import fileutils
+from coopy.error import IntegrityError as IntegrityError, ConfigurationError
 
 
 MAGIC = b'COOPY-HMAC-1\x00'
@@ -16,13 +17,9 @@ HEADER = struct.Struct('!Q')
 TAG_SIZE = hashlib.sha256().digest_size
 
 
-class IntegrityError(ValueError):
-    """Storage could not be authenticated; do not deserialize it."""
-
-
 def validate_secret(secret: bytes | None) -> None:
     if secret is not None and (not isinstance(secret, bytes) or not secret):
-        raise ValueError('secret must be nonempty bytes or None')
+        raise ConfigurationError('secret must be nonempty bytes or None')
 
 
 class Integrity:

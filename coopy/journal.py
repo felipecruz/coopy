@@ -1,24 +1,23 @@
+from pathlib import Path
+from coopy.error import PersistenceError as PersistenceError, ConfigurationError
+
 import os
 import pickle
 from pickle import Pickler
 
 from coopy import fileutils
 
-class PersistenceError(RuntimeError):
-    """Persistence did not complete; memory may already have changed."""
-
-
 class DiskJournal():
     def __init__(self, basedir, system_data_path, durability="buffered", integrity=None):
         self.integrity = integrity
         if durability not in ("buffered", "sync"):
-            raise ValueError("durability must be 'buffered' or 'sync'")
+            raise ConfigurationError("durability must be 'buffered' or 'sync'")
         self.durability = durability
         self.failure = None
         '''
             set basedir and declare file attribute
         '''
-        self.basedir = basedir
+        self.basedir = Path(basedir)
         self.file = None
         self.system_data_path = system_data_path
 

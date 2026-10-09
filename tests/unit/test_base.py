@@ -108,7 +108,7 @@ class TestBase(unittest.TestCase):
         dummy = init_persistent_system(Wiki, basedir='wiki/')
 
         current_dir = os.path.abspath(os.getcwd())
-        self.assertEqual([current_dir + "/wiki/"],
+        self.assertEqual([current_dir + "/wiki"],
                           dummy.basedir_abspath())
 
         dummy.close()
@@ -188,7 +188,7 @@ class TestCoopyProxy(unittest.TestCase):
                 pass
 
         proxy = CoopyProxy(Wiki(), [PassPublisher()])
-        proxy.start_master()
+        proxy.start_primary()
 
         self.assertTrue(hasattr(proxy, 'server'))
         self.assertTrue(proxy.server in proxy.publisher.subscribers)
@@ -203,7 +203,7 @@ class TestCoopyProxy(unittest.TestCase):
         wiki = Wiki()
         inject(wiki, '_clock', RecordClock())
         proxy = CoopyProxy(wiki, [])
-        proxy.start_master(port=8013)
+        proxy.start_primary(port=8013)
 
         proxy.create_page('id', 'content', None)
         self.assertEqual('content', proxy.get_page('id').content)
@@ -241,7 +241,7 @@ class TestCoopyProxy(unittest.TestCase):
         args = ('localhost', 8012)
 
         self.assertRaises(Exception,
-                          proxy.start_slave,
+                          proxy.start_replica,
                           *args)
         proxy.close()
 

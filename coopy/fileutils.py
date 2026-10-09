@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import os
 import re
 import logging
@@ -31,10 +33,10 @@ class RotateFileWrapper():
                  durability="buffered"):
         self.file = file
         self.durability = durability
-        self.basedir = basedir
+        self.basedir = Path(basedir)
         self.max_size = max_size
         self.system_data_path = system_data_path
-        self.rotation_dir = os.path.join(system_data_path, basedir)
+        self.rotation_dir = Path(system_data_path) / basedir
 
     def write(self, data):
         if self.file.write(data) != len(data):
@@ -140,11 +142,11 @@ def lastest_log_number(basedir):
 
 
 def to_log_file(basedir, number):
-    return basedir + LOG_PREFIX + number_as_string(number) + LOG_SUFIX;
+    return str(Path(basedir) / (LOG_PREFIX + number_as_string(number) + LOG_SUFIX))
 
 
 def to_snapshot_file(basedir, number):
-    return basedir + SNAPSHOT_PREFIX + number_as_string(number) + SNAPSHOT_SUFIX;
+    return str(Path(basedir) / (SNAPSHOT_PREFIX + number_as_string(number) + SNAPSHOT_SUFIX))
 
 
 def get_number(filename):
@@ -181,10 +183,11 @@ def last_log_files(basedir):
     for file in files:
         if get_number(file) > last_snap:
             cont += 1
-            file_names.append(basedir + file)
+            file_names.append(str(Path(basedir) / file))
     return file_names
 
 def name_to_dir(basedir):
+    basedir = os.fspath(basedir)
     if len(basedir) > 0:
         basedir = basedir.replace('\\','/')
         if not basedir.endswith('/'):

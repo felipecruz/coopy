@@ -195,7 +195,7 @@ def test_shutdown_keeps_slave_guard_and_rejects_promotion(fake_master, ready):
     with pytest.raises(RuntimeError, match='unsynchronized'):
         proxy.take_snapshot()
     with pytest.raises(RuntimeError, match='slave'):
-        proxy.start_master(port=0)
+        proxy.start_primary(port=0)
 
 
 def test_stop_at_ready_boundary_does_not_publish_snapshot(fake_master, monkeypatch):
@@ -223,7 +223,7 @@ def test_stop_at_ready_boundary_does_not_publish_snapshot(fake_master, monkeypat
 def test_second_receiver_is_rejected(fake_master):
     proxy, slave, _ = fake_master
     with pytest.raises(RuntimeError, match='already'):
-        proxy.start_slave('127.0.0.1', 0)
+        proxy.start_replica('127.0.0.1', 0)
     assert proxy.slave is slave
 
 
@@ -235,7 +235,7 @@ def test_connection_failure_keeps_slave_unsynchronized(monkeypatch):
     proxy = CoopyProxy(Wiki(), [])
     try:
         with pytest.raises(ConnectionRefusedError):
-            proxy.start_slave('127.0.0.1', 0)
+            proxy.start_replica('127.0.0.1', 0)
         assert proxy.slave is not None
         assert not proxy.slave.synchronized
         assert 'refused' in proxy.slave.error
@@ -253,7 +253,7 @@ def test_failed_master_snapshot_does_not_synchronize_client(monkeypatch):
     monkeypatch.setattr('coopy.network.default_select.prepare_data',
                         lambda value: (_ for _ in ()).throw(ValueError('cannot serialize')))
     try:
-        slave = proxy.start_slave(*master.server.getsockname())
+        slave = proxy.start_replica(*master.server.getsockname())
         slave.join(3)
         assert not slave.is_alive()
         assert not slave.synchronized
@@ -276,7 +276,7 @@ def test_unix_socket_bootstrap_and_cleanup(monkeypatch):
         master.start()
         proxy = CoopyProxy(Wiki(), [])
         try:
-            slave = proxy.start_slave('unused', 0, ipc=True)
+            slave = proxy.start_replica('unused', 0, ipc=True)
             assert slave.wait_until_synchronized(3)
             assert proxy.pages == {}
         finally:
@@ -293,7 +293,7 @@ def test_master_listens_on_loopback_without_hostname_lookup(monkeypatch):
     monkeypatch.setattr(socket, 'gethostname', no_lookup)
 
     proxy = CoopyProxy(Wiki(), [])
-    proxy.start_master(port=0)
+    proxy.start_primary(port=0)
     try:
         assert proxy.master.server.getsockname()[0] == '127.0.0.1'
     finally:

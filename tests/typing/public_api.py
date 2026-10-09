@@ -24,3 +24,6 @@ if TYPE_CHECKING:
     assert_type(result.system, Todo | None)
     coopy.control(a).take_snapshot()
     coopy.control(b).close()
+    with coopy.control(coopy.open(Todo)) as managed:
+        assert_type(managed, Todo)
+        assert_type(managed.add("milk"), int)

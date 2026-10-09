@@ -40,9 +40,9 @@ def test_timer_uses_control_even_with_domain_collision(tmp_path):
     handle.start_snapshot_manager(30)
     timer = system.snapshot_timer
     timer.proxy.take_snapshot()
+    assert system.events == []
     handle.close()
     assert not timer.is_alive()
-    assert system.events == []
 
 
 def test_salvage_has_no_writable_control(tmp_path):
