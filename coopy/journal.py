@@ -9,7 +9,8 @@ class PersistenceError(RuntimeError):
 
 
 class DiskJournal():
-    def __init__(self, basedir, system_data_path, durability="buffered"):
+    def __init__(self, basedir, system_data_path, durability="buffered", integrity=None):
+        self.integrity = integrity
         if durability not in ("buffered", "sync"):
             raise ValueError("durability must be 'buffered' or 'sync'")
         self.durability = durability
@@ -81,7 +82,12 @@ class DiskJournal():
         '''
         self.check_writable()
         try:
-            self.pickler.dump(message)
+            if self.integrity is None:
+                self.pickler.dump(message)
+            else:
+                payload = pickle.dumps(message, pickle.HIGHEST_PROTOCOL)
+                self.file.write(self.integrity.encode(
+                    payload, self.file.name, self.file.tell()))
             if self.durability == 'sync':
                 # Acknowledge only after the entire record is flushed/synced.
                 self.file.flush()

@@ -3,16 +3,19 @@ import logging
 import pickle
 import os
 import tempfile
+from io import BytesIO
 from pickle import Pickler, Unpickler
 
 from coopy import fileutils as fu
+from coopy.integrity import IntegrityError
 
 from os import path
 
 logger = logging.getLogger("coopy")
 
 class SnapshotManager(object):
-    def __init__(self, basedir, durability="buffered"):
+    def __init__(self, basedir, durability="buffered", integrity=None):
+        self.integrity = integrity
         self.durability = durability
         if len(basedir) > 0:
             basedir = basedir.replace('\\','/')
@@ -38,7 +41,11 @@ class SnapshotManager(object):
                                              prefix=".coopy-snapshot-",
                                              delete=False) as file:
                 temporary = file.name
-                Pickler(file, pickle.HIGHEST_PROTOCOL).dump(object)
+                if self.integrity is None:
+                    Pickler(file, pickle.HIGHEST_PROTOCOL).dump(object)
+                else:
+                    payload = pickle.dumps(object, pickle.HIGHEST_PROTOCOL)
+                    file.write(self.integrity.encode(payload, destination))
                 file.flush()
                 os.fsync(file.fileno())
             if before_publish:
@@ -65,6 +72,11 @@ class SnapshotManager(object):
             return None
         with open(path.join(self.basedir, last_snapshot), "rb") as file:
             logger.debug("Recovering snapshot from: " + file.name)
+            if self.integrity is not None:
+                payload = self.integrity.read(file, file.name)
+                if file.read(1):
+                    raise IntegrityError('Trailing bytes after signed snapshot')
+                return Unpickler(BytesIO(payload)).load()
             return Unpickler(file).load()
 
 

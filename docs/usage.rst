@@ -8,7 +8,7 @@ Opening and closing a system
 
 Use ``from coopy.base import init_persistent_system`` and call
 ``init_persistent_system(obj, basedir=None, recovery="strict",
-durability="buffered")``. ``obj`` is an instance or a class
+durability="buffered", secret=None)``. ``obj`` is an instance or a class
 that can be constructed without arguments, even when reopening existing data.
 A new directory gets an initial snapshot. Existing data replaces the supplied
 object with the latest snapshot, then replays later journaled calls. See the
@@ -134,6 +134,65 @@ repeat external effects even when recovery ultimately raises.
 Keep the full directory until a backup and restore have been verified. There is
 no automatic retention policy. Consult :doc:`snapshots` for checkpoint failure
 handling, old-format boundaries, and ignored temporary files.
+
+Authenticated storage (opt-in)
+------------------------------
+
+Pass a nonempty ``bytes`` secret on every open to enable HMAC-SHA256 integrity::
+
+    from pathlib import Path
+    secret = Path("/run/secrets/coopy-storage-key").read_bytes()
+    proxy = init_persistent_system(Domain, basedir="signed-data", secret=secret)
+
+Generate a high-entropy key once (for example, ``secrets.token_bytes(32)``),
+store it **outside the data directory**, and supply the same bytes after each
+restart. Do not embed it in the domain object, source control, logs, or a backup
+of the data directory. Keep a separate secure key backup; losing the key makes
+signed storage unrecoverable. **This detects tampering; it does not encrypt
+any data.** Anyone who can read the directory can still read serialized data.
+Anyone with the key can forge records. Application code and replication peers
+must still be trusted; this option does not authenticate network replication.
+
+New signed directories contain a random system identity in
+``.coopy-integrity`` and versioned binary envelopes around each snapshot and
+journal record. HMAC binds the payload and length to the identity, file name,
+and record offset. A snapshot from another independently initialized system
+is rejected even if both use the same secret. Back up the identity with all
+numbered storage files, including when moving a directory to another path.
+Never rename numbered files. The secret itself is never added to storage.
+
+Recovery authenticates the selected snapshot and every later journal record
+before constructing any unpickler or replaying any domain method. It retains
+these exact bytes in memory so changing disk files after verification cannot
+substitute unverified input. Wrong secrets, missing/invalid tags, unsigned
+input, malformed envelopes, and incomplete records stop strict recovery with
+``RecoveryError`` and ``report.stop.kind == "verification"``. The report gives
+the offending file, offset, and record (zero for the checkpoint or identity).
+``recovery="salvage", secret=secret`` also verifies everything first: on a
+verification failure it returns ``system=None`` and the report without writing
+storage or unpickling a partial prefix. It never bypasses authentication.
+Obsolete files excluded by the checkpoint boundary are not verified.
+
+Without a secret the existing unsigned format and recovery behavior remain
+unchanged. There is no automatic signing of legacy directories, key rotation,
+or downgrade: supplying a secret for unsigned storage fails. To migrate,
+recover a trusted unsigned backup in a controlled environment and export its
+domain state into a separate new signed directory with application tooling.
+Use the same secret for all writers and reopen operations on signed storage.
+Each signed journal record uses its own pickle memo; aliases within a record
+survive, but cross-record object identity is not preserved. Use stable IDs.
+
+HMAC does not prove freshness or completeness. A valid old directory (including
+its identity) can be replayed, and deletion of whole files or complete trailing
+records may be undetectable. Protect access and retain backups; detecting these
+cases requires a trusted external checkpoint/counter. Removal of all storage
+is indistinguishable from creating a new system. Restoring signed data uses
+extra memory proportional to the selected snapshot and all journals needed
+for replay; take regular checkpoints to bound that cost. Signed serialization
+also buffers one complete snapshot or action. Durability still depends on the
+policy below. An interrupted first initialization can leave an identity with
+no checkpoint: preserve it for inspection and initialize a separate empty
+directory rather than treating incomplete signed storage as a fresh system.
 
 Durability policies
 -------------------

@@ -17,6 +17,7 @@ from datetime import datetime
 from coopy import __version__, fileutils
 from coopy.foundation import Action, RecordClock, Publisher
 from coopy.journal import DiskJournal
+from coopy.integrity import Integrity, IDENTITY_FILE, validate_secret
 from coopy.restore import recover
 from coopy.snapshot import SnapshotManager, SnapshotTimer
 from coopy.utils import method_or_none, action_check, inject
@@ -55,7 +56,8 @@ def _to_password(password):
 
 
 def init_persistent_system(obj, basedir=None, *, recovery="strict",
-                           durability="buffered"):
+                           durability="buffered", secret=None):
+    validate_secret(secret)
     if recovery not in ("strict", "salvage"):
         raise ValueError("recovery must be 'strict' or 'salvage'")
     if durability not in ("buffered", "sync"):
@@ -86,7 +88,7 @@ def init_persistent_system(obj, basedir=None, *, recovery="strict",
     # Salvage inspects existing storage without creating checkpoints/journals.
     if recovery == "salvage":
         inject(obj, '_clock', RecordClock())
-        return recover(obj, basedir, mode="salvage")
+        return recover(obj, basedir, mode="salvage", secret=secret)
 
     # check if basedir exists, if not, create it
     try:
@@ -97,9 +99,16 @@ def init_persistent_system(obj, basedir=None, *, recovery="strict",
             fileutils.sync_directory(os.path.dirname(os.path.abspath(basedir)))
 
     # if no snapshot files, create first one with a 'empty' system
-    if not fileutils.last_snapshot_file(basedir):
+    integrity = None
+    new_signed = (secret is not None
+                  and not fileutils.list_snapshot_files(basedir)
+                  and not fileutils.list_log_files(basedir)
+                  and not os.path.exists(os.path.join(basedir, IDENTITY_FILE)))
+    if new_signed:
+        integrity = Integrity.open(basedir, secret, create=True, durability=durability)
+    if not fileutils.last_snapshot_file(basedir) and (secret is None or new_signed):
         logger.info(CORE_LOG_PREFIX + "No snapshot files..")
-        SnapshotManager(basedir, durability=durability).take_snapshot(obj)
+        SnapshotManager(basedir, durability=durability, integrity=integrity).take_snapshot(obj)
 
     # measure restore time
     start = time.perf_counter()
@@ -112,16 +121,19 @@ def init_persistent_system(obj, basedir=None, *, recovery="strict",
     # RestoreHelper will recover a system state based on snapshots and
     # transations files extracting actions executed previously and
     # re-executing them again
-    result = recover(obj, basedir, mode=recovery)
+    result = recover(obj, basedir, mode=recovery, secret=secret)
     obj = result.system
 
     delta = time.perf_counter() - start
     logger.info(CORE_LOG_PREFIX + "restore spent %.6f seconds" % delta)
 
-    journal = DiskJournal(basedir, system_data_path, durability=durability)
+    if secret is not None:
+        integrity = Integrity.open(basedir, secret)
+    journal = DiskJournal(basedir, system_data_path, durability=durability,
+                          integrity=integrity)
     journal.setup()
 
-    snapshot_manager = SnapshotManager(basedir, durability=durability)
+    snapshot_manager = SnapshotManager(basedir, durability=durability, integrity=integrity)
 
     proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager)
     proxy.recovery_report = result.report
