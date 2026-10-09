@@ -328,13 +328,21 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Next step | Run the hosted CI matrix to confirm coverage and stateful tests on every supported interpreter/platform, including native Linux fork and free-threaded jobs. |
   | Next step | Install the pre-commit hooks in contributor checkouts and review the first scheduled Dependabot Actions update after pushing to the default branch. |
 
-- [ ] **F21 — Harden password comparison and remove empty network backends (1.7).** Replace the replication password's ordinary inequality comparison with `hmac.compare_digest`. Document that the password is still transmitted in plain text and remains a stopgap pending the encrypted transport proposed in FUTURE.md §2.2. Delete the empty `coopy/network/linux_epoll.py` and `coopy/network/osx_kqueue.py` placeholders; use standard-library `selectors` or a future pyzmq transport if platform-specific polling is needed. Acceptance: valid and invalid password authentication tests pass with constant-time comparison, no imports depend on the deleted modules, and documentation does not imply transport encryption.
+- [x] **F21 — Harden password comparison and remove empty network backends (1.7).** Replace the replication password's ordinary inequality comparison with `hmac.compare_digest`. Document that the password is still transmitted in plain text and remains a stopgap pending the encrypted transport proposed in FUTURE.md §2.2. Delete the empty `coopy/network/linux_epoll.py` and `coopy/network/osx_kqueue.py` placeholders; use standard-library `selectors` or a future pyzmq transport if platform-specific polling is needed. Acceptance: valid and invalid password authentication tests pass with constant-time comparison, no imports depend on the deleted modules, and documentation does not imply transport encryption.
+  Complexity assessment before implementation: S; clear requirements affecting five implementation files across authentication, tests, transport documentation, and two backend deletions, plus roadmap tracking. The polling wording is interpreted as future guidance; the existing select backend needs no rewrite.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
-  | Details | Source: FUTURE.md §1.7 — Quick wins found while writing this |
-  | Next step | Retain F13 bootstrap and authentication behavior; encrypted transport remains outside v0.7.0. |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | S |
+  | Details | Authentication uses hmac.compare_digest; removed both empty platform backends. Replication documentation explicitly describes plaintext passwords and payloads, the stopgap handshake, and future selectors/pyzmq options. |
+  | Commit | `a6e3ee195e06b534a598a5312637d23a0c159af6` — implements F21. |
+  | Validation | Python 3.12.2/macOS: 335 passed, 31 skipped; coverage 93.33% exceeds the 93% floor. Six new real-socket cases verify compare_digest delegation for valid, first/last-byte mismatch, empty, longer, and non-ASCII passwords. Existing bootstrap/rejection tests pass. Ruff lint/format, strict Sphinx build, deleted-backend import audit, diff checks, and AIFlow validation passed. Socket tests required execution outside the sandbox. |
+  | Limitation | Passwords and replication payloads remain unencrypted; shared-password authentication is a stopgap, and pickle replication requires trusted peers on a trusted network. |
+  | Limitation | Local validation covers Python 3.12/macOS; 30 native Linux fork cases and one free-threaded assertion were skipped. The hosted platform/interpreter matrix was not run here. |
+  | Next step | Implement the encrypted transport proposed in FUTURE.md §2.2 as a separate feature. |
+
 
 ## Validation record
 
