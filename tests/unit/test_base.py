@@ -4,7 +4,66 @@ from unittest import mock
 
 import pytest
 
+from coopy.decorators import abort_exception, readonly
+
 from ..domain import Wiki
+
+
+class FalseyError(ValueError):
+    def __bool__(self):
+        return False
+
+
+@pytest.mark.parametrize('decorators, success_events, failure_events', [
+    ((), ['receive_before', 'receive'],
+     ['receive_before', 'receive_exception', 'receive']),
+    ((abort_exception,), ['receive_before', 'receive'], ['receive_before']),
+    ((readonly,), [], ['receive_exception']),
+    ((readonly, abort_exception), [], []),
+    ((abort_exception, readonly), [], []),
+], ids=['ordinary', 'abort', 'readonly', 'readonly-abort', 'abort-readonly'])
+@pytest.mark.parametrize('error_type', [None, ValueError, FalseyError],
+                         ids=['success', 'failure', 'falsey-exception'])
+def test_proxy_publication_by_outcome_and_decorators(
+        decorators, success_events, failure_events, error_type):
+    from coopy.base import CoopyProxy
+
+    error = error_type('rejected') if error_type is not None else None
+
+    class Domain:
+        def call(self, value, *, suffix):
+            result = value + suffix
+            if error is not None:
+                raise error
+            return result
+
+    for decorator in decorators:
+        Domain.call = decorator(Domain.call)
+    subscriber = mock.Mock()
+    proxy = CoopyProxy(Domain(), [subscriber])
+    try:
+        if error is None:
+            assert proxy.call('value', suffix='!') == 'value!'
+        else:
+            with pytest.raises(error_type) as caught:
+                proxy.call('value', suffix='!')
+            assert caught.value is error
+
+        expected = success_events if error is None else failure_events
+        assert [call[0] for call in subscriber.mock_calls] == expected
+        if 'receive' in expected:
+            action = subscriber.receive.call_args.args[0]
+            assert action.action == 'call'
+            assert action.args == ('value',)
+            assert action.kwargs == {'suffix': '!'}
+            assert action.raised is (error is not None)
+
+        # Releasing an unowned RLock raises, verifying cleanup on both paths.
+        with pytest.raises(RuntimeError):
+            proxy.lock.release()
+    finally:
+        proxy.close()
+
 
 class TestBase(unittest.TestCase):
     def tearDown(self):

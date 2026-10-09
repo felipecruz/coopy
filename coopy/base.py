@@ -209,14 +209,14 @@ class CoopyProxy():
                 # lets restore tell expected failures from divergences
                 action.raised = exception is not None
 
-                if not readonly and not abort_exception:
+                if not readonly and not (abort_exception and action.raised):
                     self.publisher.publish(action)
 
             finally:
                 if not unlocked:
                     self.lock.release()
 
-            if exception:
+            if exception is not None:
                 raise exception
 
             return system

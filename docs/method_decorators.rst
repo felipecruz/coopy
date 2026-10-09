@@ -26,22 +26,34 @@ This decorator provides a means of leaving the thread safety in your hands via t
 @abort_exception
 ================
 
-Default behaviour is to log on disk, even if your code raises an exception.
+By default, a non-readonly method call is journaled even when it raises an
+exception. Restore re-executes that call, including any mutations made before
+the failure.
 
-If your 'business' method raises an exception and your method is decoreted by @abort_exception, this execution will not be logged at disk. This means that during restore process, this invocation that raised an exception will not be re-executed::
+``@abort_exception`` omits a call from the journal only when it raises. The
+exception still reaches the caller. Successful calls return their result and
+are journaled normally, so their mutations survive a clean restart. For
+example, validate before changing state::
 
     from coopy.decorators import abort_exception
+
     @abort_exception
-    def create_page(self, wikipage):
-        page = None
-        wikipage.last_modify = coopy.clock.now()
-        if wikipage.id in self.pages:
-            page = self.pages[wikipage.id]
-        if not page:
-            self.pages[wikipage.id] = wikipage
-            raise Exception('Exemple error')
-        else:
-            self.update_page(wikipage.id, wikipage.content)
+    def create_page(self, page):
+        if page.id in self.pages:
+            raise ValueError('Page already exists')
+        page.last_modified = self._clock.now()
+        self.pages[page.id] = page
+        return page
 
+Combining ``@readonly`` and ``@abort_exception`` in either order excludes both
+successful and failing calls from the journal. ``@readonly`` is a declaration
+by the application; it does not prevent mutations.
 
-**Restore process will not execute this method because it wasn't logged at disk.**
+**This decorator does not roll back in-memory mutations or external effects.**
+Changes made before an exception remain visible in the running object and can
+be captured by a later snapshot. Without that snapshot, replay omits the failed
+call, so recovered state can differ from the live state after failure. Perform
+validation before mutations and arrange any required compensation yourself.
+Pre-call subscriber notifications still occur for non-readonly calls, including
+ones that later fail. Successful calls are also published to replication
+subscribers; failed abort-decorated calls are not.

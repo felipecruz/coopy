@@ -64,8 +64,10 @@ memory. Queues have no byte limit; a persistently slow slave can consume master
 memory and should be disconnected by the operator. Serializing a large domain
 still pauses master mutations, even though transferring it does not.
 
-Only calls published by the proxy are replicated. Direct mutations and the
-existing omission of successful ``@abort_exception`` calls are not repaired by
-bootstrap. Recorded clock values are replayed; other domain behavior must be
-deterministic. This is not durable slave journaling, automatic reconnect,
-automatic failover, or a synchronous replication acknowledgment.
+Only calls published by the proxy are replicated. Successful non-readonly
+``@abort_exception`` calls are published; failing ones are omitted without
+rolling back mutations already made on the master. Direct mutations are not
+published either. These changes may enter a later bootstrap snapshot but are
+not sent as live actions. Recorded clock values are replayed; other domain
+behavior must be deterministic. This is not durable slave journaling, automatic
+reconnect, automatic failover, or a synchronous replication acknowledgment.
