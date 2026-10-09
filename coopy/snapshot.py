@@ -1,6 +1,8 @@
 import threading
 import logging
 import pickle
+import os
+import tempfile
 from pickle import Pickler, Unpickler
 
 from coopy import fileutils as fu
@@ -20,11 +22,25 @@ class SnapshotManager(object):
 
         self.basedir = basedir
 
-    def take_snapshot(self, object):
-        with open(fu.next_snapshot_file(self.basedir), "wb") as file:
-            logger.debug("Taking snapshot on: " + file.name)
-            pickler = Pickler(file, pickle.HIGHEST_PROTOCOL)
-            pickler.dump(object)
+    def take_snapshot(self, object, before_publish=None):
+        destination = fu.next_snapshot_file(self.basedir)
+        # The temporary name cannot be discovered as a checkpoint. Keep it on
+        # the same filesystem so publication is a single atomic rename.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", dir=self.basedir,
+                                             prefix=".coopy-snapshot-",
+                                             delete=False) as file:
+                temporary = file.name
+                Pickler(file, pickle.HIGHEST_PROTOCOL).dump(object)
+                file.flush()
+                os.fsync(file.fileno())
+            if before_publish:
+                before_publish(destination)
+            os.replace(temporary, destination)
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.unlink(temporary)
 
     def recover_snapshot(self):
         last_snapshot = fu.last_snapshot_file(self.basedir)
@@ -45,7 +61,10 @@ class SnapshotTimer(threading.Thread):
     def run(self):
         # wait first: the first snapshot happens after snapshot_time
         while not self.finished.wait(self.snapshot_time):
-            self.proxy.take_snapshot()
+            try:
+                self.proxy.take_snapshot()
+            except Exception:
+                logger.exception("Scheduled snapshot failed; retaining previous checkpoint")
 
     def stop(self):
         self.finished.set()

@@ -348,6 +348,7 @@ class RotateFileWrapperTest(unittest.TestCase):
 
         data = b"a" * 1025
         _file.write(data)
+        _file.rotate_if_needed()
 
         self.assertEqual(len(os.listdir(TEST_DIR)), 2)
 

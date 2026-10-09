@@ -23,30 +23,25 @@ class RotateFileWrapper():
         self.basedir = basedir
         self.max_size = max_size
         self.system_data_path = system_data_path
+        self.rotation_dir = os.path.join(system_data_path, basedir)
 
     def write(self, data):
-        current_cwd = os.getcwd()
-        restore_cwd = current_cwd == self.system_data_path
-        if not restore_cwd:
-            os.chdir(self.system_data_path)
-
         self.file.write(data)
 
         ''' certifies that data will be written - performance issues? '''
         self.file.flush()
 
-        if os.path.getsize(self.file.name) > self.max_size:
-            file_name = next_log_file(self.basedir)
-            logger.debug("Opening: " + file_name)
-            self.file.flush()
-            os.fsync(self.file.fileno())
-            self.file.close()
-            self.file = open(file_name,'wb')
-            self.pickler.clear_memo()
+    def rotate_if_needed(self):
+        if self.file.tell() > self.max_size:
+            self.rotate(next_log_file(name_to_dir(self.rotation_dir)))
 
-
-        if not restore_cwd:
-            os.chdir(current_cwd)
+    def rotate(self, file_name):
+        self.flush()
+        # Open first: a failed rotation leaves the old journal writable.
+        new_file = open(file_name, 'xb')
+        self.file.close()
+        self.file = new_file
+        self.pickler.clear_memo()
 
     def __getattr__(self, name):
         return getattr(self.file, name)
@@ -78,7 +73,7 @@ def list_coopy_files(basedir, regex):
     files = os.listdir(basedir)
     if not files:
         return None
-    files = [f for f in files if regex.search(f)]
+    files = [f for f in files if regex.fullmatch(f)]
     if not files:
         return None
     return sorted(files)

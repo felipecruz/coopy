@@ -28,7 +28,7 @@ class TestJournal(unittest.TestCase):
         new_file_name = expected_file_name.replace('2','3')
         open(new_file_name, 'wt').close()
 
-        self.assertEqual(new_file_name,
+        self.assertEqual(new_file_name.replace('3', '4'),
                           journal.current_journal_file(JOURNAL_DIR).name)
 
     def test_receive(self):
@@ -73,4 +73,3 @@ class TestJournal(unittest.TestCase):
         pickle_class = pickle.Pickler(open(expected_file_name, 'rb'))\
                                                             .__class__
         self.assertTrue(isinstance(journal.pickler, pickle_class))
-

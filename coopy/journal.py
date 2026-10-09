@@ -22,30 +22,22 @@ class DiskJournal():
         self.file.set_pickler(self.pickler)
 
     def current_journal_file(self, basedir):
-        '''
-            get current file on basedir(last created one)
-            and return a Rotate wrapper.
+        # Never append a fresh pickler's memo to an existing pickle stream.
+        # Also guarantees that reopened journals follow the latest snapshot.
+        return fileutils.RotateFileWrapper(
+            open(fileutils.next_log_file(fileutils.name_to_dir(self.basedir)), 'xb'),
+            self.basedir, self.system_data_path)
 
-            if current file size > 1Mb (configured on fileutils) crate
-            another file with the next name
-        '''
+    def checkpoint(self, snapshot_path):
+        """Advance past a reserved checkpoint before it becomes visible.
 
-        last_file_name = fileutils.last_log_file(self.basedir)
-
-        if last_file_name and os.path.getsize(self.basedir + last_file_name) \
-            < fileutils.MAX_LOGFILE_SIZE:
-
-            file = fileutils.RotateFileWrapper(
-                       open(self.basedir + last_file_name, 'ab'),
-                       self.basedir,
-                       self.system_data_path)
-        else:
-            file = fileutils.RotateFileWrapper(
-                       open(fileutils.next_log_file(self.basedir), 'wb'),
-                       self.basedir,
-                       self.system_data_path)
-
-        return file
+        The caller holds the domain lock. If publication subsequently fails,
+        all old journals remain available for replay from the old checkpoint.
+        """
+        number = fileutils.get_number(os.path.basename(snapshot_path)) + 1
+        number = max(number, fileutils.next_number(self.basedir))
+        self.file.rotate(fileutils.to_log_file(
+            fileutils.name_to_dir(self.basedir), number))
 
     def receive_before(self, message):
         pass
@@ -55,6 +47,9 @@ class DiskJournal():
             receive a message and pickle
         '''
         self.pickler.dump(message)
+        # A Pickler can call write more than once per record. Rotating inside
+        # write splits large records and clears a memo still in use by dump.
+        self.file.rotate_if_needed()
 
     def receive_exception(self, message):
         pass

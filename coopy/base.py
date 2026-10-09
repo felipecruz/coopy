@@ -226,7 +226,12 @@ class CoopyProxy():
             self.lock.acquire()
             try:
                 if self.snapshot_manager:
-                    self.snapshot_manager.take_snapshot(self.obj)
+                    def advance_journals(destination):
+                        for journal in self.publisher.subscribers:
+                            if isinstance(journal, DiskJournal):
+                                journal.checkpoint(destination)
+                    self.snapshot_manager.take_snapshot(
+                        self.obj, before_publish=advance_journals)
             finally:
                 self.lock.release()
         finally:
