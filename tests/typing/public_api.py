@@ -12,6 +12,14 @@ class Todo:
         return priority
 
 if TYPE_CHECKING:
+    async def async_api() -> None:
+        async with coopy.AsyncPersistent(Todo, "async-data") as todo:
+            await todo.add("milk")
+            await todo.call("add", "eggs")
+            await todo.take_snapshot()
+        opened = await coopy.AsyncPersistent.open(Todo, "async-data")
+        await opened.aclose()
+
     a = coopy.init_persistent_system(Todo)
     b = coopy.init_persistent_system(Todo())
     assert_type(a, Todo)

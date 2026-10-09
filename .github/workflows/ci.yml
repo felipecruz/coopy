@@ -34,6 +34,30 @@ jobs:
         run: python -m pytest --verbose -W error::DeprecationWarning
         timeout-minutes: 5
 
+  free-threaded:
+    name: Free-threaded (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.13t", "3.14t"]
+    env:
+      PYTHON_GIL: "0"
+      COOPY_REQUIRE_NO_GIL: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install core test dependencies
+        run: python -m pip install "setuptools>=77" wheel pytest -e .
+      - name: Verify free-threading and run suite including concurrent readers/writers
+        run: |
+          python -c "import sys, sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1; assert not sys._is_gil_enabled()"
+          python -m pytest --verbose -W error::DeprecationWarning
+        timeout-minutes: 5
+
   docs:
     name: Build documentation
     runs-on: ubuntu-latest
@@ -47,7 +71,7 @@ jobs:
 
   build:
     name: Build distributions
-    needs: test
+    needs: [test, free-threaded]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

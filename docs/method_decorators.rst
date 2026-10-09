@@ -24,6 +24,10 @@ calls, shared clock recording, and snapshots itself. Unlocked mutations are
 outside the checkpoint consistency guarantee; avoid them in persistent domains
 unless you provide equivalent synchronization.
 
+These limits also apply on free-threaded Python: the GIL is not a substitute
+for locking compound reads. See :doc:`concurrency` for reader guarantees,
+direct-object access limits, and the asyncio facade.
+
 @abort_exception
 ================
 

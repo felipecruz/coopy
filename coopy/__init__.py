@@ -10,3 +10,6 @@ from .serialization import (Serializer as Serializer, PickleSerializer as Pickle
                             JsonSerializer as JsonSerializer, TypeRegistry as TypeRegistry,
                             ActionSchemas as ActionSchemas, SerializationError as SerializationError)
 __all__ += ["Serializer", "PickleSerializer", "JsonSerializer", "TypeRegistry", "ActionSchemas", "SerializationError"]
+
+from .asyncio import AsyncPersistent as AsyncPersistent
+__all__ += ["AsyncPersistent"]

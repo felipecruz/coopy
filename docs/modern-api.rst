@@ -1,6 +1,13 @@
 Typed domain objects and persistence controls
 =============================================
 
+Async callers and concurrent-reader guarantees are covered in:
+
+.. toctree::
+   :maxdepth: 1
+
+   concurrency
+
 Both ``coopy.init_persistent_system(Todo, directory)`` and
 ``coopy.init_persistent_system(Todo(), directory)`` retain the domain type for
 static checking. Decorators preserve positional and keyword signatures. The
