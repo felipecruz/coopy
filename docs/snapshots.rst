@@ -26,7 +26,7 @@ the checkpoint you intend to recover.
 Checkpoint recovery
 -------------------
 
-Manual and timed snapshots hold the proxy's domain lock while serializing state
+Default manual and timed snapshots hold the proxy's domain lock while serializing state
 and advancing the journal. New actions go into a journal numbered after the new
 snapshot, so reopening replays them exactly once. Reopening starts a new journal
 rather than appending a new pickle memo to an existing stream. Size rotation
@@ -69,3 +69,87 @@ visible despite an exception; old checkpoints and journals remain available.
 See :doc:`usage` for synchronous acknowledgments, strict recovery, and salvage.
 Mutations that bypass the proxy lock (including ``@unlocked`` methods) remain
 outside this checkpoint guarantee.
+
+Optional compression
+--------------------
+
+Install ``pip install 'coopy[zstd]'`` or ``pip install 'coopy[lz4]'`` and open
+with ``snapshot_compression="zstd"`` or ``snapshot_compression="lz4"``.
+This changes newly written snapshots only. A versioned envelope identifies the
+compression; recovery automatically reads both old uncompressed and compressed
+snapshots, but requires the corresponding extra for compressed data. It never
+guesses the serializer: reopen with the same compatible serializer and secret.
+With HMAC enabled, the compressed envelope is authenticated before any
+decompression or deserialization. Compression adds checksums but is not a
+replacement for authentication. Both pickle and registered JSON are supported.
+
+Compressed and signed snapshots currently construct whole payloads in memory;
+allow memory for serialized, compressed, and decoded copies. There is no
+decompressed-size cap. Compression ratio and performance depend on the data.
+Keep extras installed wherever recovery or salvage may be needed.
+
+Opt-in fork snapshots
+---------------------
+
+On supported POSIX systems, a single-threaded application can explicitly assert
+that its state and serializer are fork-safe::
+
+    job = coopy.control(proxy).take_snapshot(mode="fork", fork_safe=True)
+    # The parent can now handle more requests and proxy mutations.
+    proxy.add("after the checkpoint boundary")
+    if job is not None:
+        job.wait(timeout=60)
+
+The lock protects journal synchronization, reserving the snapshot number,
+rotating the journal past it, and ``fork()``. The child serializes the copy-on-write
+view into a preopened hidden file, including compression/signing when enabled,
+flushes that file, and calls ``os._exit``. It never publishes a checkpoint,
+executes journal actions, starts workers, logs errors, or runs normal exit
+handlers. The parent alone reaps it, syncs its file, renames it, and (in sync
+mode) syncs the directory. Parent writes after fork use the later journal,
+whether the child succeeds or fails. Old checkpoints and journals are retained.
+
+``wait()`` returns only after publication and is idempotent; failures are also
+remembered. A timeout kills and reaps the child, removes its hidden file when
+possible, and raises ``TimeoutError``. Child serialization failures raise
+``PersistenceError`` without serializing the child's exception. Parent I/O errors
+propagate. A directory-sync failure after rename can leave a complete visible
+checkpoint. Call ``wait()`` before taking another snapshot; overlapping
+checkpoints are rejected. ``close()`` waits up to 60 seconds for an outstanding
+job and propagates its error while still closing resources. Do not reap the
+child yourself or install a SIGCHLD handler that does so. A parent crash can
+leave a hidden file or an orphan child; recovery ignores hidden files.
+
+Fork mode requires all of the following:
+
+* POSIX ``os.fork`` outside macOS, called from the sole Python main thread.
+  macOS always falls back because higher-level system APIs can make fork unsafe.
+* No replication role and no snapshot timer or other live Python thread at fork.
+  Timed snapshots remain blocking. Threads created after fork do not enter the
+  child; do not race thread creation with the eligibility check and fork.
+* An explicit ``fork_safe=True`` application assertion: no hidden native threads,
+  unsafe at-fork handlers, inherited locks/resources needed by serialization,
+  or serializer/reducer/finalizer callbacks with external effects. Coopy cannot
+  detect these properties. Arbitrary ``__getstate__``, ``__reduce__``, registered
+  codecs and C extensions are not automatically safe. Use blocking snapshots
+  if you cannot establish these conditions. Copy-on-write does not isolate
+  external resources or shared memory.
+
+Use ordinary CPython builds; embedded and free-threaded runtimes have not been
+validated. Unrelated open descriptors remain inherited until the child exits;
+the application must tolerate that temporary retention.
+
+If these detectable conditions fail, or the assertion is absent, coopy emits
+``RuntimeWarning``, takes a blocking snapshot, and returns ``None``. A fork
+system-call failure propagates; it does not silently retry serialization.
+See Python's `os.fork restrictions <https://docs.python.org/3/library/os.html#os.fork>`_.
+Python execution after fork in a multithreaded process is not supported.
+The eligibility check cannot establish native-library or user-callback safety.
+Fork avoids serializing under the parent's lock but still pauses for journal
+synchronization, page-table copying and fork handlers, and copy-on-write pages
+can increase memory pressure. No bounded pause or throughput is promised.
+
+.. toctree::
+   :maxdepth: 1
+
+   performance

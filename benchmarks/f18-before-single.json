@@ -1,0 +1,48 @@
+{
+  "python": "3.12.2 (main, Apr 17 2024, 16:58:59) [Clang 15.0.0 (clang-1500.3.9.4)]",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "timezone": "UTC",
+  "cpu_count": 8,
+  "parameters": {
+    "writes": 1000,
+    "workers": 1,
+    "actions": 10000,
+    "snapshot_mib": 64,
+    "repeats": 3,
+    "directory": null,
+    "fork": false,
+    "group_commit_delay": null
+  },
+  "measurements": {
+    "buffered_writes_per_second": [
+      5756.17557468918,
+      6756.907006050131,
+      6881.193611415799
+    ],
+    "sync_writes_per_second": [
+      4985.6454792385975,
+      4618.497660613521,
+      5248.418594413542
+    ],
+    "restore_actions": 10000,
+    "restore_seconds": 0.08284691700828262,
+    "restore_seconds_per_million": 8.284691700828262,
+    "snapshot_pause_seconds": [
+      0.06599191701388918,
+      0.056072792009217665,
+      0.057495374989230186
+    ],
+    "snapshot_total_seconds": [
+      0.06599412500509061,
+      0.05607362498994917,
+      0.05749583401484415
+    ],
+    "fork_jobs": 0
+  },
+  "medians": {
+    "buffered_writes_per_second": 6756.907006050131,
+    "sync_writes_per_second": 4985.6454792385975,
+    "snapshot_pause_seconds": 0.057495374989230186,
+    "snapshot_total_seconds": 0.05749583401484415
+  }
+}

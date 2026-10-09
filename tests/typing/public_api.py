@@ -22,7 +22,10 @@ if TYPE_CHECKING:
     result = coopy.init_persistent_system(Todo, recovery='salvage')
     assert_type(result, RecoveryResult[Todo])
     assert_type(result.system, Todo | None)
+    from coopy.snapshot import SnapshotJob
     coopy.control(a).take_snapshot()
+    assert_type(coopy.control(a).take_snapshot(mode="fork", fork_safe=True), SnapshotJob | None)
+    assert_type(coopy.open(Todo, snapshot_compression="zstd", group_commit_delay=0.002), Todo)
     coopy.control(b).close()
     with coopy.control(coopy.open(Todo)) as managed:
         assert_type(managed, Todo)

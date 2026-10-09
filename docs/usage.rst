@@ -213,6 +213,24 @@ re-raising its original domain exception). Readonly calls and omitted failed
 on each open, not stored in the pickle format; it does not retroactively
 validate earlier buffered acknowledgments.
 
+Enable group commit for concurrent synchronous calls with ``group_commit_delay=0.001``
+(seconds). This lets a batch leader release the domain lock briefly while other
+callers execute and append complete records. It then reacquires the lock and
+syncs the batch. Every caller waits for its own record's batch, including
+callers whose domain method raised a journaled exception. A batch sync or
+rotation failure fails all its waiting calls and disables later writes.
+Checkpoints and close drain pending batches. Completion order between callers
+may differ from execution order; replay retains execution order.
+
+The default, ``group_commit_delay=0``, retains immediate per-call synchronization.
+A positive window adds latency to isolated writes and can reduce throughput on fast
+storage. Benchmark your concurrency and storage before tuning it. Grouping
+starts no worker thread. With grouping enabled, mutating ``@unlocked`` methods
+also acquire the domain lock; readonly unlocked methods keep their behavior.
+Reads can observe mutations whose callers are still waiting for sync; this
+is not transaction isolation. Replication delivery does not imply a disk
+acknowledgment. See :doc:`performance` for measured trade-offs.
+
 Synchronous mode also syncs the data directory on journal creation, rotation,
 and checkpoint publication, and its existing parent if coopy creates the data
 directory. Snapshots retain the locked checkpoint boundary and file sync in

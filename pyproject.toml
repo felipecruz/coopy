@@ -28,6 +28,8 @@ classifiers = [
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "mypy>=1.14,<2"]
 docs = ["sphinx>=7,<9"]
+zstd = ["zstandard>=0.22"]
+lz4 = ["lz4>=4.3"]
 
 [project.urls]
 Homepage = "https://github.com/felipecruz/coopy"

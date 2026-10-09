@@ -124,8 +124,7 @@ def recover(system, basedir, mode='strict', *, secret=None, serializer=None, sch
             report.checkpoint = fileutils.last_snapshot_file(basedir)
             recovered = SnapshotManager(basedir, serializer=serializer).recover_snapshot()
         else:
-            recovered = (Unpickler(BytesIO(snapshot_payload)).load() if serializer is None
-                         else serializer.loads(snapshot_payload))
+            recovered = SnapshotManager(basedir, serializer=serializer).load_payload(snapshot_payload)
         if recovered is None:
             raise ValueError('No usable checkpoint found')
     except Exception as error:

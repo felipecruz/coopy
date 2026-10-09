@@ -3,6 +3,7 @@ from coopy.error import PersistenceError as PersistenceError, ConfigurationError
 
 import os
 import pickle
+import threading
 from pickle import Pickler
 
 from coopy import fileutils
@@ -15,6 +16,11 @@ class DiskJournal():
             raise ConfigurationError("durability must be 'buffered' or 'sync'")
         self.durability = durability
         self.failure = None
+        self.condition = None
+        self.group_commit_delay = 0.0
+        self.pending = 0
+        self.synchronized = 0
+        self.sync_leader = False
         '''
             set basedir and declare file attribute
         '''
@@ -57,9 +63,54 @@ class DiskJournal():
         number = max(number, fileutils.next_number(self.basedir))
         self.file.rotate(fileutils.to_log_file(
             self.basedir, number))
+        self._acknowledge()
+
+    def enable_group_commit(self, lock, delay):
+        if self.durability == 'sync' and delay > 0:
+            self.condition = threading.Condition(lock)
+            self.group_commit_delay = delay
+
+    def _acknowledge(self):
+        self.synchronized = self.pending
+        if self.condition is not None:
+            self.condition.notify_all()
+
+    def sync_pending(self):
+        """Synchronize under the domain lock; never acknowledge a failed batch."""
+        self.check_writable()
+        if self.pending > self.synchronized:
+            try:
+                self.file.flush()
+                self.file.rotate_if_needed()
+            except Exception as error:
+                self._failed(error)
+            self._acknowledge()
+
+    def wait_sync(self):
+        """Caller holds the domain lock; waiting releases it for other writers."""
+        if self.condition is None:
+            return
+        target = self.pending
+        while target > self.synchronized:
+            self.check_writable()
+            if self.sync_leader:
+                self.condition.wait()
+            else:
+                self.sync_leader = True
+                try:
+                    self.condition.wait(self.group_commit_delay)
+                    # Close/checkpoint may have synchronized this batch already.
+                    if target > self.synchronized:
+                        self.sync_pending()
+                finally:
+                    self.sync_leader = False
+                    self.condition.notify_all()
 
     def _failed(self, error):
         self.failure = error
+        if self.condition is not None:
+            with self.condition:
+                self.condition.notify_all()
         raise PersistenceError(
             'Journal persistence failed; memory may already be changed. '
             'No rollback was performed. Stop using this proxy and inspect recovery.'
@@ -90,11 +141,15 @@ class DiskJournal():
                            else self.serializer.dumps(message))
                 self.file.write(self.integrity.encode(
                     payload, self.file.name, self.file.tell()))
+            self.pending += 1
+            if self.condition is not None:
+                return
             if self.durability == 'sync':
                 # Acknowledge only after the entire record is flushed/synced.
                 self.file.flush()
             # Rotate only between records, never during Pickler.dump().
             self.file.rotate_if_needed()
+            self.synchronized = self.pending
         except Exception as error:
             self._failed(error)
 

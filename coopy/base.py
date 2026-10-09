@@ -13,6 +13,7 @@ from typing import Any, Generic, Literal, TypeVar, cast, overload
 from pathlib import Path
 from types import TracebackType
 import warnings
+import math
 
 from coopy.error import ConfigurationError, LifecycleError, ReplicationError
 
@@ -30,7 +31,7 @@ from coopy.journal import DiskJournal
 from coopy.integrity import Integrity, IDENTITY_FILE, validate_secret
 from coopy.restore import recover, RecoveryResult, RecoveryReport
 from coopy.serialization import Serializer, ActionSchemas
-from coopy.snapshot import SnapshotManager, SnapshotTimer
+from coopy.snapshot import SnapshotManager, SnapshotTimer, SnapshotJob, fork_supported
 from coopy.utils import method_or_none, action_check, inject
 from coopy.validation import validate_system
 
@@ -74,6 +75,8 @@ def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
                            recovery: Literal["strict"] = "strict",
                            durability: Literal["buffered", "sync"] = "buffered",
                            secret: bytes | None = None,
+                           snapshot_compression: str | None = None,
+                           group_commit_delay: float = 0.0,
                            serializer: Serializer | None = None,
                            schemas: ActionSchemas | None = None) -> T: ...
 
@@ -82,6 +85,8 @@ def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
                            recovery: Literal["strict"] = "strict",
                            durability: Literal["buffered", "sync"] = "buffered",
                            secret: bytes | None = None,
+                           snapshot_compression: str | None = None,
+                           group_commit_delay: float = 0.0,
                            serializer: Serializer | None = None,
                            schemas: ActionSchemas | None = None) -> T: ...
 
@@ -90,6 +95,8 @@ def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
                            recovery: Literal["salvage"],
                            durability: Literal["buffered", "sync"] = "buffered",
                            secret: bytes | None = None,
+                           snapshot_compression: str | None = None,
+                           group_commit_delay: float = 0.0,
                            serializer: Serializer | None = None,
                            schemas: ActionSchemas | None = None) -> RecoveryResult[T]: ...
 
@@ -98,6 +105,8 @@ def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
                            recovery: Literal["salvage"],
                            durability: Literal["buffered", "sync"] = "buffered",
                            secret: bytes | None = None,
+                           snapshot_compression: str | None = None,
+                           group_commit_delay: float = 0.0,
                            serializer: Serializer | None = None,
                            schemas: ActionSchemas | None = None) -> RecoveryResult[T]: ...
 
@@ -105,20 +114,30 @@ def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
 def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
                            recovery: str, durability: str = "buffered",
                            secret: bytes | None = None,
+                           snapshot_compression: str | None = None,
+                           group_commit_delay: float = 0.0,
                            serializer: Serializer | None = None,
                            schemas: ActionSchemas | None = None) -> T | RecoveryResult[T]: ...
 @overload
 def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
                            recovery: str, durability: str = "buffered",
                            secret: bytes | None = None,
+                           snapshot_compression: str | None = None,
+                           group_commit_delay: float = 0.0,
                            serializer: Serializer | None = None,
                            schemas: ActionSchemas | None = None) -> T | RecoveryResult[T]: ...
 
 def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recovery: str = "strict",
                            durability: str = "buffered", secret: bytes | None = None,
+                           snapshot_compression: str | None = None,
+                           group_commit_delay: float = 0.0,
                            serializer: Serializer | None = None,
                            schemas: ActionSchemas | None = None) -> Any:
     validate_secret(secret)
+    if not math.isfinite(group_commit_delay) or group_commit_delay < 0:
+        raise ConfigurationError("group_commit_delay must be finite and nonnegative")
+    from coopy.compression import validate_compression
+    validate_compression(snapshot_compression)
     if recovery not in ("strict", "salvage"):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
     if durability not in ("buffered", "sync"):
@@ -169,7 +188,7 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
         integrity = Integrity.open(basedir, secret, create=True, durability=durability)
     if not fileutils.last_snapshot_file(basedir) and (secret is None or new_signed):
         logger.info(CORE_LOG_PREFIX + "No snapshot files..")
-        SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer).take_snapshot(obj)
+        SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer, compression=snapshot_compression).take_snapshot(obj)
 
     # measure restore time
     start = time.perf_counter()
@@ -194,9 +213,9 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
                           integrity=integrity, serializer=serializer)
     journal.setup()
 
-    snapshot_manager = SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer)
+    snapshot_manager = SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer, compression=snapshot_compression)
 
-    proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager, schemas=schemas)
+    proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager, schemas=schemas, group_commit_delay=group_commit_delay)
     proxy.recovery_report = result.report
     return proxy
 
@@ -206,7 +225,7 @@ def init_system(obj: Any, subscribers: list[Any]) -> CoopyProxy:
     return proxy
 
 class CoopyProxy():
-    def __init__(self, obj: Any, subscribers: list[Any], snapshot_manager: SnapshotManager | None = None, schemas: ActionSchemas | None = None) -> None:
+    def __init__(self, obj: Any, subscribers: list[Any], snapshot_manager: SnapshotManager | None = None, schemas: ActionSchemas | None = None, group_commit_delay: float = 0.0) -> None:
         self.schemas = schemas if schemas is not None else ActionSchemas()
         self._closed = False
         self.recovery_report = RecoveryReport()
@@ -214,10 +233,14 @@ class CoopyProxy():
         self.obj = obj
         self.publisher = Publisher(subscribers)
         self.lock = threading.RLock()
+        for subscriber in subscribers:
+            if isinstance(subscriber, DiskJournal):
+                subscriber.enable_group_commit(self.lock, group_commit_delay)
         self.master: Any = None
         self.slave: Any = None
         self.snapshot_manager = snapshot_manager
         self.snapshot_timer: SnapshotTimer | None = None
+        self._snapshot_job: SnapshotJob | None = None
 
     def start_snapshot_manager(self, snapshot_time: float) -> None:
         # the timer waits snapshot_time before the first snapshot, so this
@@ -299,10 +322,16 @@ class CoopyProxy():
         if not readonly and hasattr(self, 'slave') and self.slave:
             raise ReplicationError('This is a slave/read-only instance.')
 
+        # Grouped synchronous writes must hold the shared condition lock even
+        # for an explicitly unlocked domain method.
+        locked = not unlocked or (not readonly and any(
+            isinstance(j, DiskJournal) and j.condition is not None
+            for j in self.publisher.subscribers))
+
         def method(*args: Any, **kwargs: Any) -> Any:
             exception = None
             try:
-                if not unlocked:
+                if locked:
                     self.lock.acquire(True)
 
                 self._check_open()
@@ -342,10 +371,15 @@ class CoopyProxy():
                 action.raised = exception is not None
 
                 if not readonly and not (abort_exception and action.raised):
-                    self.publisher.publish(action)
+                    try:
+                        self.publisher.publish(action)
+                    finally:
+                        for journal in self.publisher.subscribers:
+                            if isinstance(journal, DiskJournal):
+                                journal.wait_sync()
 
             finally:
-                if not unlocked:
+                if locked:
                     self.lock.release()
 
             if exception is not None:
@@ -360,7 +394,9 @@ class CoopyProxy():
         return [os.path.join(os.path.abspath(os.getcwd()), journal.basedir)
                 for journal in disk_journals]
 
-    def take_snapshot(self) -> None:
+    def take_snapshot(self, *, mode: str = 'blocking', fork_safe: bool = False) -> SnapshotJob | None:
+        if mode not in ('blocking', 'fork'):
+            raise ConfigurationError("snapshot mode must be 'blocking' or 'fork'")
         slave = self.slave
         if slave:
             slave.acquire()
@@ -368,6 +404,8 @@ class CoopyProxy():
             self.lock.acquire()
             try:
                 self._check_open()
+                if self._snapshot_job is not None and not self._snapshot_job.done:
+                    raise LifecycleError('Call snapshot_job.wait() before another snapshot')
                 if slave and not slave.synchronized:
                     raise ReplicationError('Cannot snapshot an unsynchronized slave.')
                 if self.snapshot_manager:
@@ -378,6 +416,13 @@ class CoopyProxy():
                         for journal in self.publisher.subscribers:
                             if isinstance(journal, DiskJournal):
                                 journal.checkpoint(destination)
+                    if mode == 'fork':
+                        if fork_supported(fork_safe) and not self.master and not slave:
+                            self._snapshot_job = self.snapshot_manager.start_fork(
+                                self.obj, advance_journals)
+                            return self._snapshot_job
+                        warnings.warn('Fork snapshot unavailable or not declared safe; using blocking snapshot',
+                                      RuntimeWarning, stacklevel=2)
                     self.snapshot_manager.take_snapshot(
                         self.obj, before_publish=advance_journals)
             finally:
@@ -385,6 +430,7 @@ class CoopyProxy():
         finally:
             if slave:
                 slave.release()
+        return None
 
     def _check_open(self) -> None:
         if self._closed:
@@ -404,12 +450,23 @@ class CoopyProxy():
             logger.exception("Cleanup failed while propagating context exception")
 
     def close(self) -> None:
+        errors: list[Exception] = []
         with self.lock:
             if self._closed:
                 return
+            for journal in self.publisher.subscribers:
+                if isinstance(journal, DiskJournal) and journal.failure is None:
+                    try:
+                        journal.sync_pending()
+                    except Exception as error:
+                        errors.append(error)
             self._closed = True
         # Never join worker threads while holding their domain lock.
-        errors: list[Exception] = []
+        if self._snapshot_job is not None:
+            try:
+                self._snapshot_job.wait()
+            except Exception as error:
+                errors.append(error)
         if self.snapshot_timer:
             try:
                 self.snapshot_timer.stop()
@@ -456,8 +513,8 @@ class PersistenceControl(Generic[T]):
     def recovery_report(self) -> RecoveryReport:
         return self._proxy.recovery_report
 
-    def take_snapshot(self) -> None:
-        CoopyProxy.take_snapshot(self._proxy)
+    def take_snapshot(self, *, mode: str = 'blocking', fork_safe: bool = False) -> SnapshotJob | None:
+        return CoopyProxy.take_snapshot(self._proxy, mode=mode, fork_safe=fork_safe)
 
     def close(self) -> None:
         CoopyProxy.close(self._proxy)
