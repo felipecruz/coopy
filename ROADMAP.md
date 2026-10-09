@@ -98,11 +98,21 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Limitation | Hosted CI and other Python/OS combinations were not executed locally; the sdist installation check downloads build requirements. |
   | Next step | Run the updated hosted CI workflow to verify the Python 3.13/Linux distribution job. |
 
-- [ ] **F7 — Preserve every write after a checkpoint.** Snapshot numbering overtakes the still-open journal, while `last_log_files` only selects journals numbered after the latest snapshot. Establish an unambiguous checkpoint/replay boundary while holding the domain lock. Accept when write A → snapshot → write B → close → reopen restores both exactly once; cover repeated snapshots, writes after reopening, timer-triggered snapshots, and journal rotation with shared object references. Do not silently reinterpret existing files without compatibility tests.
+- [x] **F7 — Preserve every write after a checkpoint.** Snapshot numbering overtakes the still-open journal, while `last_log_files` only selects journals numbered after the latest snapshot. Establish an unambiguous checkpoint/replay boundary while holding the domain lock. Accept when write A → snapshot → write B → close → reopen restores both exactly once; cover repeated snapshots, writes after reopening, timer-triggered snapshots, and journal rotation with shared object references. Do not silently reinterpret existing files without compatibility tests.
+  Complexity assessment before implementation: M; clear acceptance criteria across recovery tests, snapshot documentation, and roadmap tracking (three files, plus job notes). F3 already implemented the runtime boundary; this job adds concurrent-boundary and legacy-selection regression coverage. Historical files cannot reveal ambiguous post-checkpoint writes in earlier journals; preserve their interpretation.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | M |
+  | Details | Retained F3's domain-locked journal rotation before checkpoint publication and fresh journal on reopen. Added six regression cases for concurrent writes during manual/timed checkpoint rotation and publication, plus legacy journal selection and independent per-file memos. Documented the boundary without changing storage interpretation. |
+  | Commit | `f9e3375dba4251d30ec4fe1063a99df6be4de0c8` — implements F7 regression coverage and boundary documentation; `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — prior F3 runtime checkpoint fix and recovery tests. |
+  | Validation | All 89 tests passed on Python 3.12.2/macOS with DeprecationWarning as error, including 16 checkpoint tests covering repeated/reopened/timed snapshots, concurrent writes, large-record rotation with aliases, failures, and legacy protocol-2 streams. Full suite required local socket access. AIFlow roadmap check and git diff --check passed. |
+  | Limitation | Historical post-snapshot tails in journals at or below the checkpoint number cannot be inferred safely; those files retain their existing replay interpretation. |
+  | Limitation | Aliases within records survive rotation; object identity across journal files or between snapshot state and later arguments is not guaranteed. |
+  | Limitation | Power-loss durability and mutations bypassing the proxy lock remain outside the checkpoint guarantee; other Python/OS combinations were not run locally. |
+  | Next step | Run the supported Python and operating-system CI matrix. |
 
 - [ ] **F8 — Journal successful abort-decorated calls.** `CoopyProxy.__getattr__` currently suppresses every `@abort_exception` action, including success. Suppress journaling only when the decorated call raises. Accept when a successful decorated mutation survives restart, a failing decorated call is omitted and its exception reaches the caller, and ordinary failing calls retain their existing journal behavior. Document that this decorator does not roll back in-memory mutations or external effects; add tests for readonly interaction.
 
