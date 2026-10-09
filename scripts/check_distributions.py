@@ -2,6 +2,7 @@
 
 Run `python -m build` and `python -m twine check --strict dist/*` first.
 Only the standard library is needed; pip fetches the sdist's build requirements.
+Each installed artifact writes and restores state in separate Python processes.
 """
 
 import email.policy
@@ -23,7 +24,7 @@ class Notebook:
         self.entries.append(text)
 
 
-def persistence_round_trip():
+def persistence_round_trip(*, restore):
     import coopy
     from coopy.base import init_persistent_system
 
@@ -31,18 +32,17 @@ def persistence_round_trip():
     assert Path(coopy.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
     notebook = init_persistent_system(Notebook, basedir="data")
     try:
-        notebook.add("before checkpoint")
-        notebook.take_snapshot()
-        notebook.add("after checkpoint")
+        if restore:
+            assert notebook.entries == ["before checkpoint", "after checkpoint"]
+        else:
+            assert notebook.entries == [], "Round trip must start with fresh storage"
+            notebook.add("before checkpoint")
+            notebook.take_snapshot()
+            notebook.add("after checkpoint")
     finally:
         notebook.close()
-
-    restored = init_persistent_system(Notebook, basedir="data")
-    try:
-        assert restored.entries == ["before checkpoint", "after checkpoint"]
-    finally:
-        restored.close()
-    print(f"Persistence round trip passed: {coopy.__file__}", flush=True)
+    phase = "restored" if restore else "written"
+    print(f"Persistence state {phase}: {coopy.__file__}", flush=True)
 
 
 def check_metadata(raw, readme):
@@ -91,15 +91,19 @@ def check_distributions():
                  "--disable-pip-version-check", "--no-deps", str(artifact)],
                 cwd=work, check=True,
             )
-            subprocess.run(
-                [str(python), "-I", str(Path(__file__).resolve()), "--round-trip"],
-                cwd=work, check=True,
-            )
+            # A fresh interpreter must recover from disk without any writer state.
+            for phase in ("--write-state", "--restore-state"):
+                subprocess.run(
+                    [str(python), "-I", str(Path(__file__).resolve()), phase],
+                    cwd=work, check=True,
+                )
             print(f"Installed artifact passed: {artifact.name}", flush=True)
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--round-trip"]:
-        persistence_round_trip()
+    if sys.argv[1:] == ["--write-state"]:
+        persistence_round_trip(restore=False)
+    elif sys.argv[1:] == ["--restore-state"]:
+        persistence_round_trip(restore=True)
     else:
         check_distributions()
