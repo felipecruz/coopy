@@ -1,7 +1,6 @@
 import os
 import unittest
 import shutil
-import six
 
 import coopy
 import coopy.fileutils as fu
@@ -347,18 +346,12 @@ class RotateFileWrapperTest(unittest.TestCase):
 
         self.assertEqual(len(os.listdir(TEST_DIR)), 1)
 
-        if six.PY3:
-            data = b"a" * 1025
-        else:
-            data = "a" * 1025
+        data = b"a" * 1025
         _file.write(data)
 
         self.assertEqual(len(os.listdir(TEST_DIR)), 2)
 
-        if six.PY3:
-            second_data = b"b" * 1000
-        else:
-            second_data = "b" * 1000
+        second_data = b"b" * 1000
 
         _file.write(second_data)
         files = os.listdir(TEST_DIR)

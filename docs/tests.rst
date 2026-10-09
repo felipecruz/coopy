@@ -5,7 +5,7 @@ Tests
 
 First time::
 
-    pip install -r requirements.txt
+    pip install -e ".[test]"
 
 To actually run the tests::
 
@@ -16,7 +16,7 @@ Coverage Report
 
 First time::
 
-    pip install -r requirements.txt
+    pip install -e ".[test]"
 
 And then::
 
@@ -24,7 +24,7 @@ And then::
 
 Coverage report::
 
-    $ py.test --cov coopy
+    $ python -m pytest --cov coopy
 
     Name                           Stmts   Miss  Cover
     --------------------------------------------------

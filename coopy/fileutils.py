@@ -1,8 +1,6 @@
 import os
 import re
-import types
 import logging
-import logging.config
 
 logger = logging.getLogger("coopy")
 
@@ -15,9 +13,9 @@ LOG_SUFIX = ".log"
 SNAPSHOT_PREFIX = "snapshot_"
 SNAPSHOT_SUFIX = ".dat"
 
-SNAPSHOT_REGEX = re.compile("snapshot_(\d{15})\.dat", re.IGNORECASE)
-LOG_REGEX = re.compile("transaction_(\d{15})\.log", re.IGNORECASE)
-FILE_REGEX = re.compile("(transaction|snapshot)_(\d{15})\..{3}", re.IGNORECASE)
+SNAPSHOT_REGEX = re.compile(r"snapshot_(\d{15})\.dat", re.IGNORECASE)
+LOG_REGEX = re.compile(r"transaction_(\d{15})\.log", re.IGNORECASE)
+FILE_REGEX = re.compile(r"(transaction|snapshot)_(\d{15})\..{3}", re.IGNORECASE)
 
 class RotateFileWrapper():
     def __init__(self, file, basedir, system_data_path, max_size=MAX_LOGFILE_SIZE):
@@ -51,14 +49,15 @@ class RotateFileWrapper():
             os.chdir(current_cwd)
 
     def __getattr__(self, name):
-        if name == 'closed':
-            return self.file.closed
-        elif name == "flush":
-            import os
-            self.file.flush()
-            os.fsync(self.file.fileno())
-        else:
-            return getattr(self.file, name)
+        return getattr(self.file, name)
+
+    @property
+    def closed(self):
+        return self.file.closed
+
+    def flush(self):
+        self.file.flush()
+        os.fsync(self.file.fileno())
 
     @property
     def name(self):
@@ -79,7 +78,7 @@ def list_coopy_files(basedir, regex):
     files = os.listdir(basedir)
     if not files:
         return None
-    files = filter(regex.search, files)
+    files = [f for f in files if regex.search(f)]
     if not files:
         return None
     return sorted(files)

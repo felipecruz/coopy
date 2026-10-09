@@ -12,13 +12,12 @@ http://en.wikipedia.org/wiki/Object_prevalence
 
 ## Status
 
-Current version - 0.4.3beta
+Current version - 0.5.0
 
-coopy is compatible with py2.6, py2.7, py3.2, py3.3 and pypy.
+coopy requires Python 3.10 or newer (tested on 3.10 - 3.14). Python 2 support
+was dropped in 0.5.0; use coopy 0.4.x if you are stuck on Python 2.
 
-CI builds:
-
-[![Build Status](https://secure.travis-ci.org/felipecruz/coopy.png)](http://travis-ci.org/felipecruz/coopy)
+[![CI](https://github.com/felipecruz/coopy/actions/workflows/ci.yml/badge.svg)](https://github.com/felipecruz/coopy/actions/workflows/ci.yml)
 
 ## Install
 
@@ -32,7 +31,7 @@ or
 ```sh
 $ git clone https://github.com/felipecruz/coopy.git
 $ cd coopy
-$ python setup.py install
+$ pip install .
 ```
 
 ## Using
@@ -63,6 +62,12 @@ This should not affect end-user code
 To get datetime or date objects you need to get from an internal clock.
 Check [How to use Clock](http://coopy.readthedocs.org/en/latest/use_clock.html)
 
+## Security
+
+Journals, snapshots and master/slave replication all use `pickle`. Loading a
+pickle can run arbitrary code, so only restore data directories you trust and
+only replicate between trusted hosts on a trusted network.
+
 ## Documentation
 
 http://coopy.readthedocs.org
@@ -82,7 +87,7 @@ System(Domain) Class: https://github.com/loogica/riobus/blob/master/riobus.py
 
 First time:
 
-`pip install -r requirements.txt`
+`pip install -e ".[test]"`
 
 To actually run the tests:
 
@@ -92,7 +97,7 @@ To actually run the tests:
 
 First time:
 
-`pip install -r requirements.txt`
+`pip install -e ".[test]"`
 
 And then:
 

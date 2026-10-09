@@ -4,3 +4,7 @@ htmlcov/
 build/
 build_history/
 coopy.log*
+!.github/
+!.gitignore
+*.egg-info/
+dist/

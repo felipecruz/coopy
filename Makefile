@@ -1,7 +1,7 @@
 test: clean
-	py.test --verbose .
+	python -m pytest --verbose
 coverage:
-	py.test --cov-report html --cov .
+	python -m pytest --cov-report html --cov coopy
 clean:
 	@rm -rf build/
 	@rm -rf htmlcov/

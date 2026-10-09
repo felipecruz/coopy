@@ -50,7 +50,7 @@ need to get from an internal clock. Check this page :doc:`use_clock`
 Status
 ------
 
-coopy is compatible with py2.6, py2.7, py3.2, py3.3 and pypy.
+coopy requires Python 3.10 or newer.
 
 contribute
 ----------

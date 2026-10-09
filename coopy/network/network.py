@@ -1,16 +1,9 @@
-import six
 import zlib
 import struct
-
-if six.PY3:
-    import pickle
-else:
-    import cPickle as pickle
-
+import pickle
 import threading
 import logging
 
-from coopy import foundation
 from coopy.foundation import Action
 
 COPYNET_MASTER_PREFIX = '[coopynet - master]'
@@ -21,7 +14,7 @@ COPYNET_HEADER = '!Ic'
 l = logging.getLogger("coopy")
 
 def prepare_data(data, stype=b's'):
-    if (isinstance(data, Action) or isinstance(data, foundation.Action)):
+    if isinstance(data, Action):
         stype = b'a'
 
     data = pickle.dumps(data)
@@ -44,7 +37,7 @@ class CopyNetPacket():
 
 class CopyNetSnapshotThread(threading.Thread):
     def __init__(self, net_client, obj):
-            threading.Thread.__init__ (self)
+            threading.Thread.__init__(self, daemon=True)
             self.net_client = net_client
             self.obj = obj
 

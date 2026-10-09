@@ -70,3 +70,13 @@ def test_validate_system_method_with_subscript():
             return ''.join([])
 
     assert validate_system(GoodSystem())
+
+def test_validate_system_without_source():
+    from coopy.validation import validate_system
+
+    namespace = {}
+    exec("class NoSource(object):\n"
+         "    def method(self):\n"
+         "        return 1\n", namespace)
+
+    assert validate_system(namespace['NoSource']())

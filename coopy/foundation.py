@@ -1,7 +1,6 @@
-from datetime import datetime, date, time
-from time import localtime
+from datetime import datetime, date, timezone
 
-from .validation import FORBIDDEN_OBJECTS, DATETIME_FUNCS, DATE_FUNCS
+from .validation import DATETIME_FUNCS, DATE_FUNCS
 
 class RecordClock(object):
     def __init__(self):
@@ -20,7 +19,8 @@ class RecordClock(object):
         return dt
 
     def utcnow(self):
-        dt = datetime.utcnow()
+        # naive UTC datetime, same as the deprecated datetime.utcnow()
+        dt = datetime.now(timezone.utc).replace(tzinfo=None)
         self.results.append(dt)
         return dt
 
@@ -60,6 +60,7 @@ class Action(object):
         self.args = args
         self.kwargs = kwargs
         self.results = None
+        self.raised = None
 
         # TODO do we need it?
         self.timestamp = timestamp

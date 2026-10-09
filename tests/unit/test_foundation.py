@@ -32,7 +32,7 @@ class TestAction(unittest.TestCase):
 
         action.execute_action(dummy)
 
-        self.assertEquals(1, dummy.exec_count)
+        self.assertEqual(1, dummy.exec_count)
 
         action = Action('caller_id',
                         'business_method_args',
@@ -42,7 +42,7 @@ class TestAction(unittest.TestCase):
 
         action.execute_action(dummy)
 
-        self.assertEquals(3, dummy.exec_count)
+        self.assertEqual(3, dummy.exec_count)
 
         action = Action('caller_id',
                         'business_method_kwargs',
@@ -52,7 +52,7 @@ class TestAction(unittest.TestCase):
 
         action.execute_action(dummy)
 
-        self.assertEquals(6, dummy.exec_count)
+        self.assertEqual(6, dummy.exec_count)
 
 class TestRecordClock(unittest.TestCase):
     def test_record_clock(self):
@@ -62,31 +62,31 @@ class TestRecordClock(unittest.TestCase):
         self.assertTrue(len(clock.results) == 0)
 
         dt1 = clock.now()
-        self.assertEquals(dt1, clock.results[0])
+        self.assertEqual(dt1, clock.results[0])
 
         dt2 = clock.now()
-        self.assertEquals(dt2, clock.results[1])
+        self.assertEqual(dt2, clock.results[1])
 
         dt = clock.today()
-        self.assertEquals(dt, clock.results[2])
+        self.assertEqual(dt, clock.results[2])
 
         utcnow = clock.utcnow()
-        self.assertEquals(utcnow, clock.results[3])
+        self.assertEqual(utcnow, clock.results[3])
 
 class TestRestoreClock(unittest.TestCase):
     def test_restore_clock(self):
         from coopy.foundation import RestoreClock
-        from datetime import datetime, date
+        from datetime import datetime, date, timezone
 
         dt1 = datetime.now()
         dt2 = date.today()
-        dt3 = datetime.utcnow()
+        dt3 = datetime.now(timezone.utc).replace(tzinfo=None)
 
         clock = RestoreClock([dt1, dt2, dt3])
 
-        self.assertEquals(dt1, clock.now())
-        self.assertEquals(dt2, clock.today())
-        self.assertEquals(dt3, clock.utcnow())
+        self.assertEqual(dt1, clock.now())
+        self.assertEqual(dt2, clock.today())
+        self.assertEqual(dt3, clock.utcnow())
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coopy"
+dynamic = ["version"]
+description = "coopy - plain objects persistence/prevalence tool"
+readme = { file = "README.markdown", content-type = "text/markdown" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Felipe Cruz", email = "felipecruz@loogica.net" }]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/felipecruz/coopy"
+Documentation = "http://coopy.readthedocs.org"
+
+[tool.setuptools.dynamic]
+version = { attr = "coopy.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["coopy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

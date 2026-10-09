@@ -1,14 +1,11 @@
+import pickle
+
 from tests.domain import Wiki
 
 def test_prepare_data():
     from coopy.network.network import prepare_data
     from coopy.foundation import RecordClock
     from coopy.utils import inject
-    import six
-    if six.PY3:
-        import pickle
-    else:
-        import cPickle as pickle
     import zlib
 
     wiki = Wiki()
@@ -25,11 +22,6 @@ def test_prepare_data():
 def test_prepare_action():
     from coopy.foundation import Action
     from coopy.network.network import prepare_data
-    import six
-    if six.PY3:
-        import pickle
-    else:
-        import cPickle as pickle
     import zlib
     import datetime
 

@@ -1,15 +1,9 @@
-import six
 import logging
+from pickle import Unpickler, UnpicklingError
 
 from coopy import fileutils
 from coopy.snapshot import SnapshotManager
 from coopy.foundation import RestoreClock
-
-if six.PY3:
-    from pickle import Unpickler, UnpicklingError
-    BadPickleGet = UnpicklingError
-else:
-    from cPickle import Unpickler, BadPickleGet
 
 logger = logging.getLogger("coopy")
 LOG_PREFIX = '[RESTORE] '
@@ -29,16 +23,21 @@ def restore(system, basedir):
     actions = []
     for file in files:
         logger.debug(LOG_PREFIX + "Opening  " + str(file))
-        unpickler = Unpickler(open(file,'rb'))
-        try:
-            while True:
-                action = unpickler.load()
-                logger.debug(LOG_PREFIX + action.action)
-                actions.append(action)
-        except BadPickleGet:
-            logger.error(LOG_PREFIX + "Error unpickling %s" % (str(file)))
-        except EOFError:
-            pass
+        with open(file, 'rb') as journal_file:
+            unpickler = Unpickler(journal_file)
+            try:
+                while True:
+                    action = unpickler.load()
+                    logger.debug(LOG_PREFIX + action.action)
+                    actions.append(action)
+            except EOFError:
+                pass
+            except (UnpicklingError, AttributeError, ImportError,
+                    IndexError, ValueError) as e:
+                # a truncated or corrupted journal: keep what was read so
+                # far, but make the data loss visible
+                logger.error(LOG_PREFIX + "Error unpickling %s after %d "
+                             "actions: %r" % (file, len(actions), e))
 
     if not actions:
         return system
@@ -46,12 +45,22 @@ def restore(system, basedir):
     logger.debug(LOG_PREFIX + "Actions re-execution")
     for action in actions:
         try:
-            if hasattr(action, 'results'):
-                system._clock = RestoreClock(action.results)
+            system._clock = RestoreClock(getattr(action, 'results', None)
+                                         or [])
             action.execute_action(system)
         except Exception as e:
-            logger.debug(LOG_PREFIX + 'Error executing: %s' % (str(action)))
-            logger.debug(LOG_PREFIX + 'Exception: %s' % (str(e)))
+            raised = getattr(action, 'raised', None)
+            if raised:
+                # it also failed when it first ran, replay matches
+                log = logger.debug
+            elif raised is None:
+                # journal written before coopy 0.5 - can't tell
+                log = logger.warning
+            else:
+                # it succeeded originally: restored state diverged
+                log = logger.error
+            log(LOG_PREFIX + 'Error executing: %s' % (str(action)))
+            log(LOG_PREFIX + 'Exception: %r' % (e,))
 
     system._clock = current_clock
     return system

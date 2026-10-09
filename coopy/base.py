@@ -5,23 +5,16 @@ Created on Dec 6, 2011
 '''
 __author__ = "Felipe Cruz <felipecruz@loogica.net>"
 __license__ = "BSD"
-__version__ = "0.4.6b"
 
-import six
 import os
+import time
 import logging
 import threading
-import types
-
-if six.PY3:
-    import _thread as thread
-else:
-    import thread
 
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
-from coopy import fileutils
+from coopy import __version__, fileutils
 from coopy.foundation import Action, RecordClock, Publisher
 from coopy.journal import DiskJournal
 from coopy.restore import restore
@@ -32,11 +25,20 @@ from coopy.validation import validate_system
 from coopy.network.default_select import CopyNet, CopyNetSlave
 
 CORE_LOG_PREFIX = '[CORE] '
+DEFAULT_PASSWORD = b'copynet'
+
+logger = logging.getLogger("coopy")
+logger.addHandler(logging.NullHandler())
 
 def logging_config(basedir="./"):
-    log_file_path = os.path.join(basedir, "coopy.log")
+    log_file_path = os.path.abspath(os.path.join(basedir, "coopy.log"))
     result = logging.getLogger("coopy")
     result.setLevel(logging.DEBUG)
+
+    # avoid duplicated log lines when called more than once
+    for handler in result.handlers:
+        if getattr(handler, 'baseFilename', None) == log_file_path:
+            return
 
     handler = RotatingFileHandler(log_file_path, "a", 1000000, 10)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s ' \
@@ -44,11 +46,17 @@ def logging_config(basedir="./"):
     handler.setFormatter(formatter)
     result.addHandler(handler)
 
-logging_config()
-logger = logging.getLogger("coopy")
+def _to_password(password):
+    if password is None:
+        return DEFAULT_PASSWORD
+    if isinstance(password, str):
+        return password.encode('utf-8')
+    return password
 
 
 def init_persistent_system(obj, basedir=None):
+    logging_config()
+
     # a system object is needed in order to coopy work
     if not obj:
         raise Exception(CORE_LOG_PREFIX +
@@ -82,7 +90,7 @@ def init_persistent_system(obj, basedir=None):
         SnapshotManager(basedir).take_snapshot(obj)
 
     # measure restore time
-    start = datetime.utcnow()
+    start = time.perf_counter()
     logger.info(CORE_LOG_PREFIX + "coopy init....")
 
     # inject clock on system object
@@ -94,9 +102,8 @@ def init_persistent_system(obj, basedir=None):
     # re-executing them again
     obj = restore(obj, basedir)
 
-    end = datetime.utcnow()
-    delta = end - start
-    logger.info(CORE_LOG_PREFIX + "spent " + str(delta) + "microseconds")
+    delta = time.perf_counter() - start
+    logger.info(CORE_LOG_PREFIX + "restore spent %.6f seconds" % delta)
 
     journal = DiskJournal(basedir, system_data_path)
     journal.setup()
@@ -121,28 +128,28 @@ class CoopyProxy():
         self.snapshot_timer = None
 
     def start_snapshot_manager(self, snapshot_time):
-        import time
+        # the timer waits snapshot_time before the first snapshot, so this
+        # call returns immediately
         self.snapshot_timer = SnapshotTimer(snapshot_time, self)
-        time.sleep(snapshot_time)
         self.snapshot_timer.start()
 
     def start_master(self, port=8012, password=None, ipc=False):
         self.server = CopyNet(self.obj,
                               port=port,
-                              password=password,
+                              password=_to_password(password),
                               ipc=ipc)
         self.server.start()
         self.publisher.register(self.server)
+        self.master = self.server
         self.slave = None
 
-    def start_slave(self, host, port, password=None, ipc=None):
+    def start_slave(self, host, port, password=None, ipc=False):
         self.server = None
-        self.slave = CopyNetSlave(self.obj,
-                                    self,
-                                    host=host,
-                                    password=password,
-                                    port=port,
-                                    ipc=ipc)
+        self.slave = CopyNetSlave(self,
+                                  host=host,
+                                  port=port,
+                                  password=_to_password(password),
+                                  ipc=ipc)
         self.slave.start()
 
     def __getattr__(self, name):
@@ -166,7 +173,7 @@ class CoopyProxy():
                 #record all calls to clock.now()
                 self.obj._clock = RecordClock()
 
-                thread_ident = thread.get_ident()
+                thread_ident = threading.get_ident()
                 action = Action(thread_ident,
                                 name,
                                 datetime.now(),
@@ -189,6 +196,8 @@ class CoopyProxy():
 
                 #restore clock
                 action.results = self.obj._clock.results
+                # lets restore tell expected failures from divergences
+                action.raised = exception is not None
 
                 if not readonly and not abort_exception:
                     self.publisher.publish(action)
@@ -210,25 +219,31 @@ class CoopyProxy():
                 for journal in disk_journals]
 
     def take_snapshot(self):
-        if self.slave:
-            self.slave.acquire()
-
-        self.lock.acquire()
-        if self.snapshot_manager:
-            self.snapshot_manager.take_snapshot(self.obj)
-        self.lock.release()
-
-        if self.slave:
-            self.slave.release()
+        slave = self.slave
+        if slave:
+            slave.acquire()
+        try:
+            self.lock.acquire()
+            try:
+                if self.snapshot_manager:
+                    self.snapshot_manager.take_snapshot(self.obj)
+            finally:
+                self.lock.release()
+        finally:
+            if slave:
+                slave.release()
 
     def close(self):
-        self.publisher.close()
-        logging.shutdown()
+        # stop the timer first so no snapshot runs against closed resources
         if self.snapshot_timer:
             self.snapshot_timer.stop()
+            self.snapshot_timer = None
+        self.publisher.close()
 
     def shutdown(self):
         if self.master:
-            self.server.close()
+            self.master.close()
+            self.master = None
         if self.slave:
             self.slave.close()
+            self.slave = None

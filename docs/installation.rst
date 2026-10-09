@@ -15,4 +15,4 @@ You can always check our bleeding-edge development version::
 
 and then::
 
-    $ python setup.py install
+    $ pip install .

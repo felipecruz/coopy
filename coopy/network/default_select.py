@@ -1,21 +1,15 @@
-import six
 from select import select
 import os
 import socket
 import zlib
 import struct
-
-if six.PY3:
-    import pickle
-    from queue import Queue
-else:
-    import cPickle as pickle
-    from Queue import Queue
+import pickle
+from queue import Queue
 import threading
 import logging
-import sys
 
 
+from coopy.foundation import RestoreClock
 from coopy.network.network import prepare_data, CopyNetPacket, CopyNetClient,\
                                   CopyNetSnapshotThread
 
@@ -30,13 +24,25 @@ _sinfo = lambda x: l.info("%s %s" % (COPYNET_SLAVE_PREFIX, x))
 _mdebug = lambda x: l.debug("%s %s" % (COPYNET_MASTER_PREFIX, x))
 _sdebug = lambda x: l.debug("%s %s" % (COPYNET_SLAVE_PREFIX, x))
 
-_mwarn = lambda x: l.warn("%s %s" % (COPYNET_MASTER_PREFIX, x))
-_swarn = lambda x: l.warn("%s %s" % (COPYNET_SLAVE_PREFIX, x))
+_mwarn = lambda x: l.warning("%s %s" % (COPYNET_MASTER_PREFIX, x))
+_swarn = lambda x: l.warning("%s %s" % (COPYNET_SLAVE_PREFIX, x))
 
 COPYNET_SOCK = '/tmp/coopy.sock'
 COPYNET_HEADER = '!Ic'
 
 _HEADER_SIZE = struct.calcsize(COPYNET_HEADER)
+
+def _recv_exactly(sock, size):
+    '''
+        read exactly size bytes; returns less only if the peer closed
+    '''
+    buf = b''
+    while len(buf) < size:
+        chunk = sock.recv(size - len(buf))
+        if not chunk:
+            break
+        buf += chunk
+    return buf
 
 #TODO: re-write all code below!!! :) (and tests)
 
@@ -49,7 +55,7 @@ class CopyNet(threading.Thread):
                  password=b'copynet',
                  ipc=False):
 
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, daemon=True)
         self.obj = obj
         self.host = host
         self.port = port
@@ -86,11 +92,17 @@ class CopyNet(threading.Thread):
         self.running = False
         try:
             self.server.shutdown(socket.SHUT_RDWR)
-        except socket.error:
+        except OSError:
             pass
         self.server.close()
-        if self.ipc:
+        if self.ipc and os.path.exists(COPYNET_SOCK):
             os.remove(COPYNET_SOCK)
+
+    def receive_before(self, message):
+        pass
+
+    def receive_exception(self, message):
+        pass
 
     def receive(self, message):
         _mdebug('Receive')
@@ -138,7 +150,8 @@ class CopyNet(threading.Thread):
     def disconnect(self, sock):
         _mdebug('Master received data. Close client')
         sock.close()
-        del self.clientmap[sock]
+        self.clientmap.pop(sock, None)
+        self.queues.pop(sock, None)
 
     def run(self):
         self.running = True
@@ -148,7 +161,8 @@ class CopyNet(threading.Thread):
             try:
                 to_read, to_write, exception_mode = \
                     select([self.server] + list(self.clientmap.keys()), [], [], 5)
-            except socket.error as e:
+            except (OSError, ValueError) as e:
+                # ValueError: server socket already closed (fd == -1)
                 _mdebug("Select error")
                 self.running = False
                 break
@@ -158,7 +172,7 @@ class CopyNet(threading.Thread):
                     try:
                         client, address = self.server.accept()
                     except Exception as e:
-                        _mdebug('Cannot accept client: %s'  % e.message)
+                        _mdebug('Cannot accept client: %s' % e)
                         continue
 
                     _minfo('Server: got connection %d from %s' %
@@ -187,7 +201,7 @@ class CopyNetSlave(threading.Thread):
                  password=b'copynet',
                  ipc=False):
 
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, daemon=True)
         self.parent = parent
         self.host = host
         self.port = port
@@ -204,7 +218,7 @@ class CopyNetSlave(threading.Thread):
 
             self.sock.sendall(password)
             _sdebug('Slave connected to server@%d' % self.port)
-        except socket.error as e:
+        except OSError as e:
             _sdebug("Error connecting to server %s" % (e))
             raise Exception("Network Error: Could not connect to: %s:%d" %
                     (host, port))
@@ -236,7 +250,7 @@ class CopyNetSlave(threading.Thread):
             for sock in to_read:
                 if sock == self.sock:
                     try:
-                        data = self.sock.recv(_HEADER_SIZE)
+                        data = _recv_exactly(self.sock, _HEADER_SIZE)
                     except Exception as e:
                         _mdebug('Exception %s'  % e)
                         data = None
@@ -249,31 +263,42 @@ class CopyNetSlave(threading.Thread):
                         try:
                             (psize, stype) = struct.unpack(COPYNET_HEADER, data)
                         except struct.error as e:
+                            l.error("%s Malformed header %r, shutting down" %
+                                    (COPYNET_SLAVE_PREFIX, data))
                             self.running = False
-                            self.sock.close()
-                            raise Exception("Unexpected error")
-                        if stype == 'n':
-                            self.sock.close()
-                            raise Exception("Not authorized")
+                            break
+                        if stype == b'n':
+                            l.error("%s Not authorized by master" %
+                                    COPYNET_SLAVE_PREFIX)
+                            self.running = False
+                            break
 
                         _sdebug('Reading %d bytes' % (psize))
-                        buf = ''
-
-                        while len(buf) < psize:
-                            buf += self.sock.recv(4096)
+                        buf = _recv_exactly(self.sock, psize)
+                        if len(buf) < psize:
+                            _sdebug('Connection closed mid-message')
+                            self.running = False
+                            break
 
                         un_data = zlib.decompress(buf)
 
-                        self.lock.acquire(1)
-                        if stype == 'a':
-                            _sdebug('Receiving action')
-                            action = picke.loads(str(un_data))
-                            action.execute_action(self.parent.obj)
-                            _sdebug(str(action))
-                        else:
-                            _sdebug('Receiving system')
-                            self.parent.obj = pickle.loads(str(un_data))
-                        self.lock.release()
+                        with self.lock:
+                            if stype == b'a':
+                                _sdebug('Receiving action')
+                                action = pickle.loads(un_data)
+                                obj = self.parent.obj
+                                # replay with the master's clock values
+                                obj._clock = RestoreClock(action.results or [])
+                                try:
+                                    action.execute_action(obj)
+                                except Exception as e:
+                                    # it may have failed on master too
+                                    _sdebug('Error executing %s: %r' %
+                                            (action, e))
+                                _sdebug(str(action))
+                            else:
+                                _sdebug('Receiving system')
+                                self.parent.obj = pickle.loads(un_data)
 
                 else:
                     _sdebug("Unexcpected")

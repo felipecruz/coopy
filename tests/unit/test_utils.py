@@ -48,27 +48,27 @@ class UtilsTest(unittest.TestCase):
         def readonly_unlocked():
             pass
 
-        self.assertEquals(
+        self.assertEqual(
                 (False, False, False),
                 utils.action_check(no_decorator)
         )
         
-        self.assertEquals(
+        self.assertEqual(
                 (True, False, False),
                 utils.action_check(read_method)
         )
         
-        self.assertEquals(
+        self.assertEqual(
                 (False, True, False),
                 utils.action_check(not_locked)
         )
 
-        self.assertEquals(
+        self.assertEqual(
                 (False, False, True),
                 utils.action_check(abort_on_exception)
         )
 
-        self.assertEquals(
+        self.assertEqual(
                 (True, True, False),
                 utils.action_check(readonly_unlocked)
         )

@@ -1,15 +1,11 @@
-import six
 import threading
 import logging
 import pickle
+from pickle import Pickler, Unpickler
+
 from coopy import fileutils as fu
 
 from os import path
-
-if six.PY3:
-    from pickle import Pickler, Unpickler
-else:
-    from cPickle import Pickler, Unpickler
 
 logger = logging.getLogger("coopy")
 
@@ -25,34 +21,33 @@ class SnapshotManager(object):
         self.basedir = basedir
 
     def take_snapshot(self, object):
-        file = open(fu.next_snapshot_file(self.basedir), "wb")
-        logger.debug("Taking snapshot on: " + file.name)
-        pickler = Pickler(file, pickle.HIGHEST_PROTOCOL)
-        pickler.dump(object)
-        file.flush()
-        file.close()
+        with open(fu.next_snapshot_file(self.basedir), "wb") as file:
+            logger.debug("Taking snapshot on: " + file.name)
+            pickler = Pickler(file, pickle.HIGHEST_PROTOCOL)
+            pickler.dump(object)
 
     def recover_snapshot(self):
-        file = open(path.join(self.basedir,fu.last_snapshot_file(self.basedir)),"rb")
-        if not file:
+        last_snapshot = fu.last_snapshot_file(self.basedir)
+        if not last_snapshot:
             return None
-        logger.debug("Recovering snapshot from: " + file.name)
-        unpickler = Unpickler(file)
-        return unpickler.load()
+        with open(path.join(self.basedir, last_snapshot), "rb") as file:
+            logger.debug("Recovering snapshot from: " + file.name)
+            return Unpickler(file).load()
 
 
 class SnapshotTimer(threading.Thread):
     def __init__(self, snapshot_time, proxy):
-        threading.Thread.__init__ (self)
+        threading.Thread.__init__(self, daemon=True)
         self.snapshot_time = snapshot_time
         self.proxy = proxy
         self.finished = threading.Event()
 
     def run(self):
-        while not self.finished.isSet():
+        # wait first: the first snapshot happens after snapshot_time
+        while not self.finished.wait(self.snapshot_time):
             self.proxy.take_snapshot()
-            self.finished.wait(self.snapshot_time)
 
     def stop(self):
         self.finished.set()
-        self.join()
+        if self is not threading.current_thread():
+            self.join()

@@ -1,4 +1,4 @@
-import six
+import pickle
 import unittest
 
 import os
@@ -21,14 +21,14 @@ class TestJournal(unittest.TestCase):
         expected_file_name = '%s%s' % (JOURNAL_DIR,
                                       'transaction_000000000000002.log')
 
-        self.assertEquals(expected_file_name,
+        self.assertEqual(expected_file_name,
                           journal.current_journal_file(JOURNAL_DIR).name)
 
         # test hack! - create next file
         new_file_name = expected_file_name.replace('2','3')
         open(new_file_name, 'wt').close()
 
-        self.assertEquals(new_file_name,
+        self.assertEqual(new_file_name,
                           journal.current_journal_file(JOURNAL_DIR).name)
 
     def test_receive(self):
@@ -61,18 +61,14 @@ class TestJournal(unittest.TestCase):
 
     def test_setup(self):
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
-        self.assertEquals(JOURNAL_DIR, journal.basedir)
+        self.assertEqual(JOURNAL_DIR, journal.basedir)
 
         journal.setup()
         expected_file_name = '%s%s' % (JOURNAL_DIR,
                                       'transaction_000000000000002.log')
-        self.assertEquals(expected_file_name,
+        self.assertEqual(expected_file_name,
                           journal.file.name)
 
-        if six.PY3:
-            import pickle
-        else:
-            import cPickle as pickle
         # test hack
         pickle_class = pickle.Pickler(open(expected_file_name, 'rb'))\
                                                             .__class__

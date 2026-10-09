@@ -1,15 +1,10 @@
 import os
-import six
 import unittest
+from unittest import mock
 
 import pytest
 
 from ..domain import Wiki
-
-if six.PY3:
-    from unittest import mock
-else:
-    import mock
 
 class TestBase(unittest.TestCase):
     def tearDown(self):
@@ -27,8 +22,8 @@ class TestBase(unittest.TestCase):
 
         dummy = init_system(Wiki, dummy_subscribers)
 
-        self.assertEquals(dummy.__class__, CoopyProxy)
-        self.assertEquals(dummy.publisher.subscribers, dummy_subscribers)
+        self.assertEqual(dummy.__class__, CoopyProxy)
+        self.assertEqual(dummy.publisher.subscribers, dummy_subscribers)
 
 
 
@@ -40,8 +35,8 @@ class TestBase(unittest.TestCase):
 
         files = os.listdir('wiki/')
         self.assertTrue('snapshot_000000000000002.dat' in files)
-        self.assertEquals(dummy.__class__, CoopyProxy)
-        self.assertEquals(len(dummy.publisher.subscribers), 1)
+        self.assertEqual(dummy.__class__, CoopyProxy)
+        self.assertEqual(len(dummy.publisher.subscribers), 1)
 
         dummy.close()
 
@@ -54,7 +49,7 @@ class TestBase(unittest.TestCase):
         dummy = init_persistent_system(Wiki, basedir='wiki/')
 
         current_dir = os.path.abspath(os.getcwd())
-        self.assertEquals([current_dir + "/wiki/"],
+        self.assertEqual([current_dir + "/wiki/"],
                           dummy.basedir_abspath())
 
         dummy.close()
@@ -141,6 +136,35 @@ class TestCoopyProxy(unittest.TestCase):
         proxy.shutdown()
         proxy.close()
 
+    def test_coopyproxy_master_accepts_writes(self):
+        from coopy.base import CoopyProxy
+        from coopy.utils import inject
+        from coopy.foundation import RecordClock
+
+        wiki = Wiki()
+        inject(wiki, '_clock', RecordClock())
+        proxy = CoopyProxy(wiki, [])
+        proxy.start_master(port=8013)
+
+        proxy.create_page('id', 'content', None)
+        self.assertEqual('content', proxy.get_page('id').content)
+
+        server = proxy.master
+        proxy.shutdown()
+        self.assertTrue(proxy.master is None)
+        self.assertFalse(server.running)
+        proxy.close()
+
+    def test_coopyproxy_start_snapshot_manager_does_not_block(self):
+        import time
+        from coopy.base import CoopyProxy
+
+        proxy = CoopyProxy(Wiki(), [])
+        start = time.perf_counter()
+        proxy.start_snapshot_manager(10)
+        self.assertTrue(time.perf_counter() - start < 1)
+        proxy.close()
+
     def test_coopyproxy_start_slave(self):
         from coopy.base import CoopyProxy
 
@@ -211,7 +235,7 @@ class TestCoopyProxy(unittest.TestCase):
         with pytest.raises(Exception):
             proxy.check_abort_exception()
 
-        self.assertEquals(1, len(publisher.messages))
+        self.assertEqual(1, len(publisher.messages))
 
         proxy.close()
 
@@ -246,6 +270,7 @@ class TestCoopyProxy(unittest.TestCase):
         proxy.lock.acquire.assert_called_with(1)
         proxy.lock.release.assert_called()
 
+        proxy.lock.reset_mock()
         proxy.unlocked_method()
         proxy.lock.acquire.assert_not_called()
         proxy.close()

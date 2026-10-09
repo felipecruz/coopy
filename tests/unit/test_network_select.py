@@ -1,5 +1,4 @@
-import six
-import sys
+import pickle
 import pytest
 import socket
 
@@ -8,10 +7,8 @@ from coopy.network.default_select import CopyNet, CopyNetSlave, _HEADER_SIZE
 
 _str_to_bytes = lambda x: x.encode('utf-8') if type(x) != bytes else x
 
-if six.PY3 or 'PyPy' in sys.version:
-    socket_select_error = ValueError
-else:
-    socket_select_error = socket.error
+# select() on a closed socket (fd == -1)
+socket_select_error = ValueError
 
 def tcp_actor(address, port, _type):
     if _type == "inet":
@@ -20,7 +17,8 @@ def tcp_actor(address, port, _type):
     else:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(address)
-    s.setblocking(0)
+    # wait a bit for data instead of racing the master thread
+    s.settimeout(1)
     return s
 
 def tcp_server(address, port, _type, max_clients=5):
@@ -87,13 +85,9 @@ def test_network_select_receive():
 
     #if no error, socket is open
     import select
-    select.select([], [], [actor], 0)
+    select.select([actor], [], [], 1)
 
     import struct, zlib
-    if six.PY3:
-        import pickle
-    else:
-        import cPickle as pickle
 
     size = struct.calcsize(COPYNET_HEADER)
     header = actor.recv(size)
@@ -155,14 +149,10 @@ def test_network_select_broadcast():
     time.sleep(0.2)
 
     copynet.receive(b"message")
-    if six.PY3:
-        import pickle
-    else:
-        import cPickle as pickle
 
     #both clients should receive the same message
     for cli in clients:
-        import struct, zlib, pickle
+        import struct, zlib
         size = struct.calcsize(COPYNET_HEADER)
         header = cli.recv(size)
         (psize, stype) = struct.unpack(COPYNET_HEADER, header)
@@ -207,11 +197,7 @@ def test_network_select_send_direct():
 
     time.sleep(0.2)
 
-    if six.PY3:
-        import pickle
-    else:
-        import cPickle as pickle
-    import struct, zlib, pickle
+    import struct, zlib
     size = struct.calcsize(COPYNET_HEADER)
 
     #one of the 2 reads will raise an error and the other will work
@@ -310,7 +296,9 @@ def test_copynetslave_disconnect_on_empty_data():
     cli, address = server.accept()
 
     time.sleep(0.2)
+    # a truncated header followed by EOF must stop the slave
     cli.sendall(_str_to_bytes('1'))
+    cli.close()
 
     time.sleep(0.2)
     assert slave.running == False

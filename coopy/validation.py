@@ -36,14 +36,15 @@ class NodeVisitor(ast.NodeVisitor):
                 '''
                 return
             elif node.func.attr in FORBIDDEN_FUNCS:
-                logger.warn("Dont call now(), utcnow() nor today() from date"
+                logger.warning("Dont call now(), utcnow() nor today() from date"
                             " or datetime objects. Use the clock instead.")
         elif isinstance(node.func.value, ast.Subscript):
             '''
                 Ignore var[something] pattern
             '''
             return
-        elif isinstance(node.func.value, ast.Str):
+        elif isinstance(node.func.value, ast.Constant) and \
+             isinstance(node.func.value.value, str):
             '''
                 ignore ''.join([]) patterns
             '''
@@ -82,7 +83,14 @@ def validate_system(system_instance):
                                                     predicate=inspect.ismethod):
         if method_name.startswith("__") and method_name.endswith("__"):
             continue
-        fixed_source = unindent_source(inspect.getsourcelines(method)[0])
+        try:
+            source_lines = inspect.getsourcelines(method)[0]
+        except (OSError, TypeError):
+            # e.g. classes defined in a REPL or shipped without sources
+            logger.warning("Could not validate %s: source code not "
+                           "available" % method_name)
+            continue
+        fixed_source = unindent_source(source_lines)
         valid = validate_date_datetime_calls(fixed_source)
         if not valid:
             raise PrevalentError("%s contains methods with invalid calls "\
