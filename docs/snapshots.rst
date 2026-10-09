@@ -62,5 +62,9 @@ Legacy protocol-2 streams retain their per-file pickle memo behavior. Rotation
 starts a fresh memo: aliases within a record are preserved, but object identity
 across separate journal files or between a snapshot and later arguments is not
 guaranteed. Pass stable identifiers to refer to existing domain objects.
-Power-loss durability, corruption recovery, and mutations that bypass the proxy
-lock (including ``@unlocked`` methods) are outside this checkpoint guarantee.
+With ``durability="sync"``, checkpoint publication also syncs the data directory.
+A directory-sync failure after rename can leave the complete new checkpoint
+visible despite an exception; old checkpoints and journals remain available.
+See :doc:`usage` for synchronous acknowledgments, strict recovery, and salvage.
+Mutations that bypass the proxy lock (including ``@unlocked`` methods) remain
+outside this checkpoint guarantee.

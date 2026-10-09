@@ -15,8 +15,10 @@ methods.
 
 Successful calls normally flush the journal to the operating system without
 syncing it to disk. Clean restart recovery does not imply power-loss durability
-or complete recovery from a corrupted file. Some replay and decoding errors are
-logged and recovery continues. Read :doc:`usage` before relying on persisted
-state, and :doc:`snapshots` for the checkpoint publication boundary.
+or complete recovery from a corrupted file. Opt into ``durability="sync"`` for
+per-action synchronization. Strict recovery stops at detected replay and
+decoding errors; explicit salvage returns inspected state and a recovery
+report. Read :doc:`usage` before relying on persisted state, and :doc:`snapshots`
+for the checkpoint publication boundary.
 
 Start with the executable :doc:`tutorial`. All pickle storage must be trusted.

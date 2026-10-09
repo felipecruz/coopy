@@ -12,7 +12,8 @@ from os import path
 logger = logging.getLogger("coopy")
 
 class SnapshotManager(object):
-    def __init__(self, basedir):
+    def __init__(self, basedir, durability="buffered"):
+        self.durability = durability
         if len(basedir) > 0:
             basedir = basedir.replace('\\','/')
             if not basedir.endswith('/'):
@@ -44,6 +45,8 @@ class SnapshotManager(object):
                 before_publish(destination)
             os.replace(temporary, destination)
             temporary = None
+            if self.durability == "sync":
+                fu.sync_directory(self.basedir)
         finally:
             if temporary:
                 try:

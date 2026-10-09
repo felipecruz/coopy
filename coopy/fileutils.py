@@ -17,18 +17,30 @@ SNAPSHOT_REGEX = re.compile(r"snapshot_(\d{15})\.dat", re.IGNORECASE)
 LOG_REGEX = re.compile(r"transaction_(\d{15})\.log", re.IGNORECASE)
 FILE_REGEX = re.compile(r"(transaction|snapshot)_(\d{15})\..{3}", re.IGNORECASE)
 
+def sync_directory(directory):
+    """Persist directory entries on POSIX; propagate unsupported/I/O errors."""
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 class RotateFileWrapper():
-    def __init__(self, file, basedir, system_data_path, max_size=MAX_LOGFILE_SIZE):
+    def __init__(self, file, basedir, system_data_path, max_size=MAX_LOGFILE_SIZE,
+                 durability="buffered"):
         self.file = file
+        self.durability = durability
         self.basedir = basedir
         self.max_size = max_size
         self.system_data_path = system_data_path
         self.rotation_dir = os.path.join(system_data_path, basedir)
 
     def write(self, data):
-        self.file.write(data)
+        if self.file.write(data) != len(data):
+            raise OSError("Short journal write")
 
-        ''' certifies that data will be written - performance issues? '''
+        # Buffered mode still flushes Python buffers, but does not sync here.
         self.file.flush()
 
     def rotate_if_needed(self):
@@ -39,7 +51,13 @@ class RotateFileWrapper():
         self.flush()
         # Open first: a failed rotation leaves the old journal writable.
         new_file = open(file_name, 'xb')
-        self.file.close()
+        try:
+            if self.durability == "sync":
+                sync_directory(os.path.dirname(os.path.abspath(file_name)))
+            self.file.close()
+        except BaseException:
+            new_file.close()
+            raise
         self.file = new_file
         self.pickler.clear_memo()
 
@@ -59,7 +77,11 @@ class RotateFileWrapper():
         return self.file.name
 
     def close(self):
-        self.file.close()
+        try:
+            if self.durability == "sync":
+                self.flush()
+        finally:
+            self.file.close()
 
     def set_pickler(self, pickler):
         self.pickler = pickler

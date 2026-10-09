@@ -7,7 +7,8 @@ Opening and closing a system
 --------------------------------
 
 Use ``from coopy.base import init_persistent_system`` and call
-``init_persistent_system(obj, basedir=None)``. ``obj`` is an instance or a class
+``init_persistent_system(obj, basedir=None, recovery="strict",
+durability="buffered")``. ``obj`` is an instance or a class
 that can be constructed without arguments, even when reopening existing data.
 A new directory gets an initial snapshot. Existing data replaces the supplied
 object with the latest snapshot, then replays later journaled calls. See the
@@ -134,21 +135,54 @@ Keep the full directory until a backup and restore have been verified. There is
 no automatic retention policy. Consult :doc:`snapshots` for checkpoint failure
 handling, old-format boundaries, and ignored temporary files.
 
-Current durability contract
--------------------------------
+Durability policies
+-------------------
 
-A normal successful mutation executes in memory before its action is appended.
-Journal writes flush Python buffers to the operating system, but normal action
-completion and ``close()`` do not call ``fsync``. A serialization or I/O failure
-can therefore leave changed memory despite an exception, with no rollback.
-Normal calls may also trigger size rotation, which syncs the old journal; this
-is not a per-call synchronous durability policy.
+``durability="buffered"`` is the default. Journal writes flush Python buffers
+to the operating system. Normal action completion and ``close()`` do not call
+``fsync``; size rotation still syncs the old journal. A power loss can lose
+acknowledged buffered calls.
 
-Clean close/reopen recovery is supported for deterministic, journaled calls
-with intact storage. A process crash can interrupt a record; a power loss can
-lose acknowledged writes. There is no synchronous commit guarantee (F12).
-Snapshots sync a temporary file, advance the journal under the domain lock, and
-atomically rename the checkpoint. The containing directory is not synced, so
-this also does not establish a power-loss durability guarantee. Checkpoints
-coordinate only mutations respecting the proxy lock. See :doc:`snapshots` for
-the precise numbering and publication boundary.
+Choose ``durability="sync"`` when opening each persistent proxy::
+
+    proxy = init_persistent_system(Domain, basedir="data", durability="sync")
+
+A journaled mutation executes in memory, serializes a complete record, flushes
+it, and calls ``os.fsync`` on the journal before returning its result (or
+re-raising its original domain exception). Readonly calls and omitted failed
+``@abort_exception`` calls do not sync a journal record. The policy is selected
+on each open, not stored in the pickle format; it does not retroactively
+validate earlier buffered acknowledgments.
+
+Synchronous mode also syncs the data directory on journal creation, rotation,
+and checkpoint publication, and its existing parent if coopy creates the data
+directory. Snapshots retain the locked checkpoint boundary and file sync in
+both modes. ``close()`` in synchronous mode flushes and syncs before closing;
+errors propagate and the file is still closed. Stop writers before closing.
+POSIX directory-sync support is required; unsupported operations fail rather
+than silently downgrade. This contract is completion of ``os.fsync``, subject
+to the OS/filesystem/device guarantees. It does not promise hardware cache
+flush beyond that API, protect against disk damage, or validate actual power
+loss. Keep backups and use a durable existing parent directory.
+
+A serialization, short write, write, flush, sync, or action-triggered rotation
+failure raises ``coopy.journal.PersistenceError`` with the underlying cause in
+``__cause__``. **Memory may already be changed; there is no rollback.** A record
+may be absent, partial, or fully persisted despite the exception. A persistence
+error takes precedence over a simultaneous domain exception. The journal
+refuses subsequent mutations and checkpoints through that proxy; readonly
+inspection remains available. Stop callers, close the proxy (handling close
+errors), preserve storage, and inspect strict recovery or explicit salvage.
+Do not blindly retry the mutation: it may already be in the journal.
+
+A synchronous checkpoint's directory sync can fail after its atomic rename;
+the complete new checkpoint may then be visible although ``take_snapshot()``
+raised. The prior checkpoint and journals are retained. Initialization and
+snapshot failures propagate too; these calls must not be assumed to have
+completed just because a file exists.
+
+Clean restart recovery requires deterministic, journaled calls and intact
+storage. A process crash can interrupt an unacknowledged record; strict
+recovery detects incomplete records. Calls bypassing the proxy lock, including
+``@unlocked`` mutations, are outside the concurrency and checkpoint contract.
+See :doc:`snapshots` for the precise numbering and publication boundary.

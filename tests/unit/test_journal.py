@@ -4,7 +4,7 @@ import unittest
 import os
 import shutil
 
-from coopy.journal import DiskJournal
+from coopy.journal import DiskJournal, PersistenceError
 
 JOURNAL_DIR = 'journal_test/'
 CURRENT_DIR = os.getcwd()
@@ -44,7 +44,7 @@ class TestJournal(unittest.TestCase):
         journal.setup()
 
         self.assertRaises(
-                            pickle.PicklingError,
+                            PersistenceError,
                             journal.receive,
                             (message)
                           )

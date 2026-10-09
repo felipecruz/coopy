@@ -54,9 +54,12 @@ def _to_password(password):
     return password
 
 
-def init_persistent_system(obj, basedir=None, *, recovery="strict"):
+def init_persistent_system(obj, basedir=None, *, recovery="strict",
+                           durability="buffered"):
     if recovery not in ("strict", "salvage"):
         raise ValueError("recovery must be 'strict' or 'salvage'")
+    if durability not in ("buffered", "sync"):
+        raise ValueError("durability must be 'buffered' or 'sync'")
     logging_config()
 
     # a system object is needed in order to coopy work
@@ -90,11 +93,13 @@ def init_persistent_system(obj, basedir=None, *, recovery="strict"):
         os.listdir(basedir)
     except os.error:
         os.mkdir(basedir)
+        if durability == "sync":
+            fileutils.sync_directory(os.path.dirname(os.path.abspath(basedir)))
 
     # if no snapshot files, create first one with a 'empty' system
     if not fileutils.last_snapshot_file(basedir):
         logger.info(CORE_LOG_PREFIX + "No snapshot files..")
-        SnapshotManager(basedir).take_snapshot(obj)
+        SnapshotManager(basedir, durability=durability).take_snapshot(obj)
 
     # measure restore time
     start = time.perf_counter()
@@ -113,10 +118,10 @@ def init_persistent_system(obj, basedir=None, *, recovery="strict"):
     delta = time.perf_counter() - start
     logger.info(CORE_LOG_PREFIX + "restore spent %.6f seconds" % delta)
 
-    journal = DiskJournal(basedir, system_data_path)
+    journal = DiskJournal(basedir, system_data_path, durability=durability)
     journal.setup()
 
-    snapshot_manager = SnapshotManager(basedir)
+    snapshot_manager = SnapshotManager(basedir, durability=durability)
 
     proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager)
     proxy.recovery_report = result.report
@@ -248,6 +253,9 @@ class CoopyProxy():
                 if slave and not slave.synchronized:
                     raise RuntimeError('Cannot snapshot an unsynchronized slave.')
                 if self.snapshot_manager:
+                    for journal in self.publisher.subscribers:
+                        if isinstance(journal, DiskJournal):
+                            journal.check_writable()
                     def advance_journals(destination):
                         for journal in self.publisher.subscribers:
                             if isinstance(journal, DiskJournal):
