@@ -64,6 +64,8 @@ The examples run in subprocesses with temporary working and data directories.
 They cover close/reopen, checkpoint plus journal recovery, all recorded clock
 methods, readonly copies, decorator failures, and experimental replication.
 A separate process also reopens the tutorial's importable domain. The replication
-example needs local socket access and does not close the remaining F13 scope.
+example needs local socket access. F13 acceptance tests additionally cover
+concurrent catch-up with recorded clocks, fragmented and interrupted packets,
+authentication rejection, shutdown guards, and explicit reconnect.
 CI runs these tests and the Sphinx build. The generated guide is at
 ``build/docs/index.html``.

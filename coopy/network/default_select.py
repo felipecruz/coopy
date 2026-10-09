@@ -224,7 +224,7 @@ class CopyNet(threading.Thread):
 
 class CopyNetSlave(threading.Thread):
     def __init__(self, parent, host='localhost', port=5466,
-                 password=b'copynet', ipc=False):
+                 password=b'copynet', ipc=False, *, connect=True):
         super().__init__(daemon=True)
         self.parent = parent
         self.host = host
@@ -234,12 +234,20 @@ class CopyNetSlave(threading.Thread):
         self.ready = threading.Event()
         self.stopped = threading.Event()
         self.error = None
+        self.address = COPYNET_SOCK if ipc else (host, port)
+        self.password = password
         self.sock = socket.socket(socket.AF_UNIX if ipc else socket.AF_INET,
                                   socket.SOCK_STREAM)
+        if connect:
+            self._connect()
+
+    def _connect(self):
         try:
-            self.sock.connect(COPYNET_SOCK if ipc else (host, port))
-            self.sock.sendall(_AUTH_HEADER.pack(len(password)) + password)
-        except OSError:
+            self.sock.connect(self.address)
+            self.sock.sendall(_AUTH_HEADER.pack(len(self.password)) + self.password)
+        except Exception as exc:
+            self.error = str(exc)
+            self.stopped.set()
             self.sock.close()
             raise
 
@@ -257,9 +265,10 @@ class CopyNetSlave(threading.Thread):
         self.lock.release()
 
     def close(self):
-        self.stopped.set()
-        self.ready.clear()
-        self.running = False
+        with self.lock:
+            self.stopped.set()
+            self.ready.clear()
+            self.running = False
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
@@ -283,6 +292,8 @@ class CopyNetSlave(threading.Thread):
                     if size or pending is None or self.synchronized:
                         raise ValueError('Unexpected synchronization marker')
                     with self.lock:
+                        if self.stopped.is_set():
+                            break
                         self.parent.obj = pending
                         pending = None
                         self.ready.set()
@@ -294,6 +305,8 @@ class CopyNetSlave(threading.Thread):
                     raise ConnectionError('Master disconnected mid-message')
                 value = pickle.loads(zlib.decompress(payload))
                 with self.lock:
+                    if self.stopped.is_set():
+                        break
                     if kind == b's':
                         if pending is not None or self.synchronized:
                             raise ValueError('Unexpected snapshot')
@@ -307,9 +320,11 @@ class CopyNetSlave(threading.Thread):
                             value.execute_action(obj)
                         except Exception:
                             if not getattr(value, 'raised', False):
+                                self.ready.clear()
                                 raise
                         else:
                             if getattr(value, 'raised', False):
+                                self.ready.clear()
                                 raise ValueError('Action outcome differs from master')
         except Exception as exc:
             if not self.stopped.is_set():

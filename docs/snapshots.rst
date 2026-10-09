@@ -14,8 +14,9 @@ application writers before closing. Close does not take a final snapshot.
 
 The :doc:`tutorial` contains a runnable example with manual checkpoints, timer
 setup/cleanup, and close/reopen recovery. Snapshot serialization holds the
-domain lock and can pause writes. Replication remains incomplete pending F13;
-do not depend on a slave as a durable snapshot service.
+domain lock and can pause writes. Replication supports consistent bootstrap
+but does not provide durable slave restart; do not depend on a slave as a
+durable snapshot service.
 
 Retain the full directory until you have verified a stopped-system backup and
 restore. There is no automatic pruning. File numbers, not timestamps, determine

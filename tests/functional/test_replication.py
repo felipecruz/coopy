@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from coopy.base import CoopyProxy
+from coopy.base import CoopyProxy, init_persistent_system
 from coopy.decorators import readonly
 from coopy.foundation import Action
 from coopy.network.network import COPYNET_HEADER, prepare_data
@@ -26,8 +26,8 @@ class Timeline:
         return list(self.events)
 
 
-def test_populated_master_concurrent_catchup_clock_and_live_replay(monkeypatch):
-    master = CoopyProxy(Timeline(), [])
+def test_populated_master_concurrent_catchup_clock_and_live_replay(monkeypatch, tmp_path):
+    master = init_persistent_system(Timeline(), basedir=str(tmp_path / 'master'))
     replica = CoopyProxy(Timeline(), [])
     cached_write = replica.add
     for i in range(10):
@@ -87,6 +87,37 @@ def test_populated_master_concurrent_catchup_clock_and_live_replay(monkeypatch):
         continue_transfer.set()
         replica.close()
         master.shutdown()
+        master.close()
+
+
+def test_explicit_reconnect_replaces_stale_state_with_fresh_bootstrap():
+    master = CoopyProxy(Timeline(), [])
+    replica = CoopyProxy(Timeline(), [])
+    master.add(0)
+    master.start_master(port=0)
+    address = master.master.server.getsockname()
+    try:
+        first = replica.start_slave(*address)
+        assert first.wait_until_synchronized(3)
+        cached_read = replica.read
+        with pytest.raises(RuntimeError, match='already'):
+            replica.start_slave(*address)
+        with pytest.raises(RuntimeError, match='active master'):
+            master.start_slave(*address)
+        with pytest.raises(RuntimeError, match='already'):
+            master.start_master(port=0)
+        replica.shutdown()
+        with pytest.raises(RuntimeError, match='not synchronized'):
+            cached_read()
+        master.add(1)
+        second = replica.start_slave(*address)
+        assert second is not first
+        assert second.wait_until_synchronized(3)
+        assert not first.synchronized
+        assert cached_read() == master.read()
+        assert [event[0] for event in replica.read()] == [0, 1]
+    finally:
+        replica.close()
         master.close()
 
 

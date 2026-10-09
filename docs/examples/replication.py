@@ -1,4 +1,4 @@
-"""Experimental replication; incomplete until roadmap F13 is accepted."""
+"""Trusted-peer replication with a consistent bootstrap and ordered catch-up."""
 from tempfile import TemporaryDirectory
 
 from coopy.base import init_persistent_system, init_system

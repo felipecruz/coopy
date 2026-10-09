@@ -149,26 +149,37 @@ class CoopyProxy():
         self.snapshot_timer.start()
 
     def start_master(self, port=8012, password=None, ipc=False):
-        self.server = CopyNet(self.obj,
-                              port=port,
-                              password=_to_password(password),
-                              ipc=ipc,
-                              lock=self.lock)
         with self.lock:
+            if self.slave is not None:
+                raise RuntimeError('Cannot promote a slave to master.')
+            if self.master is not None:
+                raise RuntimeError('Master is already started.')
+            self.server = CopyNet(self.obj,
+                                  port=port,
+                                  password=_to_password(password),
+                                  ipc=ipc,
+                                  lock=self.lock)
             self.publisher.register(self.server)
             self.master = self.server
-            self.slave = None
             self.server.start()
 
     def start_slave(self, host, port, password=None, ipc=False):
-        self.server = None
-        self.slave = CopyNetSlave(self,
-                                  host=host,
-                                  port=port,
-                                  password=_to_password(password),
-                                  ipc=ipc)
-        self.slave.start()
-        return self.slave
+        with self.lock:
+            if self.master is not None:
+                raise RuntimeError('Cannot start a slave on an active master.')
+            if self.slave is not None and self.slave.is_alive():
+                raise RuntimeError('Slave receiver is already started; close it first.')
+            self.server = None
+            # Install the read/write guard before attempting network I/O, so
+            # even a failed connection leaves an explicitly unsynchronized slave.
+            self.slave = CopyNetSlave(self,
+                                      host=host,
+                                      port=port,
+                                      password=_to_password(password),
+                                      ipc=ipc, connect=False)
+            self.slave._connect()
+            self.slave.start()
+            return self.slave
 
     def __getattr__(self, name):
         if self.slave and not self.slave.synchronized:
@@ -283,4 +294,4 @@ class CoopyProxy():
             self.master = None
         if self.slave:
             self.slave.close()
-            self.slave = None
+            # Retain the slave role and guard until a fresh bootstrap succeeds.

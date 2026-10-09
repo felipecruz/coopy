@@ -144,15 +144,22 @@ def test_fragmented_snapshot_stays_private_until_ready(fake_master):
     assert not slave.synchronized
 
 
-@pytest.mark.parametrize('cut', ['header', 'payload', 'before-ready', 'corrupt', 'ready-first'])
+@pytest.mark.parametrize('cut', ['header', 'payload', 'before-ready', 'ready-header',
+                               'action-header', 'action-payload', 'corrupt', 'ready-first'])
 def test_interrupted_or_invalid_bootstrap_is_not_exposed(fake_master, cut):
+    from coopy.foundation import Action
+
     proxy, slave, peer = fake_master
     original = proxy.obj
     header, payload = prepare_data(Wiki())
+    action_header, action_payload = prepare_data(Action(1, 'anything', None, (), {}))
     packets = {
         'header': header[:2],
         'payload': header + payload[:3],
         'before-ready': header + payload,
+        'ready-header': header + payload + struct.pack(COPYNET_HEADER, 0, b'r')[:3],
+        'action-header': header + payload + action_header[:2],
+        'action-payload': header + payload + action_header + action_payload[:3],
         'corrupt': struct.pack(COPYNET_HEADER, 3, b's') + b'bad',
         'ready-first': struct.pack(COPYNET_HEADER, 0, b'r'),
     }
@@ -171,6 +178,71 @@ def test_close_interrupts_partial_packet_read(fake_master):
     slave.close()
     assert not slave.is_alive()
     assert not slave.synchronized
+
+
+@pytest.mark.parametrize('ready', [False, True])
+def test_shutdown_keeps_slave_guard_and_rejects_promotion(fake_master, ready):
+    proxy, slave, peer = fake_master
+    if ready:
+        header, payload = prepare_data(Wiki())
+        peer.sendall(header + payload + struct.pack(COPYNET_HEADER, 0, b'r'))
+        assert slave.wait_until_synchronized(3)
+    proxy.shutdown()
+    assert proxy.slave is slave
+    assert not slave.synchronized
+    with pytest.raises(RuntimeError, match='not synchronized'):
+        proxy.get_page('anything')
+    with pytest.raises(RuntimeError, match='unsynchronized'):
+        proxy.take_snapshot()
+    with pytest.raises(RuntimeError, match='slave'):
+        proxy.start_master(port=0)
+
+
+def test_stop_at_ready_boundary_does_not_publish_snapshot(fake_master, monkeypatch):
+    proxy, slave, peer = fake_master
+    initial = proxy.obj
+    receive = _recv_exactly
+
+    def stop_before_ready(sock, size):
+        packet = receive(sock, size)
+        if packet == struct.pack(COPYNET_HEADER, 0, b'r'):
+            slave.close()
+        return packet
+
+    monkeypatch.setattr('coopy.network.default_select._recv_exactly', stop_before_ready)
+    header, payload = prepare_data(Wiki())
+    peer.sendall(header + payload)
+    # Complete the pending snapshot before sending the instrumented marker.
+    peer.sendall(struct.pack(COPYNET_HEADER, 0, b'r'))
+    slave.join(3)
+    assert not slave.is_alive()
+    assert not slave.synchronized
+    assert proxy.obj is initial
+
+
+def test_second_receiver_is_rejected(fake_master):
+    proxy, slave, _ = fake_master
+    with pytest.raises(RuntimeError, match='already'):
+        proxy.start_slave('127.0.0.1', 0)
+    assert proxy.slave is slave
+
+
+def test_connection_failure_keeps_slave_unsynchronized(monkeypatch):
+    def refuse(*args):
+        raise ConnectionRefusedError('connection refused')
+
+    monkeypatch.setattr(socket.socket, 'connect', refuse)
+    proxy = CoopyProxy(Wiki(), [])
+    try:
+        with pytest.raises(ConnectionRefusedError):
+            proxy.start_slave('127.0.0.1', 0)
+        assert proxy.slave is not None
+        assert not proxy.slave.synchronized
+        assert 'refused' in proxy.slave.error
+        with pytest.raises(RuntimeError, match='not synchronized'):
+            proxy.get_page('anything')
+    finally:
+        proxy.close()
 
 
 def test_failed_master_snapshot_does_not_synchronize_client(monkeypatch):

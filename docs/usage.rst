@@ -30,8 +30,8 @@ and compatible, importable domain classes. ``close()`` does not take a snapshot.
 ``coopy.base``; it does not configure disk persistence. The old ``master``,
 ``replication``, and ``snapshot_time`` initializer keywords are not supported.
 Use ``take_snapshot()`` or ``start_snapshot_manager(seconds)`` on the persistent
-proxy. Replication is experimental and incomplete pending F13; see
-:doc:`replication` for the existing lifecycle API.
+proxy. Replication is experimental; see :doc:`replication` for bootstrap,
+readiness, and the lifecycle API.
 
 What gets recorded
 ----------------------

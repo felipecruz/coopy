@@ -5,10 +5,9 @@ Master/slave replication
 
 .. warning::
 
-   Replication is experimental and **incomplete until roadmap F13 is accepted**.
-   F5 supplied bootstrap and catch-up code, described below, but F13 remains
-   open. This example demonstrates the current API, not a production recovery
-   or failover guarantee.
+   Replication is experimental and requires trusted peers. Bootstrap and
+   ordered catch-up are tested, including writes during transfer; this is not
+   a production recovery or failover guarantee.
 
 A new slave receives a snapshot of the populated master, then replays the
 ordered actions queued during transfer. Snapshot capture holds the same lock as
@@ -51,6 +50,14 @@ and detected replay divergence clear synchronization. ``connection.error``
 records the receiver failure. A failed or disconnected slave must reconnect and
 bootstrap again; it is never automatically promoted. Closing a proxy stops its
 receiver; ``master.shutdown()`` stops its listener and disconnects its slaves.
+
+``replica.shutdown()`` retains the slave role and its unsynchronized read/write
+guard, including when shutdown interrupts bootstrap. Connection setup failures
+also retain that guard and record ``connection.error`` on ``replica.slave``;
+``start_slave`` still raises the connection exception. To reconnect explicitly,
+stop the previous receiver with ``replica.shutdown()``, then call
+``replica.start_slave(...)`` and wait for a fresh bootstrap. Starting a second
+active receiver or converting a slave to a master raises ``RuntimeError``.
 
 Protocol and limits
 -----------------------
