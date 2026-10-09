@@ -37,15 +37,20 @@ Current declared code baseline; release publication is unverified. Goal: identif
   | Validation | Clock unit tests, multiple-clock-call restart, bad-system rejection, clock helpers, and source-unavailable validation all passed in the focused run. |
   | Limitation | Source-unavailable methods are skipped with a warning, and AST checks are not a general determinism guarantee; aliases, nested objects, randomness, and external side effects remain the application's responsibility. |
 
-- [ ] **F3 — Recover reliably across manual and timed snapshots.** Snapshot serialization and locking exist, but checkpoint recovery is incomplete. Completion requires post-snapshot writes to survive restart and failed snapshots to preserve the previous usable checkpoint, as specified in F7 and F9.
+- [x] **F3 — Recover reliably across manual and timed snapshots.** Post-snapshot writes survive restart, and failed snapshots retain the previous usable checkpoint, covering the recovery scenarios specified in F7 and F9.
+  Complexity assessment before implementation: L; clear requirements across roughly seven code/test files in snapshot publication, journal rotation, and recovery. Historical broken checkpoint boundaries cannot be inferred safely; retain existing file interpretation and test legacy streams.
 
   | Item | Content |
   | --- | --- |
-  | Status | Partial |
-  | Details | `coopy/snapshot.py` saves/loads snapshots and runs a background timer; `CoopyProxy.take_snapshot` locks writes and releases locks in finally blocks. Timer startup returns immediately and close stops it. Journals are not advanced at the checkpoint boundary, and snapshot files are written directly under their final names. |
-  | Commit | `b14bd7d83b9a5913079f4b29c61d9e98b02c167d` — locks snapshot capture; `76279581872c5d3d768355e2f2126d09b8020730` — nonblocking timer startup, timer cleanup, and exception-safe lock release. |
-  | Validation | Snapshot round-trip, proxy-lock, and nonblocking-timer tests passed. Separate temporary probes reproduced loss of a post-snapshot write and EOFError after a failed snapshot, despite an older good snapshot. |
-  | Limitation | F7 addresses the journal boundary; F9 addresses incomplete snapshot publication. Existing snapshot tests do not exercise these failures. |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | L |
+  | Details | Atomic temporary-file publication advances journals under the domain lock before exposing a checkpoint. Reopening creates a fresh journal; rotation occurs between complete records. Timer failures are logged and retried. |
+  | Commit | `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — implements F3 recovery; prior snapshot groundwork: `b14bd7d83b9a5913079f4b29c61d9e98b02c167d`, `76279581872c5d3d768355e2f2126d09b8020730`. |
+  | Validation | 62 persistence/core tests passed with DeprecationWarning as error; includes repeated/reopened/timed checkpoints, serialization/write/fsync/rotation/rename failures, process exit before publication, large-record rotation with aliases, and legacy protocol-2 streams. |
+  | Limitation | Existing files with ambiguous post-snapshot writes in earlier journals cannot be repaired automatically; historical format interpretation is unchanged. |
+  | Limitation | Power-loss durability, corruption recovery, and mutations bypassing the proxy lock remain outside this guarantee. Interrupted snapshots can leave ignored temporary files. |
+  | Next step | Implement the explicit recovery and durability policies tracked in F11 and F12. |
 
 - [x] **F4 — Run the core library on modern Python without six.** The runtime uses Python 3 APIs and standard-library dependencies, with the package version centralized in `coopy/__init__.py`.
 
@@ -58,15 +63,22 @@ Current declared code baseline; release publication is unverified. Goal: identif
   | Validation | 52 focused tests passed on Python 3.12.2 with DeprecationWarning treated as an error. Other Python versions and hosted CI were not run. |
   | Limitation | Packaging still references the renamed README; F6 repairs and validates the distribution path. |
 
-- [ ] **F5 — Synchronize a new read-only slave with its master.** Transport and live action replay code exist, but a newly connected slave does not receive the master's initial state. Completion requires the bootstrap and ordered catch-up checks in F13.
+- [x] **F5 — Synchronize a new read-only slave with its master.** A late joiner receives the master's consistent state and ordered catch-up before becoming readable, covering the bootstrap scenarios specified in F13.
+  Complexity assessment before implementation: L; clear requirements across roughly six files in proxy locking, transport, synchronization state, tests, and documentation. Synchronization means the snapshot and actions preceding an explicit catch-up marker have been applied; subsequent updates remain asynchronous.
 
   | Item | Content |
   | --- | --- |
-  | Status | Partial |
-  | Details | `coopy/network/default_select.py` contains password checking, broadcasts, exact-length packet reads, slave clock replay, and a proxy write guard. The call to CopyNetSnapshotThread is commented out in the accept loop, new clients are immediately marked ready, and select receives no writable sockets to drain bootstrap queues. |
-  | Commit | `d9921b3a6e8e3bd1bd677097a44430d77bdd469d` — introduces the select-based transport; `76279581872c5d3d768355e2f2126d09b8020730` — Python 3 byte handling, slave construction, packet reads, and clock replay fixes. |
-  | Validation | Packet serialization tests passed. Socket tests were read but not run; no successful end-to-end master/slave synchronization is claimed. |
-  | Limitation | The full-state synchronization described in `docs/replication.rst` is not wired into the current master; see F13. Transport remains trusted-network-only and is not a durable replica log or automatic failover system. |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | L |
+  | Details | Snapshot capture shares the mutation lock; nonblocking socket queues preserve snapshot/action order. Bootstrap stays private until a ready marker. Reads and snapshots reject unsynchronized replicas; receiver failures clear readiness. |
+  | Commit | `194b6b4b8366c5be40abf01e2d8f7873ddfc749a` — implements F5 bootstrap and catch-up; prior transport groundwork: `d9921b3a6e8e3bd1bd677097a44430d77bdd469d`, `76279581872c5d3d768355e2f2126d09b8020730`. |
+  | Validation | Full suite: 83 passed on Python 3.12 with DeprecationWarning as error, including populated-master concurrent catch-up, live replay, recorded clocks, readonly guards, fragmented authentication/packets, rejection, interrupted bootstrap, replay divergence, and TCP/Unix shutdown. |
+  | Limitation | Length-prefixed authentication and the ready marker require upgrading master and slaves together; old peers are incompatible. |
+  | Limitation | Slow-slave queues are unbounded in memory; snapshot serialization still pauses master mutations. |
+  | Limitation | Trusted-peer replication only; durable slave restart, automatic reconnect/failover, and synchronous acknowledgments are outside scope. Successful abort-decorated calls remain unpublished pending F8. |
+  | Next step | Bound pending replication bytes per slave and disconnect clients exceeding the configured limit. |
+  | Next step | Run the supported Python and operating-system CI matrix; this job validated local Python 3.12 only. |
 
 ## v0.5.1 — Make installation and local recovery dependable
 
@@ -139,3 +151,11 @@ Additional temporary Python probes invoked the real library: creating `before`, 
 AIFlow validation used `'/Users/felipecruz/Projects/aiflow/build/AIflow.app/Contents/MacOS/MarkdownPreview' --check '/Users/felipecruz/Projects/coopy/ROADMAP.md'`: **0 errors, 2 warnings**. Both warnings recommend marking partial items with implementation commits Done. F3 and F5 deliberately retain Partial status and their provenance because the corresponding recovery/synchronization outcomes are incomplete; marking them Done would contradict the evidence.
 
 Open decisions for v0.6.0: choose whether strict recovery becomes the default or stays opt-in, define how synchronous durability interacts with existing buffered behavior, and decide which historical pickle formats merit explicit migration support before making compatibility promises.
+
+## Implementation validation — 2026-10-09
+
+Job BE4A3268-73C5-40D5-ABB5-4B0F5AAB00A8 implemented the selected F3 and F5 items in separate commits, with complexity assessed as L for each before implementation. Their tables above supersede the earlier audit's recovery and bootstrap findings. Unselected items and their version placement remain unchanged; F7/F9/F13 supplied acceptance criteria for this job, rather than separate implementation selections.
+
+The final full-suite command was `.venv/bin/python -m pytest -q -W error::DeprecationWarning`: **83 passed** on local Python 3.12.2. Socket checks ran with local network permissions after the sandbox rejected binding; both TCP and Unix-socket integration checks passed. The suite includes a real subprocess exit before checkpoint publication. It does not verify power-loss behavior or the multi-platform CI matrix. `git diff --check` passed, and the AIFlow MarkdownPreview roadmap check reported **OK, with no errors or warnings** before the tracking commit.
+
+Upgrade/readiness instructions and remaining operational caveats are recorded in `.aiflow/notes/NOTES_BE4A3268-73C5-40D5-ABB5-4B0F5AAB00A8.MD`, `docs/snapshots.rst`, and `docs/replication.rst`. No implementation blockers remain; limitations and follow-up actions are listed separately in the selected items' tables.
