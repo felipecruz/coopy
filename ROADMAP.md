@@ -46,7 +46,7 @@ Current declared code baseline; release publication is unverified. Goal: identif
   | Timestamp | 2026-10-09 |
   | Complexity | L |
   | Details | Atomic temporary-file publication advances journals under the domain lock before exposing a checkpoint. Reopening creates a fresh journal; rotation occurs between complete records. Timer failures are logged and retried. |
-  | Commit | `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — implements F3 recovery; prior snapshot groundwork: `b14bd7d83b9a5913079f4b29c61d9e98b02c167d`, `76279581872c5d3d768355e2f2126d09b8020730`. |
+  | Commit | `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — implements F3 recovery; prior snapshot groundwork: `b14bd7d83b9a5913079f4b29c61d9e98b02c167d`, `76279581872c5d3d768355e2f2126d09b8020730`.; `b9689fa636ebe856063fbed77c24c4e089aeb457` |
   | Validation | 62 persistence/core tests passed with DeprecationWarning as error; includes repeated/reopened/timed checkpoints, serialization/write/fsync/rotation/rename failures, process exit before publication, large-record rotation with aliases, and legacy protocol-2 streams. |
   | Limitation | Existing files with ambiguous post-snapshot writes in earlier journals cannot be repaired automatically; historical format interpretation is unchanged. |
   | Limitation | Power-loss durability, corruption recovery, and mutations bypassing the proxy lock remain outside this guarantee. Interrupted snapshots can leave ignored temporary files. |
@@ -72,7 +72,7 @@ Current declared code baseline; release publication is unverified. Goal: identif
   | Timestamp | 2026-10-09 |
   | Complexity | L |
   | Details | Snapshot capture shares the mutation lock; nonblocking socket queues preserve snapshot/action order. Bootstrap stays private until a ready marker. Reads and snapshots reject unsynchronized replicas; receiver failures clear readiness. |
-  | Commit | `194b6b4b8366c5be40abf01e2d8f7873ddfc749a` — implements F5 bootstrap and catch-up; prior transport groundwork: `d9921b3a6e8e3bd1bd677097a44430d77bdd469d`, `76279581872c5d3d768355e2f2126d09b8020730`. |
+  | Commit | `194b6b4b8366c5be40abf01e2d8f7873ddfc749a` — implements F5 bootstrap and catch-up; prior transport groundwork: `d9921b3a6e8e3bd1bd677097a44430d77bdd469d`, `76279581872c5d3d768355e2f2126d09b8020730`.; `b9689fa636ebe856063fbed77c24c4e089aeb457` |
   | Validation | Full suite: 83 passed on Python 3.12 with DeprecationWarning as error, including populated-master concurrent catch-up, live replay, recorded clocks, readonly guards, fragmented authentication/packets, rejection, interrupted bootstrap, replay divergence, and TCP/Unix shutdown. |
   | Limitation | Length-prefixed authentication and the ready marker require upgrading master and slaves together; old peers are incompatible. |
   | Limitation | Slow-slave queues are unbounded in memory; snapshot serialization still pauses master mutations. |
@@ -93,7 +93,7 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Timestamp | 2026-10-09 |
   | Complexity | M |
   | Details | Preserved the reconciled README.md and correct metadata path. Existing CI validates both artifact descriptions and installs each into a fresh environment; the round trip now writes a checkpoint and later journal entry, closes, exits, and restores both in a separate isolated Python process. |
-  | Commit | `e6b0beb5afb3af651682e64b80f0d3b1ccc44204` — implements F6 process-restart validation; `ed54c62fae85316b848df09f871ee6e46635979a` — prior artifact validation and CI; `986fecea236ea415207c1eddc0b9b1218f6f97b4` — prior README reconciliation and metadata fix; `b4ac94cd052223008bdfa803e7d3b07841598087` — prior tracking only. |
+  | Commit | `e6b0beb5afb3af651682e64b80f0d3b1ccc44204` — implements F6 process-restart validation; `ed54c62fae85316b848df09f871ee6e46635979a` — prior artifact validation and CI; `986fecea236ea415207c1eddc0b9b1218f6f97b4` — prior README reconciliation and metadata fix; `b4ac94cd052223008bdfa803e7d3b07841598087` — prior tracking only.; `cdf26573176589e166d949b2532314f9d9b2882c` |
   | Validation | Tracked-source export plus this script change: isolated sdist/wheel builds and strict twine checks passed; both descriptions match README.md and sdist README bytes match. Both fresh installs imported from site-packages and restored both writes after process exit. Python 3.12.2/macOS; README SHA-256 unchanged. git diff --check and AIFlow validation passed. |
   | Limitation | Hosted CI and other Python/OS combinations were not executed locally; the sdist installation check downloads build requirements. |
   | Next step | Run the updated hosted CI workflow to verify the Python 3.13/Linux distribution job. |
@@ -107,7 +107,7 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Timestamp | 2026-10-09 |
   | Complexity | M |
   | Details | Retained F3's domain-locked journal rotation before checkpoint publication and fresh journal on reopen. Added six regression cases for concurrent writes during manual/timed checkpoint rotation and publication, plus legacy journal selection and independent per-file memos. Documented the boundary without changing storage interpretation. |
-  | Commit | `f9e3375dba4251d30ec4fe1063a99df6be4de0c8` — implements F7 regression coverage and boundary documentation; `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — prior F3 runtime checkpoint fix and recovery tests. |
+  | Commit | `f9e3375dba4251d30ec4fe1063a99df6be4de0c8` — implements F7 regression coverage and boundary documentation; `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — prior F3 runtime checkpoint fix and recovery tests.; `83d80df015ed5ed3d300d2e2318234d4916f61d5` |
   | Validation | All 89 tests passed on Python 3.12.2/macOS with DeprecationWarning as error, including 16 checkpoint tests covering repeated/reopened/timed snapshots, concurrent writes, large-record rotation with aliases, failures, and legacy protocol-2 streams. Full suite required local socket access. AIFlow roadmap check and git diff --check passed. |
   | Limitation | Historical post-snapshot tails in journals at or below the checkpoint number cannot be inferred safely; those files retain their existing replay interpretation. |
   | Limitation | Aliases within records survive rotation; object identity across journal files or between snapshot state and later arguments is not guaranteed. |
@@ -123,7 +123,7 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Timestamp | 2026-10-09 |
   | Complexity | M |
   | Details | Successful non-readonly abort-decorated calls now publish normally; failed decorated calls stay out of the journal and propagate their exception, including false-valued exceptions. Ordinary failure journaling, pre-call notifications, and readonly exclusion in both decorator orders are preserved. Updated decorator and replication documentation. |
-  | Commit | `fd31b31041db89c1b9c851b666c0be1e87ec5bb7` — implements F8 dispatch, regression tests, and documentation. |
+  | Commit | `fd31b31041db89c1b9c851b666c0be1e87ec5bb7` — implements F8 dispatch, regression tests, and documentation.; `358e93b93acb16349ef04a604361f9343d682d43` |
   | Validation | 106 tests passed on Python 3.12.2/macOS with DeprecationWarning as error; full suite used local socket access. Added 17 cases covering subscriber outcomes, exception identity, readonly orders, journal records, clock replay in a fresh process, and snapshot capture after failure. Final explicit outcome-table refinement: 15 unit cases passed. AIFlow roadmap check and git diff --check passed. |
   | Limitation | The decorator does not roll back in-memory mutations or external effects; later snapshots can retain failed-call mutations, and live replicas can differ after such failures. |
   | Limitation | Successful calls omitted by older code cannot be reconstructed from missing journal entries. |
@@ -139,7 +139,7 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Timestamp | 2026-10-09 |
   | Complexity | M |
   | Details | Preserved F3 atomic temporary-file publication and F7 journal coordination. Cleanup failures now log without hiding the snapshot error. Added actual file-write, flush, close, cleanup, and process-interruption regression coverage; previous checkpoint bytes and journals survive, and retry/restart restores writes exactly once. |
-  | Commit | `06b59d477898274c7472258408b0b13af871c12c` — implements F9 cleanup hardening, failure coverage, and documentation; `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — prior F3 atomic publication and journal coordination. |
+  | Commit | `06b59d477898274c7472258408b0b13af871c12c` — implements F9 cleanup hardening, failure coverage, and documentation; `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — prior F3 atomic publication and journal coordination.; `0a9809a34687ac999c9d5f7d9521b1a62f33be94` |
   | Validation | All 114 tests passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access, including F7 restart cases and 24 checkpoint tests. Faults cover serialization, partial write, flush, close, fsync, rotation, publication, cleanup, and process exit during write or before rotation/publication. AIFlow roadmap check and git diff --check passed. |
   | Limitation | Interrupted snapshots or failed cleanup can leave ignored temporary files; remove them only while the system is stopped. |
   | Limitation | Power-loss durability, pre-existing corrupted checkpoints, and mutations bypassing the proxy lock are outside this guarantee. Other supported Python/OS combinations were not run locally. |
@@ -153,7 +153,7 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Timestamp | 2026-10-09 |
   | Complexity | M |
   | Details | Replaced obsolete guides with tested current APIs for close/reopen, clocks, readonly copies, checkpoints, and decorator outcomes. Documented trusted pickle storage, mutable escapes, replay effects, and durability limits; marked replication incomplete until F13. Added Sphinx CI and repaired the legacy theme. Estimated 15–18 files across docs/examples/checks; final scope was 20 implementation files, with no runtime or README changes. |
-  | Commit | `9818b8fdb2ff9556fdf7583f512c7b3d0f844b57` — implements F10. |
+  | Commit | `9818b8fdb2ff9556fdf7583f512c7b3d0f844b57` — implements F10.; `9e4aa13d2e5c3d2301d6e912a093365d422b02b3` |
   | Validation | 118 tests passed on Python 3.12.2/macOS with DeprecationWarning as error and local sockets; final documentation checks: 4 passed, including a fresh-process reopen. Sphinx 8.2.3 HTML build passed with warnings as errors; AIFlow and git diff checks passed; README unchanged. |
   | Limitation | Replication remains experimental pending F13; the runnable example validates bootstrap only, not production recovery or failover. |
   | Limitation | Current recovery may continue after errors (F11), and ordinary journal completion has no synchronous power-loss durability guarantee (F12). |
@@ -173,7 +173,7 @@ Provisional later plan, not a scheduled release. Goal: callers can distinguish c
   | Timestamp | 2026-10-09 |
   | Complexity | M |
   | Details | Strict initialization raises RecoveryError before exposing a proxy on detected corruption or divergence. Explicit salvage returns inspection state and a report with checkpoint, replay/expected-failure counts, legacy positions, and the first stopping file, offset, record, and method; it creates no journal. Final implementation: four files. |
-  | Commit | `a0fe35f377532a709c8f129a1c30c6a11a07ed3c` — implements F11. |
+  | Commit | `a0fe35f377532a709c8f129a1c30c6a11a07ed3c` — implements F11.; `5616ba96d12143179b3a62077ec6c11fe8f7eabb` |
   | Validation | Full suite: 132 passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access. Fourteen new recovery cases cover truncated/corrupt records, missing methods, both outcome reversals, expected exceptions, legacy metadata, invalid checkpoints, and salvage storage preservation. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
   | Limitation | Legacy outcomes are unverified; current boolean metadata cannot compare exception types/messages or return values. Unsigned pickle cannot detect all corruption or whole-record removal and still requires trusted storage. |
   | Limitation | Salvage state can include mutations from the divergent attempted action, explicitly flagged in the report; replay side effects cannot be rolled back. Historical checkpoint-selection constraints remain unchanged. |
@@ -188,7 +188,7 @@ Provisional later plan, not a scheduled release. Goal: callers can distinguish c
   | Timestamp | 2026-10-09 |
   | Complexity | M |
   | Details | Added durability="sync" with complete-record flush/fsync before acknowledgment, synchronous close, and directory synchronization for journal creation/rotation and checkpoint publication. Buffered mode remains default. PersistenceError reports potentially changed memory and prevents further proxy mutations/checkpoints after journal failure. Final implementation: nine files. |
-  | Commit | `e838fc7a1f19f2b380d445b9a4fe010746a4e8d3` — implements F12. |
+  | Commit | `e838fc7a1f19f2b380d445b9a4fe010746a4e8d3` — implements F12.; `5616ba96d12143179b3a62077ec6c11fe8f7eabb` |
   | Validation | Full suite: 152 passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access; final focused durability suite: 21 passed after adding checkpoint directory-sync failure coverage. Includes write/short-write/flush/fsync faults, close/setup/rotation failures, whole-record sync observation, and separate-process restart after os._exit across rotation/checkpoint. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
   | Limitation | The contract is successful os.fsync, subject to POSIX filesystem/device guarantees; actual power loss and other Python/OS combinations were not tested. Unsupported directory sync fails instead of downgrading. |
   | Limitation | A persistence exception can leave memory changed and a record absent, partial, or fully persisted; it does not imply rollback or make blind retry safe. Snapshot directory sync can fail after the complete checkpoint becomes visible; prior files remain available. |
@@ -203,7 +203,7 @@ Provisional later plan, not a scheduled release. Goal: callers can distinguish c
   | Timestamp | 2026-10-10 |
   | Complexity | M |
   | Details | Accepted F5 snapshot/catch-up with a persistent populated master. Connection failure, shutdown, and cancellation retain unsynchronized guards; overlapping receivers and slave promotion are rejected. Explicit reconnect requires fresh bootstrap. Nine implementation files across runtime, tests, and documentation. |
-  | Commit | `a25dfb129f8f97e0e8e600780c8438290769eae5` — implements F13 lifecycle hardening and acceptance coverage. |
+  | Commit | `a25dfb129f8f97e0e8e600780c8438290769eae5` — implements F13 lifecycle hardening and acceptance coverage.; `15c7b551667698850b53fdb7deff829147f98629` |
   | Validation | 162 tests passed on Python 3.12.2/macOS with DeprecationWarning as error, including concurrent transfer writes, exact event/clock equality, fragmented authentication/snapshot delivery, interrupted action/ready packets, rejection, shutdown races, and reconnect. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
   | Limitation | Trusted-peer compressed pickle protocol; upgrade master and slaves together. Live updates remain asynchronous; automatic reconnect/failover and durable slave restart are outside scope. |
   | Limitation | Pending queues are unbounded in memory and snapshot serialization pauses mutations. Direct object access and unlocked methods bypass proxy protection. Other supported Python/OS combinations were not run locally. |
@@ -219,12 +219,96 @@ Provisional later plan, not a scheduled release. Goal: callers can distinguish c
   | Timestamp | 2026-10-10 |
   | Complexity | M |
   | Details | Added opt-in secret bytes and standard-library HMAC-SHA256 envelopes bound to system identity, file name, and record offset. All selected restore bytes are verified and retained before any unpickling. Strict and salvage report verification failures; unsigned behavior is unchanged. Seven implementation files; no historical draft merged. |
-  | Commit | `150b46ad6311e6c0460b71584bf097607016a8d1` — implements F14. |
+  | Commit | `150b46ad6311e6c0460b71584bf097607016a8d1` — implements F14.; `67fa8422495d32e9db71200ee1f3e5b66346467a` |
   | Validation | 197 tests passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access, including 35 integrity cases. Covers tampering, tag removal/truncation, same-secret snapshot swaps, wrong secrets, unsigned compatibility, rotation/checkpoints, fresh-process restore, sync/faults, and verified-byte reuse. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
   | Limitation | Integrity does not encrypt data or detect all valid rollback, whole-file deletion, or removal of complete trailing records; freshness requires trusted external state. Keep the secret outside storage and retain the identity in backups. |
   | Limitation | Signed recovery buffers selected storage in memory, and each signed action has an independent pickle memo. No automatic unsigned migration or key rotation; replication authentication is unchanged. |
   | Limitation | Other supported Python/OS combinations and actual power loss were not tested locally. |
   | Next step | Run the supported Python and operating-system CI matrix. |
+
+## v0.7.0 — Modern Python
+
+Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python), covering all items 1.1–1.7. These entries are planned work, not implementation or release claims. Goal: improve typing, everyday API use, schema evolution, performance, concurrency, and contributor tooling while preserving plain domain objects and Python 3.10+ compatibility. Exit criterion: each item below meets its acceptance criteria, with compatibility and operational limits documented. Distribution and decentralization proposals in Parts 2 and 3 remain future work.
+
+- [x] **F15 — Preserve domain types and separate persistence controls (1.1).** Type the class and instance forms of `init_persistent_system` so domain methods retain autocomplete and type checking. Add a separate `coopy.control(system)` persistence handle for operations such as `take_snapshot()`, `close()`, and replication controls; resolve collisions with domain methods named `close`, `shutdown`, or `take_snapshot`, while preserving the existing direct-control style for compatibility. Annotate the public API in `base.py`, `decorators.py`, `error.py`, and `integrity.py` first, then internals. Ship `py.typed`, preserve decorator signatures with `ParamSpec`, and use `TypeVar` syntax compatible with Python 3.10/3.11 rather than PEP 695 syntax. Introduce mypy or pyright in CI, tightening checks per module toward strict checking. Acceptance: installed-package typing examples retain domain signatures for both initialization forms and decorated methods; control-handle and name-collision tests pass, legacy controls remain usable, and the supported Python matrix imports the annotated package. Represent salvage results accurately in the overloads.
+  Complexity assessment before implementation: L; clear requirements; estimated nine files across API typing, proxy dispatch, packaging, CI, and tests. Resolved control collisions by preferring domain methods; retained direct controls when no domain name collides.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | L |
+  | Details | Added class/instance and strict/salvage overloads, ParamSpec decorators, py.typed, a typed control handle, domain-first control names, and staged mypy CI with installed-wheel examples. Fifteen implementation files. |
+  | Commit | `aaff9ab1fa9ae725740499b770ca8521af9d6c4b` — implements F15. |
+  | Validation | 201 tests passed at the F15 commit; final suite 253 passed on Python 3.12.2/macOS. Six-module mypy and installed-wheel positive/negative signature checks passed, including dynamic recovery modes. Python 3.10.14 imports and persistence smoke passed. |
+  | Limitation | Dynamic replay and networking internals are not yet strictly typed; proxy implementation attributes remain reserved. |
+  | Limitation | The full Python 3.10–3.14 and Linux/macOS CI matrix was not run locally. |
+  | Next step | Annotate remaining replay, journal, snapshot, and network internals and tighten mypy module checks. |
+  | Next step | Run the hosted supported-Python and operating-system CI matrix. |
+
+- [x] **F16 — Simplify the public API and resource lifecycle (1.2).** Add `coopy.open()` as the short entry point, retaining `init_persistent_system` as an alias. Support `with coopy.open(TodoList, "data/") as todo: ...`, closing journals and stopping the snapshot timer on normal and exceptional exit. Accept `str` and `os.PathLike` for `basedir` and use `pathlib.Path` internally. Introduce `start_primary`/`start_replica`, retaining `start_master`/`start_slave` as deprecated aliases for one or two releases with a documented removal schedule. Replace generic library failures with a precise `CoopyError` hierarchy. Leave logging configuration to applications and make the `coopy.log` file handler opt-in. Acceptance: lifecycle, path, exception, and alias tests pass; context-manager exceptions propagate after cleanup; default initialization creates no log file and explicit file logging still works. Document migration and compatibility behavior.
+  Complexity assessment before implementation: L; clear requirements; estimated ten files across lifecycle, path handling, errors, replication aliases, tests, and documentation. Chose v0.9 for alias removal after v0.7/v0.8; typed context use goes through the control handle because Python has no arbitrary intersection type.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | L |
+  | Details | Added coopy.open alias, direct and typed-control contexts, idempotent cleanup, timer/replication shutdown, native Path storage, nested directories, CoopyError subclasses, primary/replica names, and opt-in file logging. Seventeen implementation files. |
+  | Commit | `23ba9eabb92b548a5c9e410f54aee87b36a4e1aa` — implements F16. |
+  | Validation | 212 tests passed at the F16 commit; final suite 253 passed. Normal/exceptional exits, cleanup failures, path variants, alias warnings, logging defaults/opt-in, typed contexts, and existing replication checks passed. Sphinx warnings-as-errors passed. |
+  | Limitation | Direct with coopy.open works at runtime; use with coopy.control(coopy.open(...)) to retain domain typing in a context. |
+  | Limitation | Deprecated master/slave methods remain available through v0.8; underlying OS errors and domain exceptions can still propagate in their original types. |
+  | Next step | Remove start_master/start_slave aliases in v0.9 and update compatibility documentation. |
+
+- [x] **F17 — Support serialization choices and schema evolution (1.3).** Introduce a pluggable serializer with pickle as the default and an opt-in safe format such as msgpack or JSON backed by a registry of allowed types. Store schema versions with journal actions and provide registered upcasters for changed method signatures, such as upgrading `add(text)` to `add(text, priority=0)`. Add class aliases for renamed or moved classes during unpickling. Acceptance: existing pickle storage remains readable; supported serializers round-trip snapshots and journals; renamed-class fixtures and old action schemas restore through registered migrations; unknown types, unsupported versions, and invalid upgrades fail explicitly through recovery policy. Document format selection, migration, and trust boundaries, including that F14 integrity protection does not make arbitrary pickle safe.
+  Complexity assessment before implementation: XL; clear acceptance criteria with format/migration design choices; estimated ten files across every storage boundary. Chose explicit JSON registries, per-method consecutive action versions, caller-supplied pickle class aliases, and recovery-policy reporting; no automatic format guessing.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | XL |
+  | Details | Added a typed serializer protocol, compatible pickle streams, registered JSON codecs, action schema metadata/upcasters, and pickle class aliases. Integrity preflight remains before decoding. Documented format selection, migrations, and trust boundaries. Twelve implementation files. |
+  | Commit | `8741418ba1553b4b611fadf30eb9934e1f2101ee` — implements F17. |
+  | Validation | 41 serializer/migration tests and all 253 suite tests passed on Python 3.12.2/macOS. Covers signed/unsigned rotation and checkpoints, old schemas, moved classes in snapshots/arguments, invalid upgrades, custom codecs, and fresh-process JSON recovery. Mypy, installed-wheel typing, Sphinx, Python 3.10 smoke, diff checks, and AIFlow validation passed. |
+  | Limitation | JSON supports trees and rejects cycles/shared container identities; named timezone identity is not retained and resource-exhaustion limits are not provided. |
+  | Limitation | There is no automatic in-place format conversion or snapshot-state upcaster; explicit domain codecs and compatible pickle state restoration are required. |
+  | Limitation | Replication still uses trusted-peer pickle and requires compatible domain/schema versions; disk upcasters do not migrate network traffic. HMAC does not make arbitrary pickle safe. |
+  | Next step | Add explicit reference tags and validation before extending JSON to cyclic/shared object graphs. |
+  | Next step | Add a separately tested export/import workflow for format and snapshot-state migrations. |
+
+- [ ] **F18 — Improve write throughput and snapshot performance (1.4).** Add group commit for `durability="sync"`, batching fsync for concurrent calls while acknowledging each mutation only after its batch is synchronized. Add POSIX fork-based snapshots using a copy-on-write view so the parent can continue serving writes; assess threaded-process and user-serialization safety, constrain child work to serialization and exit, and document supported configurations and fallback behavior. Offer snapshot compression through optional zstd/lz4 extras. Establish benchmarks for buffered/sync writes per second, restore time per million actions, and snapshot pause duration. Acceptance: publish reproducible before/after measurements, preserve checkpoint/replay ordering and synchronous acknowledgment guarantees under concurrent calls and injected failures, and round-trip compressed snapshots. Document fork restrictions and avoid performance promises unsupported by measurements.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Planned |
+  | Details | Source: FUTURE.md §1.4 — Performance |
+  | Next step | Preserve F7/F9 checkpoint guarantees, F12 durability, and F14 integrity; coordinate snapshot formats with F17. |
+
+- [ ] **F19 — Support asynchronous callers and free-threaded Python (1.5).** Add an asyncio facade such as `AsyncPersistent` that executes writes on one dedicated writer thread and exposes awaitable domain methods such as `await todo.add("milk")`, avoiding event-loop blocking on the proxy's `threading.RLock`. Add free-threaded Python 3.13t/3.14t CI coverage and document reader guarantees when the GIL no longer protects domain-object reads. Acceptance: asynchronous writes remain ordered and replay to the same state, event-loop responsiveness is tested during writes, shutdown and error propagation are defined, and free-threaded tests exercise concurrent readers and writers. Document the limits of direct object access and unlocked methods.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Planned |
+  | Details | Source: FUTURE.md §1.5 — Concurrency |
+  | Next step | Coordinate typing and cleanup with F15/F16 and batching with F18. |
+
+- [ ] **F20 — Strengthen development tooling and generated documentation (1.6).** Adopt ruff linting and formatting in CI and pre-commit. Add Hypothesis property-based tests generating sequences of method calls, snapshots, and restarts, asserting that restored state equals live state. Establish a measured coverage baseline and a CI gate that prevents regression. Configure Dependabot for GitHub Actions versions. Keep Sphinx and generate an API reference from the type hints. Acceptance: lint/format and property checks run in CI, coverage below the agreed baseline fails the gate, the Actions update configuration is valid, and the generated reference builds with warnings treated as errors.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Planned |
+  | Details | Source: FUTURE.md §1.6 — Tooling |
+  | Next step | Generated API documentation follows F15's annotations; foundational tooling can begin independently. |
+
+- [ ] **F21 — Harden password comparison and remove empty network backends (1.7).** Replace the replication password's ordinary inequality comparison with `hmac.compare_digest`. Document that the password is still transmitted in plain text and remains a stopgap pending the encrypted transport proposed in FUTURE.md §2.2. Delete the empty `coopy/network/linux_epoll.py` and `coopy/network/osx_kqueue.py` placeholders; use standard-library `selectors` or a future pyzmq transport if platform-specific polling is needed. Acceptance: valid and invalid password authentication tests pass with constant-time comparison, no imports depend on the deleted modules, and documentation does not imply transport encryption.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Planned |
+  | Details | Source: FUTURE.md §1.7 — Quick wins found while writing this |
+  | Next step | Retain F13 bootstrap and authentication behavior; encrypted transport remains outside v0.7.0. |
 
 ## Validation record
 
