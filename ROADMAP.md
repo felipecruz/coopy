@@ -278,13 +278,22 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Next step | Add explicit reference tags and validation before extending JSON to cyclic/shared object graphs. |
   | Next step | Add a separately tested export/import workflow for format and snapshot-state migrations. |
 
-- [ ] **F18 — Improve write throughput and snapshot performance (1.4).** Add group commit for `durability="sync"`, batching fsync for concurrent calls while acknowledging each mutation only after its batch is synchronized. Add POSIX fork-based snapshots using a copy-on-write view so the parent can continue serving writes; assess threaded-process and user-serialization safety, constrain child work to serialization and exit, and document supported configurations and fallback behavior. Offer snapshot compression through optional zstd/lz4 extras. Establish benchmarks for buffered/sync writes per second, restore time per million actions, and snapshot pause duration. Acceptance: publish reproducible before/after measurements, preserve checkpoint/replay ordering and synchronous acknowledgment guarantees under concurrent calls and injected failures, and round-trip compressed snapshots. Document fork restrictions and avoid performance promises unsupported by measurements.
+- [x] **F18 — Improve write throughput and snapshot performance (1.4).** Add group commit for `durability="sync"`, batching fsync for concurrent calls while acknowledging each mutation only after its batch is synchronized. Add POSIX fork-based snapshots using a copy-on-write view so the parent can continue serving writes; assess threaded-process and user-serialization safety, constrain child work to serialization and exit, and document supported configurations and fallback behavior. Offer snapshot compression through optional zstd/lz4 extras. Establish benchmarks for buffered/sync writes per second, restore time per million actions, and snapshot pause duration. Acceptance: publish reproducible before/after measurements, preserve checkpoint/replay ordering and synchronous acknowledgment guarantees under concurrent calls and injected failures, and round-trip compressed snapshots. Document fork restrictions and avoid performance promises unsupported by measurements.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
-  | Details | Source: FUTURE.md §1.4 — Performance |
-  | Next step | Preserve F7/F9 checkpoint guarantees, F12 durability, and F14 integrity; coordinate snapshot formats with F17. |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | XL |
+  | Details | Added opt-in sync group commit, parent-published POSIX copy-on-write snapshot jobs with guarded blocking fallback, zstd/lz4 extras, authenticated compression, and reproducible before/after benchmarks. Estimated 10–14 implementation files; delivered 14 plus four measurement artifacts. |
+  | Commit | `1b2d9f06309c5e31d25b86139a0c59f1ec1f23e8` — implements F18. |
+  | Validation | 294 tests passed; 30 native fork cases skipped on macOS. Separate controlled subprocess run: 40 passed, including all 30 fork cases with a test-only platform-guard bypass. Mypy, installed-wheel typing, Python 3.10 smoke, Sphinx, diff checks, and AIFlow validation passed. Actual million-action restores and write/pause samples published in docs/performance.rst and benchmarks/. |
+  | Limitation | Native Linux execution and fork pause measurements were unavailable locally; controlled macOS mechanism tests do not certify Linux or production macOS safety. |
+  | Limitation | Fork requires an explicitly audited single-threaded POSIX main process outside macOS; native threads, serializer callbacks, at-fork hooks, and external resources cannot be proven safe automatically. |
+  | Limitation | A positive group-commit window adds isolated-call latency; measurements on this shared macOS host are noisy. Immediate per-call sync remains the default. |
+  | Limitation | Signed/compressed snapshots buffer whole payloads in memory; there is no decompressed-size cap or measured compression speed/ratio. |
+  | Next step | Run the Linux Python 3.10–3.14 CI matrix with both compression extras to verify the native fork path. |
+  | Next step | Publish blocking-versus-fork pause and memory measurements on supported single-threaded Linux deployment hardware before claiming fork performance improvements. |
 
 - [ ] **F19 — Support asynchronous callers and free-threaded Python (1.5).** Add an asyncio facade such as `AsyncPersistent` that executes writes on one dedicated writer thread and exposes awaitable domain methods such as `await todo.add("milk")`, avoiding event-loop blocking on the proxy's `threading.RLock`. Add free-threaded Python 3.13t/3.14t CI coverage and document reader guarantees when the GIL no longer protects domain-object reads. Acceptance: asynchronous writes remain ordered and replay to the same state, event-loop responsiveness is tested during writes, shutdown and error propagation are defined, and free-threaded tests exercise concurrent readers and writers. Document the limits of direct object access and unlocked methods.
 
