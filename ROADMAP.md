@@ -85,16 +85,16 @@ Current declared code baseline; release publication is unverified. Goal: identif
 Planned corrective version, not a release claim. Goal: users can install the package and retain successful local changes through snapshots and clean restarts. Exit criterion: F6–F10 acceptance checks pass, with regression coverage for the three reproduced persistence failures and accurate executable documentation.
 
 - [x] **F6 — Build distributions with the actual README.** At the original audit, `pyproject.toml` pointed to `README.markdown`, absent from HEAD after its rename to `README.md`. An untracked replacement appeared during that audit; preserve and reconcile that work when fixing metadata, while preserving `README.md` content. Accept when sdist and wheel build, `twine check --strict` passes, both include the expected project description, and installation from the built artifacts can import coopy and complete a temporary-directory persistence round trip.
-  Complexity assessment before implementation: M; clear acceptance criteria across three files covering distribution validation, CI, and tracking. The stale metadata and replacement README were already reconciled in `986fecea236ea415207c1eddc0b9b1218f6f97b4`; preserve the current README verbatim and validate that result. No unresolved specification ambiguity.
+  Complexity assessment before implementation: M; clear acceptance criteria across two implementation/tracking files, plus job notes; distribution validation and existing CI integration are the affected components. This job strengthens the installed-artifact round trip to restore in a fresh Python process. The stale metadata and replacement README were already reconciled in `986fecea236ea415207c1eddc0b9b1218f6f97b4`; preserve the current README verbatim and validate that result. No unresolved specification ambiguity.
 
   | Item | Content |
   | --- | --- |
   | Status | Done |
   | Timestamp | 2026-10-09 |
   | Complexity | M |
-  | Details | Preserved the prior README reconciliation and correct metadata path. CI now compares both distribution descriptions with README.md, checks the sdist README bytes, and installs each artifact into a fresh environment for checkpoint/write/close/reopen persistence validation. |
-  | Commit | `ed54c62fae85316b848df09f871ee6e46635979a` — implements F6 artifact validation and CI coverage; prior README reconciliation and metadata fix: `986fecea236ea415207c1eddc0b9b1218f6f97b4`. |
-  | Validation | Clean tracked-source export: isolated sdist and wheel builds passed; strict twine checks passed for both; descriptions matched README.md; both isolated installs imported from site-packages and restored both writes. Python 3.12.2/macOS; README SHA-256 unchanged. git diff --check and AIFlow roadmap validation passed. |
+  | Details | Preserved the reconciled README.md and correct metadata path. Existing CI validates both artifact descriptions and installs each into a fresh environment; the round trip now writes a checkpoint and later journal entry, closes, exits, and restores both in a separate isolated Python process. |
+  | Commit | `e6b0beb5afb3af651682e64b80f0d3b1ccc44204` — implements F6 process-restart validation; `ed54c62fae85316b848df09f871ee6e46635979a` — prior artifact validation and CI; `986fecea236ea415207c1eddc0b9b1218f6f97b4` — prior README reconciliation and metadata fix; `b4ac94cd052223008bdfa803e7d3b07841598087` — prior tracking only. |
+  | Validation | Tracked-source export plus this script change: isolated sdist/wheel builds and strict twine checks passed; both descriptions match README.md and sdist README bytes match. Both fresh installs imported from site-packages and restored both writes after process exit. Python 3.12.2/macOS; README SHA-256 unchanged. git diff --check and AIFlow validation passed. |
   | Limitation | Hosted CI and other Python/OS combinations were not executed locally; the sdist installation check downloads build requirements. |
   | Next step | Run the updated hosted CI workflow to verify the Python 3.13/Linux distribution job. |
 
