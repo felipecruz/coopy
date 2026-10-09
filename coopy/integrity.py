@@ -1,4 +1,7 @@
 """Versioned HMAC envelopes. No pickle operation belongs in this module."""
+from typing import BinaryIO
+from os import PathLike
+
 import hashlib
 import hmac
 import os
@@ -17,19 +20,19 @@ class IntegrityError(ValueError):
     """Storage could not be authenticated; do not deserialize it."""
 
 
-def validate_secret(secret):
+def validate_secret(secret: bytes | None) -> None:
     if secret is not None and (not isinstance(secret, bytes) or not secret):
         raise ValueError('secret must be nonempty bytes or None')
 
 
 class Integrity:
-    def __init__(self, secret, system_id):
+    def __init__(self, secret: bytes, system_id: bytes) -> None:
         validate_secret(secret)
         self.secret = secret
         self.system_id = system_id
 
     @classmethod
-    def open(cls, basedir, secret, *, create=False, durability='buffered'):
+    def open(cls, basedir: str | PathLike[str], secret: bytes, *, create: bool = False, durability: str = 'buffered') -> 'Integrity':
         validate_secret(secret)
         filename = os.path.join(basedir, IDENTITY_FILE)
         if create:
@@ -54,7 +57,7 @@ class Integrity:
             raise IntegrityError('Integrity identity verification failed (wrong secret or tampered identity)')
         return cls(secret, data[len(MAGIC):size])
 
-    def _mac(self, filename, offset, header, payload):
+    def _mac(self, filename: str | PathLike[str], offset: int, header: bytes, payload: bytes) -> bytes:
         # Bind to system, file kind/number, and record location, so valid
         # envelopes cannot be transplanted between systems/files/positions.
         context = (MAGIC + self.system_id + os.path.basename(filename).encode('utf-8')
@@ -63,11 +66,11 @@ class Integrity:
         mac.update(payload)
         return mac.digest()
 
-    def encode(self, payload, filename, offset=0):
+    def encode(self, payload: bytes, filename: str | PathLike[str], offset: int = 0) -> bytes:
         header = MAGIC + HEADER.pack(len(payload))
         return header + payload + self._mac(filename, offset, header, payload)
 
-    def read(self, file, filename):
+    def read(self, file: BinaryIO, filename: str | PathLike[str]) -> bytes:
         offset = file.tell()
         header = file.read(len(MAGIC) + HEADER.size)
         if len(header) != len(MAGIC) + HEADER.size or not header.startswith(MAGIC):

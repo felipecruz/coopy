@@ -38,3 +38,8 @@ or mock your clock to return the same date.
 .. function:: TestSystemMixin.enable_clock(domain)
 
     This method will inject a regular coopy clock on your domain instance
+
+.. toctree::
+   :maxdepth: 1
+
+   modern-api

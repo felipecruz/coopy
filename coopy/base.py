@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 '''
 Created on Dec 6, 2011
 
@@ -5,6 +7,8 @@ Created on Dec 6, 2011
 '''
 __author__ = "Felipe Cruz <felipecruz@gmail.com>"
 __license__ = "BSD"
+
+from typing import Any, Literal, TypeVar, overload
 
 import os
 import time
@@ -18,7 +22,7 @@ from coopy import __version__, fileutils
 from coopy.foundation import Action, RecordClock, Publisher
 from coopy.journal import DiskJournal
 from coopy.integrity import Integrity, IDENTITY_FILE, validate_secret
-from coopy.restore import recover
+from coopy.restore import recover, RecoveryResult, RecoveryReport
 from coopy.snapshot import SnapshotManager, SnapshotTimer
 from coopy.utils import method_or_none, action_check, inject
 from coopy.validation import validate_system
@@ -31,7 +35,7 @@ DEFAULT_PASSWORD = b'copynet'
 logger = logging.getLogger("coopy")
 logger.addHandler(logging.NullHandler())
 
-def logging_config(basedir="./"):
+def logging_config(basedir: PathLike = "./") -> None:
     log_file_path = os.path.abspath(os.path.join(basedir, "coopy.log"))
     result = logging.getLogger("coopy")
     result.setLevel(logging.DEBUG)
@@ -47,7 +51,7 @@ def logging_config(basedir="./"):
     handler.setFormatter(formatter)
     result.addHandler(handler)
 
-def _to_password(password):
+def _to_password(password: str | bytes | None) -> bytes:
     if password is None:
         return DEFAULT_PASSWORD
     if isinstance(password, str):
@@ -55,8 +59,40 @@ def _to_password(password):
     return password
 
 
-def init_persistent_system(obj, basedir=None, *, recovery="strict",
-                           durability="buffered", secret=None):
+T = TypeVar("T")
+PathLike = str | os.PathLike[str]
+
+@overload
+def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
+                           recovery: Literal["strict"] = "strict",
+                           durability: Literal["buffered", "sync"] = "buffered",
+                           secret: bytes | None = None) -> T: ...
+
+@overload
+def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
+                           recovery: Literal["strict"] = "strict",
+                           durability: Literal["buffered", "sync"] = "buffered",
+                           secret: bytes | None = None) -> T: ...
+
+@overload
+def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
+                           recovery: Literal["salvage"],
+                           durability: Literal["buffered", "sync"] = "buffered",
+                           secret: bytes | None = None) -> RecoveryResult[T]: ...
+
+@overload
+def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
+                           recovery: Literal["salvage"],
+                           durability: Literal["buffered", "sync"] = "buffered",
+                           secret: bytes | None = None) -> RecoveryResult[T]: ...
+
+@overload
+def init_persistent_system(obj: type[T] | T, basedir: PathLike | None = None, *,
+                           recovery: str, durability: str = "buffered",
+                           secret: bytes | None = None) -> T | RecoveryResult[T]: ...
+
+def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recovery: str = "strict",
+                           durability: str = "buffered", secret: bytes | None = None) -> Any:
     validate_secret(secret)
     if recovery not in ("strict", "salvage"):
         raise ValueError("recovery must be 'strict' or 'salvage'")
@@ -105,6 +141,7 @@ def init_persistent_system(obj, basedir=None, *, recovery="strict",
                   and not fileutils.list_log_files(basedir)
                   and not os.path.exists(os.path.join(basedir, IDENTITY_FILE)))
     if new_signed:
+        assert secret is not None
         integrity = Integrity.open(basedir, secret, create=True, durability=durability)
     if not fileutils.last_snapshot_file(basedir) and (secret is None or new_signed):
         logger.info(CORE_LOG_PREFIX + "No snapshot files..")
@@ -139,29 +176,31 @@ def init_persistent_system(obj, basedir=None, *, recovery="strict",
     proxy.recovery_report = result.report
     return proxy
 
-def init_system(obj, subscribers):
+def init_system(obj: Any, subscribers: list[Any]) -> CoopyProxy:
     # return a coopy proxy instead of a system instance
     proxy = CoopyProxy(obj, subscribers)
     return proxy
 
 class CoopyProxy():
-    def __init__(self, obj, subscribers, snapshot_manager=None):
+    def __init__(self, obj: Any, subscribers: list[Any], snapshot_manager: SnapshotManager | None = None) -> None:
+        self.recovery_report = RecoveryReport()
+        self.server: Any = None
         self.obj = obj
         self.publisher = Publisher(subscribers)
         self.lock = threading.RLock()
-        self.master = None
-        self.slave = None
+        self.master: Any = None
+        self.slave: Any = None
         self.snapshot_manager = snapshot_manager
-        self.snapshot_timer = None
+        self.snapshot_timer: SnapshotTimer | None = None
 
-    def start_snapshot_manager(self, snapshot_time):
+    def start_snapshot_manager(self, snapshot_time: float) -> None:
         # the timer waits snapshot_time before the first snapshot, so this
         # call returns immediately
-        self.snapshot_timer = SnapshotTimer(snapshot_time, self)
+        self.snapshot_timer = SnapshotTimer(snapshot_time, control(self))
         self.snapshot_timer.start()
 
-    def start_master(self, port=8012, password=None, ipc=False,
-                     host='127.0.0.1'):
+    def start_master(self, port: int = 8012, password: str | bytes | None = None, ipc: bool = False,
+                     host: str = '127.0.0.1') -> None:
         with self.lock:
             if self.slave is not None:
                 raise RuntimeError('Cannot promote a slave to master.')
@@ -177,7 +216,7 @@ class CoopyProxy():
             self.master = self.server
             self.server.start()
 
-    def start_slave(self, host, port, password=None, ipc=False):
+    def start_slave(self, host: str, port: int, password: str | bytes | None = None, ipc: bool = False) -> Any:
         with self.lock:
             if self.master is not None:
                 raise RuntimeError('Cannot start a slave on an active master.')
@@ -195,25 +234,32 @@ class CoopyProxy():
             self.slave.start()
             return self.slave
 
-    def __getattr__(self, name):
+    def __getattribute__(self, name: str) -> Any:
+        if name in _CONTROL_NAMES:
+            obj = object.__getattribute__(self, "obj")
+            if hasattr(obj, name):
+                return self.__getattr__(name)
+        return object.__getattribute__(self, name)
+
+    def __getattr__(self, name: str) -> Any:
         if self.slave and not self.slave.synchronized:
             raise RuntimeError('Slave is not synchronized with its master.')
-        method =  method_or_none(self.obj, name)
+        domain_method = method_or_none(self.obj, name)
 
-        if not method:
+        if not domain_method:
             return getattr(self.obj, name)
 
-        (readonly,unlocked,abort_exception) = action_check(method)
+        (readonly,unlocked,abort_exception) = action_check(domain_method)
 
         #TODO: re-write
         if not readonly and hasattr(self, 'slave') and self.slave:
             raise Exception('This is a slave/read-only instance.')
 
-        def method(*args, **kwargs):
+        def method(*args: Any, **kwargs: Any) -> Any:
             exception = None
             try:
                 if not unlocked:
-                    self.lock.acquire(1)
+                    self.lock.acquire(True)
 
                 if self.slave and not self.slave.synchronized:
                     raise RuntimeError('Slave is not synchronized with its master.')
@@ -262,13 +308,13 @@ class CoopyProxy():
             return system
         return method
 
-    def basedir_abspath(self):
+    def basedir_abspath(self) -> list[str]:
         disk_journals = (journal for journal in self.publisher.subscribers
                                              if hasattr(journal, 'basedir'))
         return [os.path.join(os.path.abspath(os.getcwd()), journal.basedir)
                 for journal in disk_journals]
 
-    def take_snapshot(self):
+    def take_snapshot(self) -> None:
         slave = self.slave
         if slave:
             slave.acquire()
@@ -281,7 +327,7 @@ class CoopyProxy():
                     for journal in self.publisher.subscribers:
                         if isinstance(journal, DiskJournal):
                             journal.check_writable()
-                    def advance_journals(destination):
+                    def advance_journals(destination: str) -> None:
                         for journal in self.publisher.subscribers:
                             if isinstance(journal, DiskJournal):
                                 journal.checkpoint(destination)
@@ -293,7 +339,7 @@ class CoopyProxy():
             if slave:
                 slave.release()
 
-    def close(self):
+    def close(self) -> None:
         # stop the timer first so no snapshot runs against closed resources
         if self.snapshot_timer:
             self.snapshot_timer.stop()
@@ -302,10 +348,56 @@ class CoopyProxy():
         if self.slave:
             self.slave.close()
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         if self.master:
             self.master.close()
             self.master = None
         if self.slave:
             self.slave.close()
             # Retain the slave role and guard until a fresh bootstrap succeeds.
+
+
+_CONTROL_NAMES = frozenset({"take_snapshot", "close", "shutdown",
+                            "start_snapshot_manager", "start_master", "start_slave",
+                            "basedir_abspath"})
+
+
+class PersistenceControl:
+    """Persistence operations, independent of domain method names."""
+
+    def __init__(self, proxy: CoopyProxy) -> None:
+        self._proxy = proxy
+
+    @property
+    def recovery_report(self) -> RecoveryReport:
+        return self._proxy.recovery_report
+
+    def take_snapshot(self) -> None:
+        CoopyProxy.take_snapshot(self._proxy)
+
+    def close(self) -> None:
+        CoopyProxy.close(self._proxy)
+
+    def shutdown(self) -> None:
+        CoopyProxy.shutdown(self._proxy)
+
+    def start_snapshot_manager(self, snapshot_time: float) -> None:
+        CoopyProxy.start_snapshot_manager(self._proxy, snapshot_time)
+
+    def start_master(self, port: int = 8012, password: str | bytes | None = None,
+                     ipc: bool = False, host: str = "127.0.0.1") -> None:
+        CoopyProxy.start_master(self._proxy, port, password, ipc, host)
+
+    def start_slave(self, host: str, port: int, password: str | bytes | None = None,
+                    ipc: bool = False) -> Any:
+        return CoopyProxy.start_slave(self._proxy, host, port, password, ipc)
+
+    def basedir_abspath(self) -> list[str]:
+        return CoopyProxy.basedir_abspath(self._proxy)
+
+
+def control(system: object) -> PersistenceControl:
+    """Return persistence controls for a writable coopy system."""
+    if not isinstance(system, CoopyProxy):
+        raise TypeError("control() requires a writable coopy system, not a salvage result")
+    return PersistenceControl(system)

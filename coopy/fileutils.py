@@ -17,7 +17,7 @@ SNAPSHOT_REGEX = re.compile(r"snapshot_(\d{15})\.dat", re.IGNORECASE)
 LOG_REGEX = re.compile(r"transaction_(\d{15})\.log", re.IGNORECASE)
 FILE_REGEX = re.compile(r"(transaction|snapshot)_(\d{15})\..{3}", re.IGNORECASE)
 
-def sync_directory(directory):
+def sync_directory(directory: str | os.PathLike[str]) -> None:
     """Persist directory entries on POSIX; propagate unsupported/I/O errors."""
     descriptor = os.open(directory, os.O_RDONLY)
     try:

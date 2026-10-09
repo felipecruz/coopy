@@ -1,4 +1,8 @@
 """Strict recovery and explicit, non-writing salvage of trusted pickle storage."""
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+
 from dataclasses import dataclass, field
 from io import BytesIO
 from pickle import Unpickler
@@ -40,8 +44,8 @@ class RecoveryReport:
 
 
 @dataclass
-class RecoveryResult:
-    system: object
+class RecoveryResult(Generic[T]):
+    system: T | None
     report: RecoveryReport
 
 
