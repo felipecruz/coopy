@@ -1,148 +1,171 @@
 # coopy
 
-**coopy** is a simple, transparent, non-intrusive persistence library for python language. It's released under BSD License
-
-* **Simple** - you don't have to learn an API. You can use it with just one line of code.
-* **Transparent** - you don't need to call any API functions, just your Object methods.
-* **Non-Intrusive** - no inheritance, no interface.. only pure-python-business code.
-
-It is based on the techniques of system snapshotting and transaction journalling. In the prevalent model, the object data is kept in memory in native object format, rather than being marshalled to an RDBMS or other data storage system. A snapshot of data is regularly saved to disk, and in addition to this, all changes are serialised and a log of transactions is also stored on disk.
-
-http://en.wikipedia.org/wiki/Object_prevalence
-
-## Status
-
-Current version - 0.5.0
-
-coopy requires Python 3.10 or newer (tested on 3.10 - 3.14). Python 2 support
-was dropped in 0.5.0; use coopy 0.4.x if you are stuck on Python 2.
-
 [![CI](https://github.com/felipecruz/coopy/actions/workflows/ci.yml/badge.svg)](https://github.com/felipecruz/coopy/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/coopy.svg)](https://pypi.org/project/coopy/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
 
-## Install
-
-```sh
-$ pip install coopy
-```
-
-or
-
-
-```sh
-$ git clone https://github.com/felipecruz/coopy.git
-$ cd coopy
-$ pip install .
-```
-
-## Using
-
-Simple, transparent and non-intrusive. Note that ``Todo`` could be any class
-that you want to persist state across method calls that modifies it's internal
-state.
+**Persistence for plain Python objects. No database, no ORM, no schema - one line of code.**
 
 ```python
-
 from coopy.base import init_persistent_system
-class Todo(object):
-    def __init__(self):
-        self.tasks = []
 
-    def add_task(self, name, description):
-        task = dict(name=name, description=description)
-        self.tasks.append(task)
-
-persistent_todo_list = init_persistent_system(Todo())
-persistent_todo_list.add_task("Some Task Name", "A Task Description")
+todo = init_persistent_system(TodoList)   # that's the whole integration
+todo.add("write the README")              # this change is now durable
 ```
 
-## Restrictions
+Restart your program, and your `TodoList` is exactly where you left it.
 
-This should not affect end-user code
+## Why coopy
 
-To get datetime or date objects you need to get from an internal clock.
-Check [How to use Clock](http://coopy.readthedocs.org/en/latest/use_clock.html)
+- **One line.** Wrap your object once. Keep calling its methods as usual.
+- **Your code stays yours.** No base class, no decorators required, no
+  mapping layer. Your domain classes are plain Python.
+- **Memory speed.** Reads are ordinary attribute access - no queries, no
+  network round trips, no serialization.
+- **Full history.** Every change is a journal entry, so state can always be
+  rebuilt by replaying what happened.
+- **Thread-safe by default.** Method calls are serialized for you.
+- **Replication built in.** Stream changes to read-only replicas over TCP or
+  Unix sockets.
 
-## Security
+## The idea: object prevalence
 
-Journals, snapshots and master/slave replication all use `pickle`. Loading a
-pickle can run arbitrary code, so only restore data directories you trust and
-only replicate between trusted hosts on a trusted network.
+Most applications load data from a database, change it, and write it back.
+coopy flips this around: **your objects live in memory, and the disk is just
+a log.** This technique is called
+[object prevalence](https://en.wikipedia.org/wiki/System_prevalence).
+
+1. **Every change is a method call.** coopy wraps your object in a proxy.
+   When you call a method that changes state, the call itself - method name
+   and arguments - is appended to a journal on disk.
+2. **Snapshots save time.** Now and then the whole object is saved as a
+   snapshot, so the journal doesn't grow forever.
+3. **Restart = snapshot + replay.** On startup coopy loads the latest snapshot
+   and re-runs the journaled calls made after it. Same calls, same order,
+   same state.
+
+```
+ your code ──► proxy ──► your object (in memory)
+                 │
+                 └──► journal: add("milk"), add("eggs"), done(0), ...
+
+ restart:  latest snapshot ──► replay journal ──► same object as before
+```
+
+The tradeoff: your data has to fit in memory. For a huge range of apps -
+internal tools, games, bots, prototypes, configuration and catalog services -
+it does, and you get a much simpler stack in exchange.
+
+## Quick start
+
+```sh
+pip install coopy
+```
+
+```python
+from coopy.base import init_persistent_system
+from coopy.decorators import readonly
+
+class TodoList(object):
+    def __init__(self):
+        self.items = []
+
+    def add(self, text):
+        self.items.append({"text": text, "done": False,
+                           "created": self._clock.now()})
+
+    def done(self, index):
+        self.items[index]["done"] = True
+
+    @readonly
+    def pending(self):
+        return [item["text"] for item in self.items if not item["done"]]
+
+todo = init_persistent_system(TodoList)
+todo.add("buy milk")
+todo.add("write the README")
+todo.done(0)
+print(todo.pending())   # ['write the README'] - also after a restart
+todo.close()
+```
+
+Data is stored in a directory named after your class (`todolist/` here).
+Pass `basedir="some/dir"` to choose another location.
+
+## The rules
+
+Replaying calls only works if they give the same result the second time.
+That means:
+
+- **Change state only through methods** called on the wrapped object. If you
+  modify an object returned by a method directly, that change is not
+  journaled.
+- **Use `self._clock` for time.** Call `self._clock.now()`, `utcnow()` or
+  `today()` instead of `datetime.now()`. coopy records the value and hands
+  back the same one on replay. coopy rejects classes that call
+  `datetime.now()` directly.
+- **No other outside input inside methods** - no random numbers, network
+  calls or file reads. Do those outside and pass the results in as
+  arguments.
+- **Arguments and state must be picklable.**
+
+## More features
+
+**Decorators** fine-tune individual methods:
+
+| Decorator | Effect |
+| --- | --- |
+| `@readonly` | Not journaled. Use for queries. |
+| `@abort_exception` | If the method raises, the call is not journaled. |
+| `@unlocked` | Skips coopy's lock; you handle thread safety yourself. |
+
+**Snapshots** keep restarts fast:
+
+```python
+todo.take_snapshot()               # take one now
+todo.start_snapshot_manager(3600)  # or every hour, in the background
+```
+
+**Replication** streams every change to read-only replicas:
+
+```python
+# primary
+todo.start_master(port=8012, password="secret")
+
+# replica, started from a copy of the primary's state
+replica.start_slave("primary-host", 8012, password="secret")
+```
+
+## Good to know
+
+- **Security:** journals, snapshots and replication use `pickle`, which can
+  run arbitrary code when loaded. Only restore data directories you trust,
+  and only replicate between trusted hosts on a trusted network.
+- **Durability:** each change is written and flushed to the journal as soon
+  as the call completes, so it survives a crash of your program. coopy does
+  not `fsync` every write, so a power failure can lose the most recent
+  changes.
+- **Python:** 3.10 or newer. Python 2 support ended with coopy 0.4.x.
 
 ## Documentation
 
-http://coopy.readthedocs.org
+Full docs: http://coopy.readthedocs.org
 
-## Cases
+## Development
 
-### RioBus
-
-http://riobus.loogica.net/
-
-All (~1800) Bus lines from RJ (State), Brazil, each Bus Line with a list
-of tuples (street, city_name, direction). All in memory. Running since Sep 2012.
-
-System(Domain) Class: https://github.com/loogica/riobus/blob/master/riobus.py
-
-## Tests
-
-First time:
-
-`pip install -e ".[test]"`
-
-To actually run the tests:
-
-`make test`
-
-## Coverage Report
-
-First time:
-
-`pip install -e ".[test]"`
-
-And then:
-
-`make coverage`
-
-# LICENSE
-
-```
-Copyright (c) 2009/2012, Loogica - Felipe João Pontes da Cruz - felipecruz@loogica.net
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice, 
-       this list of conditions and the following disclaimer.
-    
-    2. Redistributions in binary form must reproduce the above copyright 
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    3. Neither the name of copycat nor the names of its contributors may be used
-       to endorse or promote products derived from this software without
-       specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```sh
+git clone https://github.com/felipecruz/coopy.git
+cd coopy
+pip install -e ".[test]"
+make test       # run the tests
+make coverage   # HTML coverage report in htmlcov/
 ```
 
-Contribute
-----------
+Contributions are welcome - fork the repo and open a pull request.
 
-You know!
+## License
 
-Fork, Pull Request :)
+BSD 3-Clause. See [LICENSE](LICENSE).
 
-Contact
--------
-
-felipecruz@loogica.net
+Contact: felipecruz@gmail.com

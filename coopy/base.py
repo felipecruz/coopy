@@ -3,7 +3,7 @@ Created on Dec 6, 2011
 
 @author: felipe j. cruz
 '''
-__author__ = "Felipe Cruz <felipecruz@loogica.net>"
+__author__ = "Felipe Cruz <felipecruz@gmail.com>"
 __license__ = "BSD"
 
 import os

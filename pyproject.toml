@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "coopy"
 dynamic = ["version"]
 description = "coopy - plain objects persistence/prevalence tool"
-readme = { file = "README.markdown", content-type = "text/markdown" }
+readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-authors = [{ name = "Felipe Cruz", email = "felipecruz@loogica.net" }]
+authors = [{ name = "Felipe Cruz", email = "felipecruz@gmail.com" }]
 requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
