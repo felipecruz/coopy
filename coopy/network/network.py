@@ -1,21 +1,22 @@
-import zlib
-import struct
-import pickle
-import threading
 import logging
+import pickle
+import struct
+import threading
+import zlib
 
 from coopy.foundation import Action
 
-COPYNET_MASTER_PREFIX = '[coopynet - master]'
-COPYNET_SLAVE_PREFIX = '[coopynet - slave]'
-COPYNET_SOCK = '/tmp/coopy.sock'
-COPYNET_HEADER = '!Ic'
+COPYNET_MASTER_PREFIX = "[coopynet - master]"
+COPYNET_SLAVE_PREFIX = "[coopynet - slave]"
+COPYNET_SOCK = "/tmp/coopy.sock"
+COPYNET_HEADER = "!Ic"
 
-l = logging.getLogger("coopy")
+logger = logging.getLogger("coopy")
 
-def prepare_data(data, stype=b's'):
+
+def prepare_data(data, stype=b"s"):
     if isinstance(data, Action):
-        stype = b'a'
+        stype = b"a"
 
     data = pickle.dumps(data)
     compressed_data = zlib.compress(data)
@@ -24,25 +25,28 @@ def prepare_data(data, stype=b's'):
 
     return (header, compressed_data)
 
-class CopyNetClient():
+
+class CopyNetClient:
     def __init__(self, client, address, state):
         self.client = client
         self.address = address
         self.state = state
 
-class CopyNetPacket():
+
+class CopyNetPacket:
     def __init__(self, header, data):
         self.header = header
         self.data = data
 
+
 class CopyNetSnapshotThread(threading.Thread):
     def __init__(self, net_client, obj):
-            threading.Thread.__init__(self, daemon=True)
-            self.net_client = net_client
-            self.obj = obj
+        threading.Thread.__init__(self, daemon=True)
+        self.net_client = net_client
+        self.obj = obj
 
     def run(self):
-        (header,data) = prepare_data(self.obj)
+        (header, data) = prepare_data(self.obj)
         self.net_client.client.sendall(header)
         self.net_client.client.sendall(data)
-        self.net_client.state = 'r'
+        self.net_client.state = "r"

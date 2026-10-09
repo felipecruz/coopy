@@ -2,37 +2,37 @@ import pickle
 
 from tests.domain import Wiki
 
+
 def test_prepare_data():
-    from coopy.network.network import prepare_data
-    from coopy.foundation import RecordClock
-    from coopy.utils import inject
     import zlib
 
+    from coopy.foundation import RecordClock
+    from coopy.network.network import prepare_data
+    from coopy.utils import inject
+
     wiki = Wiki()
-    inject(wiki, '_clock', RecordClock())
-    wiki.create_page('test', 'test content', None)
+    inject(wiki, "_clock", RecordClock())
+    wiki.create_page("test", "test content", None)
 
     (header, compressed_data) = prepare_data(wiki)
 
     copy_wiki = pickle.loads(zlib.decompress(compressed_data))
 
-    assert copy_wiki.get_page('test').id == 'test'
-    assert copy_wiki.get_page('test').content == 'test content'
+    assert copy_wiki.get_page("test").id == "test"
+    assert copy_wiki.get_page("test").content == "test content"
+
 
 def test_prepare_action():
+    import datetime
+    import zlib
+
     from coopy.foundation import Action
     from coopy.network.network import prepare_data
-    import zlib
-    import datetime
 
     args = []
     kwargs = {}
 
-    action = Action('caller_id',
-                    'test',
-                    datetime.datetime.now(),
-                    args,
-                    kwargs)
+    action = Action("caller_id", "test", datetime.datetime.now(), args, kwargs)
 
     (header, compressed_data) = prepare_data(action)
 

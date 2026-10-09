@@ -1,47 +1,45 @@
-from __future__ import annotations
-
-'''
+"""
 Created on Dec 6, 2011
 
 @author: felipe j. cruz
-'''
+"""
+
+from __future__ import annotations
+
 __author__ = "Felipe Cruz <felipecruz@gmail.com>"
 __license__ = "BSD"
 
-from typing import Any, Generic, Literal, TypeVar, cast, overload
-
+import logging
+import math
+import os
+import threading
+import time
+import warnings
+from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
-import warnings
-import math
+from typing import Any, Generic, Literal, TypeVar, cast, overload
 
+from coopy import __version__ as __version__
+from coopy import fileutils
 from coopy.error import ConfigurationError, LifecycleError, ReplicationError
-
-import os
-import time
-import logging
-import threading
-
-from logging.handlers import RotatingFileHandler
-from datetime import datetime
-
-from coopy import __version__, fileutils
-from coopy.foundation import Action, RecordClock, Publisher
+from coopy.foundation import Action, Publisher, RecordClock
+from coopy.integrity import IDENTITY_FILE, Integrity, validate_secret
 from coopy.journal import DiskJournal
-from coopy.integrity import Integrity, IDENTITY_FILE, validate_secret
-from coopy.restore import recover, RecoveryResult, RecoveryReport
-from coopy.serialization import Serializer, ActionSchemas
-from coopy.snapshot import SnapshotManager, SnapshotTimer, SnapshotJob, fork_supported
-from coopy.utils import method_or_none, action_check, inject
+from coopy.network.default_select import CopyNet, CopyNetSlave
+from coopy.restore import RecoveryReport, RecoveryResult, recover
+from coopy.serialization import ActionSchemas, Serializer
+from coopy.snapshot import SnapshotJob, SnapshotManager, SnapshotTimer, fork_supported
+from coopy.utils import action_check, inject, method_or_none
 from coopy.validation import validate_system
 
-from coopy.network.default_select import CopyNet, CopyNetSlave
-
-CORE_LOG_PREFIX = '[CORE] '
-DEFAULT_PASSWORD = b'copynet'
+CORE_LOG_PREFIX = "[CORE] "
+DEFAULT_PASSWORD = b"copynet"
 
 logger = logging.getLogger("coopy")
 logger.addHandler(logging.NullHandler())
+
 
 def logging_config(basedir: PathLike = "./") -> None:
     log_file_path = os.path.abspath(os.path.join(basedir, "coopy.log"))
@@ -50,93 +48,134 @@ def logging_config(basedir: PathLike = "./") -> None:
 
     # avoid duplicated log lines when called more than once
     for handler in result.handlers:
-        if getattr(handler, 'baseFilename', None) == log_file_path:
+        if getattr(handler, "baseFilename", None) == log_file_path:
             return
 
     handler = RotatingFileHandler(log_file_path, "a", 1000000, 10)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s ' \
-                                 '- %(message)s', '%a, %d %b %Y %H:%M:%S')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", "%a, %d %b %Y %H:%M:%S"
+    )
     handler.setFormatter(formatter)
     result.addHandler(handler)
+
 
 def _to_password(password: str | bytes | None) -> bytes:
     if password is None:
         return DEFAULT_PASSWORD
     if isinstance(password, str):
-        return password.encode('utf-8')
+        return password.encode("utf-8")
     return password
 
 
 T = TypeVar("T")
 PathLike = str | os.PathLike[str]
 
-@overload
-def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
-                           recovery: Literal["strict"] = "strict",
-                           durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None,
-                           snapshot_compression: str | None = None,
-                           group_commit_delay: float = 0.0,
-                           serializer: Serializer | None = None,
-                           schemas: ActionSchemas | None = None) -> T: ...
 
 @overload
-def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
-                           recovery: Literal["strict"] = "strict",
-                           durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None,
-                           snapshot_compression: str | None = None,
-                           group_commit_delay: float = 0.0,
-                           serializer: Serializer | None = None,
-                           schemas: ActionSchemas | None = None) -> T: ...
+def init_persistent_system(
+    obj: type[T],
+    basedir: PathLike | None = None,
+    *,
+    recovery: Literal["strict"] = "strict",
+    durability: Literal["buffered", "sync"] = "buffered",
+    secret: bytes | None = None,
+    snapshot_compression: str | None = None,
+    group_commit_delay: float = 0.0,
+    serializer: Serializer | None = None,
+    schemas: ActionSchemas | None = None,
+) -> T: ...
+
 
 @overload
-def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
-                           recovery: Literal["salvage"],
-                           durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None,
-                           snapshot_compression: str | None = None,
-                           group_commit_delay: float = 0.0,
-                           serializer: Serializer | None = None,
-                           schemas: ActionSchemas | None = None) -> RecoveryResult[T]: ...
+def init_persistent_system(
+    obj: T,
+    basedir: PathLike | None = None,
+    *,
+    recovery: Literal["strict"] = "strict",
+    durability: Literal["buffered", "sync"] = "buffered",
+    secret: bytes | None = None,
+    snapshot_compression: str | None = None,
+    group_commit_delay: float = 0.0,
+    serializer: Serializer | None = None,
+    schemas: ActionSchemas | None = None,
+) -> T: ...
+
 
 @overload
-def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
-                           recovery: Literal["salvage"],
-                           durability: Literal["buffered", "sync"] = "buffered",
-                           secret: bytes | None = None,
-                           snapshot_compression: str | None = None,
-                           group_commit_delay: float = 0.0,
-                           serializer: Serializer | None = None,
-                           schemas: ActionSchemas | None = None) -> RecoveryResult[T]: ...
+def init_persistent_system(
+    obj: type[T],
+    basedir: PathLike | None = None,
+    *,
+    recovery: Literal["salvage"],
+    durability: Literal["buffered", "sync"] = "buffered",
+    secret: bytes | None = None,
+    snapshot_compression: str | None = None,
+    group_commit_delay: float = 0.0,
+    serializer: Serializer | None = None,
+    schemas: ActionSchemas | None = None,
+) -> RecoveryResult[T]: ...
+
 
 @overload
-def init_persistent_system(obj: type[T], basedir: PathLike | None = None, *,
-                           recovery: str, durability: str = "buffered",
-                           secret: bytes | None = None,
-                           snapshot_compression: str | None = None,
-                           group_commit_delay: float = 0.0,
-                           serializer: Serializer | None = None,
-                           schemas: ActionSchemas | None = None) -> T | RecoveryResult[T]: ...
-@overload
-def init_persistent_system(obj: T, basedir: PathLike | None = None, *,
-                           recovery: str, durability: str = "buffered",
-                           secret: bytes | None = None,
-                           snapshot_compression: str | None = None,
-                           group_commit_delay: float = 0.0,
-                           serializer: Serializer | None = None,
-                           schemas: ActionSchemas | None = None) -> T | RecoveryResult[T]: ...
+def init_persistent_system(
+    obj: T,
+    basedir: PathLike | None = None,
+    *,
+    recovery: Literal["salvage"],
+    durability: Literal["buffered", "sync"] = "buffered",
+    secret: bytes | None = None,
+    snapshot_compression: str | None = None,
+    group_commit_delay: float = 0.0,
+    serializer: Serializer | None = None,
+    schemas: ActionSchemas | None = None,
+) -> RecoveryResult[T]: ...
 
-def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recovery: str = "strict",
-                           durability: str = "buffered", secret: bytes | None = None,
-                           snapshot_compression: str | None = None,
-                           group_commit_delay: float = 0.0,
-                           serializer: Serializer | None = None,
-                           schemas: ActionSchemas | None = None) -> Any:
+
+@overload
+def init_persistent_system(
+    obj: type[T],
+    basedir: PathLike | None = None,
+    *,
+    recovery: str,
+    durability: str = "buffered",
+    secret: bytes | None = None,
+    snapshot_compression: str | None = None,
+    group_commit_delay: float = 0.0,
+    serializer: Serializer | None = None,
+    schemas: ActionSchemas | None = None,
+) -> T | RecoveryResult[T]: ...
+@overload
+def init_persistent_system(
+    obj: T,
+    basedir: PathLike | None = None,
+    *,
+    recovery: str,
+    durability: str = "buffered",
+    secret: bytes | None = None,
+    snapshot_compression: str | None = None,
+    group_commit_delay: float = 0.0,
+    serializer: Serializer | None = None,
+    schemas: ActionSchemas | None = None,
+) -> T | RecoveryResult[T]: ...
+
+
+def init_persistent_system(
+    obj: Any,
+    basedir: PathLike | None = None,
+    *,
+    recovery: str = "strict",
+    durability: str = "buffered",
+    secret: bytes | None = None,
+    snapshot_compression: str | None = None,
+    group_commit_delay: float = 0.0,
+    serializer: Serializer | None = None,
+    schemas: ActionSchemas | None = None,
+) -> Any:
     validate_secret(secret)
     if not math.isfinite(group_commit_delay) or group_commit_delay < 0:
         raise ConfigurationError("group_commit_delay must be finite and nonnegative")
     from coopy.compression import validate_compression
+
     validate_compression(snapshot_compression)
     if recovery not in ("strict", "salvage"):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
@@ -145,8 +184,9 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
 
     # a system object is needed in order to coopy work
     if obj is None:
-        raise ConfigurationError(CORE_LOG_PREFIX +
-                "Must input a valid object if there's no snapshot files")
+        raise ConfigurationError(
+            CORE_LOG_PREFIX + "Must input a valid object if there's no snapshot files"
+        )
 
     # if obj is a class, change obj to an insance
     if isinstance(obj, type):
@@ -166,8 +206,10 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
 
     # Salvage inspects existing storage without creating checkpoints/journals.
     if recovery == "salvage":
-        inject(obj, '_clock', RecordClock())
-        return recover(obj, basedir, mode="salvage", secret=secret, serializer=serializer, schemas=schemas)
+        inject(obj, "_clock", RecordClock())
+        return recover(
+            obj, basedir, mode="salvage", secret=secret, serializer=serializer, schemas=schemas
+        )
 
     # check if basedir exists, if not, create it
     try:
@@ -179,29 +221,39 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
 
     # if no snapshot files, create first one with a 'empty' system
     integrity = None
-    new_signed = (secret is not None
-                  and not fileutils.list_snapshot_files(basedir)
-                  and not fileutils.list_log_files(basedir)
-                  and not os.path.exists(os.path.join(basedir, IDENTITY_FILE)))
+    new_signed = (
+        secret is not None
+        and not fileutils.list_snapshot_files(basedir)
+        and not fileutils.list_log_files(basedir)
+        and not os.path.exists(os.path.join(basedir, IDENTITY_FILE))
+    )
     if new_signed:
         assert secret is not None
         integrity = Integrity.open(basedir, secret, create=True, durability=durability)
     if not fileutils.last_snapshot_file(basedir) and (secret is None or new_signed):
         logger.info(CORE_LOG_PREFIX + "No snapshot files..")
-        SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer, compression=snapshot_compression).take_snapshot(obj)
+        SnapshotManager(
+            basedir,
+            durability=durability,
+            integrity=integrity,
+            serializer=serializer,
+            compression=snapshot_compression,
+        ).take_snapshot(obj)
 
     # measure restore time
     start = time.perf_counter()
     logger.info(CORE_LOG_PREFIX + "coopy init....")
 
     # inject clock on system object
-    inject(obj, '_clock', RecordClock())
-    inject(obj, '_system_data_path', system_data_path)
+    inject(obj, "_clock", RecordClock())
+    inject(obj, "_system_data_path", system_data_path)
 
     # RestoreHelper will recover a system state based on snapshots and
     # transations files extracting actions executed previously and
     # re-executing them again
-    result = recover(obj, basedir, mode=recovery, secret=secret, serializer=serializer, schemas=schemas)
+    result = recover(
+        obj, basedir, mode=recovery, secret=secret, serializer=serializer, schemas=schemas
+    )
     obj = result.system
 
     delta = time.perf_counter() - start
@@ -209,23 +261,45 @@ def init_persistent_system(obj: Any, basedir: PathLike | None = None, *, recover
 
     if secret is not None:
         integrity = Integrity.open(basedir, secret)
-    journal = DiskJournal(basedir, system_data_path, durability=durability,
-                          integrity=integrity, serializer=serializer)
+    journal = DiskJournal(
+        basedir, system_data_path, durability=durability, integrity=integrity, serializer=serializer
+    )
     journal.setup()
 
-    snapshot_manager = SnapshotManager(basedir, durability=durability, integrity=integrity, serializer=serializer, compression=snapshot_compression)
+    snapshot_manager = SnapshotManager(
+        basedir,
+        durability=durability,
+        integrity=integrity,
+        serializer=serializer,
+        compression=snapshot_compression,
+    )
 
-    proxy = CoopyProxy(obj, [journal], snapshot_manager=snapshot_manager, schemas=schemas, group_commit_delay=group_commit_delay)
+    proxy = CoopyProxy(
+        obj,
+        [journal],
+        snapshot_manager=snapshot_manager,
+        schemas=schemas,
+        group_commit_delay=group_commit_delay,
+    )
     proxy.recovery_report = result.report
     return proxy
+
 
 def init_system(obj: Any, subscribers: list[Any]) -> CoopyProxy:
     # return a coopy proxy instead of a system instance
     proxy = CoopyProxy(obj, subscribers)
     return proxy
 
-class CoopyProxy():
-    def __init__(self, obj: Any, subscribers: list[Any], snapshot_manager: SnapshotManager | None = None, schemas: ActionSchemas | None = None, group_commit_delay: float = 0.0) -> None:
+
+class CoopyProxy:
+    def __init__(
+        self,
+        obj: Any,
+        subscribers: list[Any],
+        snapshot_manager: SnapshotManager | None = None,
+        schemas: ActionSchemas | None = None,
+        group_commit_delay: float = 0.0,
+    ) -> None:
         self.schemas = schemas if schemas is not None else ActionSchemas()
         self._closed = False
         self.recovery_report = RecoveryReport()
@@ -251,51 +325,70 @@ class CoopyProxy():
         self.snapshot_timer = SnapshotTimer(snapshot_time, control(self))
         self.snapshot_timer.start()
 
-    def start_master(self, port: int = 8012, password: str | bytes | None = None,
-                     ipc: bool = False, host: str = "127.0.0.1") -> None:
-        warnings.warn("start_master is deprecated; use start_primary (removal: v0.9)",
-                      DeprecationWarning, stacklevel=2)
+    def start_master(
+        self,
+        port: int = 8012,
+        password: str | bytes | None = None,
+        ipc: bool = False,
+        host: str = "127.0.0.1",
+    ) -> None:
+        warnings.warn(
+            "start_master is deprecated; use start_primary (removal: v0.9)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         CoopyProxy.start_primary(self, port, password, ipc, host)
 
-    def start_slave(self, host: str, port: int, password: str | bytes | None = None,
-                    ipc: bool = False) -> Any:
-        warnings.warn("start_slave is deprecated; use start_replica (removal: v0.9)",
-                      DeprecationWarning, stacklevel=2)
+    def start_slave(
+        self, host: str, port: int, password: str | bytes | None = None, ipc: bool = False
+    ) -> Any:
+        warnings.warn(
+            "start_slave is deprecated; use start_replica (removal: v0.9)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return CoopyProxy.start_replica(self, host, port, password, ipc)
 
-    def start_primary(self, port: int = 8012, password: str | bytes | None = None, ipc: bool = False,
-                     host: str = '127.0.0.1') -> None:
+    def start_primary(
+        self,
+        port: int = 8012,
+        password: str | bytes | None = None,
+        ipc: bool = False,
+        host: str = "127.0.0.1",
+    ) -> None:
         with self.lock:
             self._check_open()
             if self.slave is not None:
-                raise ReplicationError('Cannot promote a slave to master.')
+                raise ReplicationError("Cannot promote a slave to master.")
             if self.master is not None:
-                raise ReplicationError('Master is already started.')
-            self.server = CopyNet(self.obj,
-                                  host=host,
-                                  port=port,
-                                  password=_to_password(password),
-                                  ipc=ipc,
-                                  lock=self.lock)
+                raise ReplicationError("Master is already started.")
+            self.server = CopyNet(
+                self.obj,
+                host=host,
+                port=port,
+                password=_to_password(password),
+                ipc=ipc,
+                lock=self.lock,
+            )
             self.publisher.register(self.server)
             self.master = self.server
             self.server.start()
 
-    def start_replica(self, host: str, port: int, password: str | bytes | None = None, ipc: bool = False) -> Any:
+    def start_replica(
+        self, host: str, port: int, password: str | bytes | None = None, ipc: bool = False
+    ) -> Any:
         with self.lock:
             self._check_open()
             if self.master is not None:
-                raise ReplicationError('Cannot start a slave on an active master.')
+                raise ReplicationError("Cannot start a slave on an active master.")
             if self.slave is not None and self.slave.is_alive():
-                raise ReplicationError('Slave receiver is already started; close it first.')
+                raise ReplicationError("Slave receiver is already started; close it first.")
             self.server = None
             # Install the read/write guard before attempting network I/O, so
             # even a failed connection leaves an explicitly unsynchronized slave.
-            self.slave = CopyNetSlave(self,
-                                      host=host,
-                                      port=port,
-                                      password=_to_password(password),
-                                      ipc=ipc, connect=False)
+            self.slave = CopyNetSlave(
+                self, host=host, port=port, password=_to_password(password), ipc=ipc, connect=False
+            )
             self.slave._connect()
             self.slave.start()
             return self.slave
@@ -310,23 +403,27 @@ class CoopyProxy():
     def __getattr__(self, name: str) -> Any:
         self._check_open()
         if self.slave and not self.slave.synchronized:
-            raise ReplicationError('Slave is not synchronized with its master.')
+            raise ReplicationError("Slave is not synchronized with its master.")
         domain_method = method_or_none(self.obj, name)
 
         if not domain_method:
             return getattr(self.obj, name)
 
-        (readonly,unlocked,abort_exception) = action_check(domain_method)
+        (readonly, unlocked, abort_exception) = action_check(domain_method)
 
-        #TODO: re-write
-        if not readonly and hasattr(self, 'slave') and self.slave:
-            raise ReplicationError('This is a slave/read-only instance.')
+        # TODO: re-write
+        if not readonly and hasattr(self, "slave") and self.slave:
+            raise ReplicationError("This is a slave/read-only instance.")
 
         # Grouped synchronous writes must hold the shared condition lock even
         # for an explicitly unlocked domain method.
-        locked = not unlocked or (not readonly and any(
-            isinstance(j, DiskJournal) and j.condition is not None
-            for j in self.publisher.subscribers))
+        locked = not unlocked or (
+            not readonly
+            and any(
+                isinstance(j, DiskJournal) and j.condition is not None
+                for j in self.publisher.subscribers
+            )
+        )
 
         def method(*args: Any, **kwargs: Any) -> Any:
             exception = None
@@ -336,19 +433,15 @@ class CoopyProxy():
 
                 self._check_open()
                 if self.slave and not self.slave.synchronized:
-                    raise ReplicationError('Slave is not synchronized with its master.')
+                    raise ReplicationError("Slave is not synchronized with its master.")
                 if self.slave and not readonly:
-                    raise ReplicationError('This is a slave/read-only instance.')
+                    raise ReplicationError("This is a slave/read-only instance.")
 
-                #record all calls to clock.now()
+                # record all calls to clock.now()
                 self.obj._clock = RecordClock()
 
                 thread_ident = threading.get_ident()
-                action = Action(thread_ident,
-                                name,
-                                datetime.now(),
-                                args,
-                                kwargs)
+                action = Action(thread_ident, name, datetime.now(), args, kwargs)
                 action.schema_version = self.schemas.version(name)
                 system = None
                 if not readonly:
@@ -357,15 +450,14 @@ class CoopyProxy():
                 try:
                     system = action.execute_action(self.obj)
                 except Exception as e:
-                    logger.debug(CORE_LOG_PREFIX + 'Error: ' + str(e))
+                    logger.debug(CORE_LOG_PREFIX + "Error: " + str(e))
                     if abort_exception:
-                        logger.debug(CORE_LOG_PREFIX +
-                                'Aborting action' + str(action))
+                        logger.debug(CORE_LOG_PREFIX + "Aborting action" + str(action))
                     if not abort_exception:
                         self.publisher.publish_exception(action)
                     exception = e
 
-                #restore clock
+                # restore clock
                 action.results = self.obj._clock.results
                 # lets restore tell expected failures from divergences
                 action.raised = exception is not None
@@ -386,16 +478,21 @@ class CoopyProxy():
                 raise exception
 
             return system
+
         return method
 
     def basedir_abspath(self) -> list[str]:
-        disk_journals = (journal for journal in self.publisher.subscribers
-                                             if hasattr(journal, 'basedir'))
-        return [os.path.join(os.path.abspath(os.getcwd()), journal.basedir)
-                for journal in disk_journals]
+        disk_journals = (
+            journal for journal in self.publisher.subscribers if hasattr(journal, "basedir")
+        )
+        return [
+            os.path.join(os.path.abspath(os.getcwd()), journal.basedir) for journal in disk_journals
+        ]
 
-    def take_snapshot(self, *, mode: str = 'blocking', fork_safe: bool = False) -> SnapshotJob | None:
-        if mode not in ('blocking', 'fork'):
+    def take_snapshot(
+        self, *, mode: str = "blocking", fork_safe: bool = False
+    ) -> SnapshotJob | None:
+        if mode not in ("blocking", "fork"):
             raise ConfigurationError("snapshot mode must be 'blocking' or 'fork'")
         slave = self.slave
         if slave:
@@ -405,26 +502,31 @@ class CoopyProxy():
             try:
                 self._check_open()
                 if self._snapshot_job is not None and not self._snapshot_job.done:
-                    raise LifecycleError('Call snapshot_job.wait() before another snapshot')
+                    raise LifecycleError("Call snapshot_job.wait() before another snapshot")
                 if slave and not slave.synchronized:
-                    raise ReplicationError('Cannot snapshot an unsynchronized slave.')
+                    raise ReplicationError("Cannot snapshot an unsynchronized slave.")
                 if self.snapshot_manager:
                     for journal in self.publisher.subscribers:
                         if isinstance(journal, DiskJournal):
                             journal.check_writable()
+
                     def advance_journals(destination: str) -> None:
                         for journal in self.publisher.subscribers:
                             if isinstance(journal, DiskJournal):
                                 journal.checkpoint(destination)
-                    if mode == 'fork':
+
+                    if mode == "fork":
                         if fork_supported(fork_safe) and not self.master and not slave:
                             self._snapshot_job = self.snapshot_manager.start_fork(
-                                self.obj, advance_journals)
+                                self.obj, advance_journals
+                            )
                             return self._snapshot_job
-                        warnings.warn('Fork snapshot unavailable or not declared safe; using blocking snapshot',
-                                      RuntimeWarning, stacklevel=2)
-                    self.snapshot_manager.take_snapshot(
-                        self.obj, before_publish=advance_journals)
+                        warnings.warn(
+                            "Fork snapshot unavailable or not declared safe; using blocking snapshot",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+                    self.snapshot_manager.take_snapshot(self.obj, before_publish=advance_journals)
             finally:
                 self.lock.release()
         finally:
@@ -440,8 +542,12 @@ class CoopyProxy():
         self._check_open()
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None,
-                 exc: BaseException | None, traceback: TracebackType | None) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         try:
             CoopyProxy.close(self)
         except Exception:
@@ -490,10 +596,19 @@ class CoopyProxy():
             # Retain the slave role and guard until a fresh bootstrap succeeds.
 
 
-_CONTROL_NAMES = frozenset({"take_snapshot", "close", "shutdown",
-                            "start_snapshot_manager", "start_master", "start_slave",
-                            "start_primary", "start_replica",
-                            "basedir_abspath"})
+_CONTROL_NAMES = frozenset(
+    {
+        "take_snapshot",
+        "close",
+        "shutdown",
+        "start_snapshot_manager",
+        "start_master",
+        "start_slave",
+        "start_primary",
+        "start_replica",
+        "basedir_abspath",
+    }
+)
 
 
 class PersistenceControl(Generic[T]):
@@ -505,15 +620,21 @@ class PersistenceControl(Generic[T]):
     def __enter__(self) -> T:
         return cast(T, self._proxy.__enter__())
 
-    def __exit__(self, exc_type: type[BaseException] | None,
-                 exc: BaseException | None, traceback: TracebackType | None) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self._proxy.__exit__(exc_type, exc, traceback)
 
     @property
     def recovery_report(self) -> RecoveryReport:
         return self._proxy.recovery_report
 
-    def take_snapshot(self, *, mode: str = 'blocking', fork_safe: bool = False) -> SnapshotJob | None:
+    def take_snapshot(
+        self, *, mode: str = "blocking", fork_safe: bool = False
+    ) -> SnapshotJob | None:
         return CoopyProxy.take_snapshot(self._proxy, mode=mode, fork_safe=fork_safe)
 
     def close(self) -> None:
@@ -525,24 +646,42 @@ class PersistenceControl(Generic[T]):
     def start_snapshot_manager(self, snapshot_time: float) -> None:
         CoopyProxy.start_snapshot_manager(self._proxy, snapshot_time)
 
-    def start_master(self, port: int = 8012, password: str | bytes | None = None,
-                     ipc: bool = False, host: str = "127.0.0.1") -> None:
-        warnings.warn("start_master is deprecated; use start_primary (removal: v0.9)",
-                      DeprecationWarning, stacklevel=2)
+    def start_master(
+        self,
+        port: int = 8012,
+        password: str | bytes | None = None,
+        ipc: bool = False,
+        host: str = "127.0.0.1",
+    ) -> None:
+        warnings.warn(
+            "start_master is deprecated; use start_primary (removal: v0.9)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         PersistenceControl.start_primary(self, port, password, ipc, host)
 
-    def start_slave(self, host: str, port: int, password: str | bytes | None = None,
-                    ipc: bool = False) -> Any:
-        warnings.warn("start_slave is deprecated; use start_replica (removal: v0.9)",
-                      DeprecationWarning, stacklevel=2)
+    def start_slave(
+        self, host: str, port: int, password: str | bytes | None = None, ipc: bool = False
+    ) -> Any:
+        warnings.warn(
+            "start_slave is deprecated; use start_replica (removal: v0.9)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return PersistenceControl.start_replica(self, host, port, password, ipc)
 
-    def start_primary(self, port: int = 8012, password: str | bytes | None = None,
-                     ipc: bool = False, host: str = "127.0.0.1") -> None:
+    def start_primary(
+        self,
+        port: int = 8012,
+        password: str | bytes | None = None,
+        ipc: bool = False,
+        host: str = "127.0.0.1",
+    ) -> None:
         CoopyProxy.start_primary(self._proxy, port, password, ipc, host)
 
-    def start_replica(self, host: str, port: int, password: str | bytes | None = None,
-                    ipc: bool = False) -> Any:
+    def start_replica(
+        self, host: str, port: int, password: str | bytes | None = None, ipc: bool = False
+    ) -> Any:
         return CoopyProxy.start_replica(self._proxy, host, port, password, ipc)
 
     def basedir_abspath(self) -> list[str]:

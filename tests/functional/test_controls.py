@@ -1,6 +1,8 @@
 import pytest
+
 import coopy
 from coopy.decorators import readonly
+
 
 class Collisions:
     def __init__(self):
@@ -23,11 +25,11 @@ class Collisions:
 
 def test_domain_controls_and_replay(tmp_path):
     system = coopy.init_persistent_system(Collisions, str(tmp_path))
-    assert system.close('domain') == 1
-    system.shutdown('shutdown')
-    system.take_snapshot('snapshot')
+    assert system.close("domain") == 1
+    system.shutdown("shutdown")
+    system.take_snapshot("snapshot")
     coopy.control(system).take_snapshot()
-    system.close('after')
+    system.close("after")
     coopy.control(system).close()
     restored = coopy.init_persistent_system(Collisions(), str(tmp_path))
     assert restored.count() == 4
@@ -48,6 +50,6 @@ def test_timer_uses_control_even_with_domain_collision(tmp_path):
 def test_salvage_has_no_writable_control(tmp_path):
     system = coopy.init_persistent_system(Collisions, str(tmp_path))
     coopy.control(system).close()
-    result = coopy.init_persistent_system(Collisions, str(tmp_path), recovery='salvage')
+    result = coopy.init_persistent_system(Collisions, str(tmp_path), recovery="salvage")
     with pytest.raises(TypeError):
         coopy.control(result)

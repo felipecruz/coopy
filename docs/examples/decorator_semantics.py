@@ -1,4 +1,5 @@
 """Run with: python docs/examples/decorator_semantics.py"""
+
 from tempfile import TemporaryDirectory
 
 from coopy.base import init_persistent_system
@@ -28,8 +29,10 @@ def demonstrate(directory):
     ledger = init_persistent_system(Ledger, basedir=directory)
     try:
         ledger.add_or_abort("success")
-        for method, value in ((ledger.add, "ordinary failure"),
-                              (ledger.add_or_abort, "omitted failure")):
+        for method, value in (
+            (ledger.add, "ordinary failure"),
+            (ledger.add_or_abort, "omitted failure"),
+        ):
             try:
                 method(value, fail=True)
             except ValueError:

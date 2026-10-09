@@ -1,8 +1,10 @@
 """Run with: python docs/examples/persistence.py"""
+
 from tempfile import TemporaryDirectory
 
-from coopy.base import init_persistent_system
 from wiki import Wiki
+
+from coopy.base import init_persistent_system
 
 
 def round_trip(directory):

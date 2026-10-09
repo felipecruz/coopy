@@ -1,14 +1,16 @@
 """Run unchanged on GIL and free-threaded builds: require coherent queries."""
-from concurrent.futures import ThreadPoolExecutor
+
 import os
 import sys
 import sysconfig
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from coopy import control, open as open_persistent
+from coopy import control
+from coopy import open as open_persistent
 from coopy.decorators import readonly
 
 
@@ -29,16 +31,17 @@ class Ledger:
 
 
 def test_ci_really_has_no_gil():
-    if os.environ.get('COOPY_REQUIRE_NO_GIL') != '1':
-        pytest.skip('GIL-disabled assertion is required in free-threaded CI')
-    assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1
+    if os.environ.get("COOPY_REQUIRE_NO_GIL") != "1":
+        pytest.skip("GIL-disabled assertion is required in free-threaded CI")
+    assert sysconfig.get_config_var("Py_GIL_DISABLED") == 1
     assert not sys._is_gil_enabled()
 
 
-@pytest.mark.parametrize('delay', [0, 0.001])
+@pytest.mark.parametrize("delay", [0, 0.001])
 def test_concurrent_readers_writers_and_checkpoints(tmp_path, delay):
-    with control(open_persistent(Ledger, tmp_path, durability='sync',
-                                group_commit_delay=delay)) as ledger:
+    with control(
+        open_persistent(Ledger, tmp_path, durability="sync", group_commit_delay=delay)
+    ) as ledger:
         barrier = threading.Barrier(7)
         # Writers cannot finish until every reader has queried live state.
         readers_ready = threading.Barrier(6)

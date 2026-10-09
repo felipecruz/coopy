@@ -1,14 +1,14 @@
-from pathlib import Path
-import pickle
-import unittest
-
 import os
+import pickle
 import shutil
+import unittest
+from pathlib import Path
 
 from coopy.journal import DiskJournal, PersistenceError
 
-JOURNAL_DIR = 'journal_test/'
+JOURNAL_DIR = "journal_test/"
 CURRENT_DIR = os.getcwd()
+
 
 class TestJournal(unittest.TestCase):
     def setUp(self):
@@ -19,36 +19,33 @@ class TestJournal(unittest.TestCase):
 
     def test_current_journal_file(self):
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
-        expected_file_name = '%s%s' % (JOURNAL_DIR,
-                                      'transaction_000000000000002.log')
+        expected_file_name = "%s%s" % (JOURNAL_DIR, "transaction_000000000000002.log")
 
-        self.assertEqual(expected_file_name,
-                          journal.current_journal_file(JOURNAL_DIR).name)
+        self.assertEqual(expected_file_name, journal.current_journal_file(JOURNAL_DIR).name)
 
         # test hack! - create next file
-        new_file_name = expected_file_name.replace('2','3')
-        open(new_file_name, 'wt').close()
+        new_file_name = expected_file_name.replace("2", "3")
+        open(new_file_name, "wt").close()
 
-        self.assertEqual(new_file_name.replace('3', '4'),
-                          journal.current_journal_file(JOURNAL_DIR).name)
+        self.assertEqual(
+            new_file_name.replace("3", "4"), journal.current_journal_file(JOURNAL_DIR).name
+        )
 
     def test_receive(self):
         import pickle
+
         class Message(object):
             def __init__(self, value):
                 self.value = value
+
             def __getstate__(self):
                 raise pickle.PicklingError()
 
-        message = Message('test message')
+        message = Message("test message")
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
         journal.setup()
 
-        self.assertRaises(
-                            PersistenceError,
-                            journal.receive,
-                            (message)
-                          )
+        self.assertRaises(PersistenceError, journal.receive, (message))
 
     def test_close(self):
         journal = DiskJournal(JOURNAL_DIR, CURRENT_DIR)
@@ -65,12 +62,9 @@ class TestJournal(unittest.TestCase):
         self.assertEqual(Path(JOURNAL_DIR), journal.basedir)
 
         journal.setup()
-        expected_file_name = '%s%s' % (JOURNAL_DIR,
-                                      'transaction_000000000000002.log')
-        self.assertEqual(expected_file_name,
-                          journal.file.name)
+        expected_file_name = "%s%s" % (JOURNAL_DIR, "transaction_000000000000002.log")
+        self.assertEqual(expected_file_name, journal.file.name)
 
         # test hack
-        pickle_class = pickle.Pickler(open(expected_file_name, 'rb'))\
-                                                            .__class__
+        pickle_class = pickle.Pickler(open(expected_file_name, "rb")).__class__
         self.assertTrue(isinstance(journal.pickler, pickle_class))

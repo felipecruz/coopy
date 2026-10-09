@@ -1,9 +1,11 @@
 import unittest
 
+
 class TestAction(unittest.TestCase):
     def test_execute_action(self):
-        from coopy.foundation import Action, RecordClock
         from datetime import datetime
+
+        from coopy.foundation import Action, RecordClock
         from coopy.utils import inject
 
         class Dummy(object):
@@ -19,40 +21,30 @@ class TestAction(unittest.TestCase):
             def business_method_kwargs(self, keyword_arg="test"):
                 self.exec_count += 3
 
-
         dummy = Dummy()
         # force clock into dummy
-        inject(dummy, '_clock', RecordClock())
+        inject(dummy, "_clock", RecordClock())
 
-        action = Action('caller_id',
-                        'business_method_noargs',
-                        datetime.now(),
-                        (),
-                        {})
+        action = Action("caller_id", "business_method_noargs", datetime.now(), (), {})
 
         action.execute_action(dummy)
 
         self.assertEqual(1, dummy.exec_count)
 
-        action = Action('caller_id',
-                        'business_method_args',
-                        datetime.now(),
-                        ([1]),
-                        {})
+        action = Action("caller_id", "business_method_args", datetime.now(), ([1]), {})
 
         action.execute_action(dummy)
 
         self.assertEqual(3, dummy.exec_count)
 
-        action = Action('caller_id',
-                        'business_method_kwargs',
-                        datetime.now(),
-                        (),
-                        {'keyword_arg' : 'test'})
+        action = Action(
+            "caller_id", "business_method_kwargs", datetime.now(), (), {"keyword_arg": "test"}
+        )
 
         action.execute_action(dummy)
 
         self.assertEqual(6, dummy.exec_count)
+
 
 class TestRecordClock(unittest.TestCase):
     def test_record_clock(self):
@@ -73,10 +65,12 @@ class TestRecordClock(unittest.TestCase):
         utcnow = clock.utcnow()
         self.assertEqual(utcnow, clock.results[3])
 
+
 class TestRestoreClock(unittest.TestCase):
     def test_restore_clock(self):
+        from datetime import date, datetime, timezone
+
         from coopy.foundation import RestoreClock
-        from datetime import datetime, date, timezone
 
         dt1 = datetime.now()
         dt2 = date.today()
@@ -87,6 +81,7 @@ class TestRestoreClock(unittest.TestCase):
         self.assertEqual(dt1, clock.now())
         self.assertEqual(dt2, clock.today())
         self.assertEqual(dt3, clock.utcnow())
+
 
 if __name__ == "__main__":
     unittest.main()

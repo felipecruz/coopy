@@ -1,2 +1,3 @@
 pytest
 pytest-cov
+hypothesis>=6.100,<7

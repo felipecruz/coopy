@@ -1,8 +1,8 @@
+from datetime import date, datetime, timezone
 from typing import Any, Callable
 
-from datetime import datetime, date, timezone
+from .validation import DATE_FUNCS, DATETIME_FUNCS
 
-from .validation import DATETIME_FUNCS, DATE_FUNCS
 
 class RecordClock(object):
     def __init__(self) -> None:
@@ -31,9 +31,10 @@ class RecordClock(object):
         self.results.append(dt)
         return dt
 
+
 class RestoreClock(object):
     def __init__(self, results: list[date]) -> None:
-        #reverse order!
+        # reverse order!
         self.results = results[::-1]
 
     def __getattr__(self, name: str) -> Any:
@@ -45,20 +46,24 @@ class RestoreClock(object):
         last_element = self.results[-1]
         if method_name in DATETIME_FUNCS:
             if not isinstance(last_element, datetime):
-                raise TypeError("This call returns a %s" %
-                                                         (datetime.__class__))
+                raise TypeError("This call returns a %s" % (datetime.__class__))
             return lambda: self.results.pop()
         elif method_name in DATE_FUNCS:
             if not isinstance(last_element, date):
-                raise TypeError("This call returns a %s" %
-                                                         (date.__class__))
+                raise TypeError("This call returns a %s" % (date.__class__))
             return lambda: self.results.pop()
         return None
 
 
 class Action(object):
-    def __init__(self, caller_id: int, action: str, timestamp: datetime,
-                 args: tuple[Any, ...] | list[Any], kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        caller_id: int,
+        action: str,
+        timestamp: datetime,
+        args: tuple[Any, ...] | list[Any],
+        kwargs: dict[str, Any],
+    ) -> None:
         self.schema_version = 1
         self.caller_id = caller_id
         self.action = action
@@ -71,13 +76,13 @@ class Action(object):
         self.timestamp = timestamp
 
     def __str__(self) -> str:
-        return "action %s \ncaller_id %s \nargs %s" % \
-                (self.action, str(self.caller_id), self.args)
+        return "action %s \ncaller_id %s \nargs %s" % (self.action, str(self.caller_id), self.args)
 
     def execute_action(self, system: Any) -> Any:
-        #TODO not reliable
+        # TODO not reliable
         method = getattr(system, self.action)
         return method(*self.args, **self.kwargs)
+
 
 class Publisher:
     def __init__(self, subscribers: list[Any]) -> None:

@@ -2,6 +2,12 @@ test: clean
 	python -m pytest --verbose
 coverage:
 	python -m pytest --cov-report html --cov coopy
+lint:
+	python -m ruff check .
+	python -m ruff format --check .
+format:
+	python -m ruff check --fix .
+	python -m ruff format .
 clean:
 	@rm -rf build/
 	@rm -rf htmlcov/

@@ -6,14 +6,14 @@ Each installed artifact writes and restores state in separate Python processes.
 """
 
 import email.policy
-from email.parser import Parser
-from pathlib import Path
 import subprocess
 import sys
 import tarfile
 import tempfile
 import venv
 import zipfile
+from email.parser import Parser
+from pathlib import Path
 
 
 class Notebook:
@@ -64,8 +64,11 @@ def check_distributions():
 
     with tarfile.open(sdists[0]) as archive:
         # Check the top-level metadata, not the egg-info copy.
-        metadata_files = [name for name in archive.getnames()
-                          if name.count("/") == 1 and name.endswith("/PKG-INFO")]
+        metadata_files = [
+            name
+            for name in archive.getnames()
+            if name.count("/") == 1 and name.endswith("/PKG-INFO")
+        ]
         assert len(metadata_files) == 1
         metadata_path = metadata_files[0]
         check_metadata(archive.extractfile(metadata_path).read(), readme)
@@ -73,8 +76,9 @@ def check_distributions():
         assert archive.extractfile(readme_path).read() == (root / "README.md").read_bytes()
 
     with zipfile.ZipFile(wheels[0]) as archive:
-        metadata_files = [name for name in archive.namelist()
-                          if name.endswith(".dist-info/METADATA")]
+        metadata_files = [
+            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+        ]
         assert len(metadata_files) == 1
         check_metadata(archive.read(metadata_files[0]), readme)
     print("Both distribution descriptions match README.md", flush=True)
@@ -84,18 +88,30 @@ def check_distributions():
             work = Path(directory)
             environment = work / "venv"
             venv.EnvBuilder(with_pip=True).create(environment)
-            python = environment / ("Scripts/python.exe" if sys.platform == "win32"
-                                    else "bin/python")
+            python = environment / (
+                "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+            )
             subprocess.run(
-                [str(python), "-I", "-m", "pip", "install", "--no-cache-dir",
-                 "--disable-pip-version-check", "--no-deps", str(artifact)],
-                cwd=work, check=True,
+                [
+                    str(python),
+                    "-I",
+                    "-m",
+                    "pip",
+                    "install",
+                    "--no-cache-dir",
+                    "--disable-pip-version-check",
+                    "--no-deps",
+                    str(artifact),
+                ],
+                cwd=work,
+                check=True,
             )
             # A fresh interpreter must recover from disk without any writer state.
             for phase in ("--write-state", "--restore-state"):
                 subprocess.run(
                     [str(python), "-I", str(Path(__file__).resolve()), phase],
-                    cwd=work, check=True,
+                    cwd=work,
+                    check=True,
                 )
             print(f"Installed artifact passed: {artifact.name}", flush=True)
 

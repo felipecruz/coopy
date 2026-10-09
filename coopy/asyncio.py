@@ -1,10 +1,11 @@
 """Async callers for synchronous persistent domains, with one writer thread."""
+
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import Future, ThreadPoolExecutor
 import inspect
 import logging
+from concurrent.futures import Future, ThreadPoolExecutor
 from types import TracebackType
 from typing import Any, Callable, Coroutine, cast
 
@@ -28,8 +29,7 @@ class AsyncPersistent:
     Each instance belongs to one event loop. Domain methods remain synchronous.
     """
 
-    def __init__(self, obj: Any, basedir: PathLike | None = None,
-                 **options: Any) -> None:
+    def __init__(self, obj: Any, basedir: PathLike | None = None, **options: Any) -> None:
         if options.get("recovery", "strict") != "strict":
             raise ConfigurationError("AsyncPersistent requires strict recovery")
         self._obj = obj
@@ -47,8 +47,9 @@ class AsyncPersistent:
             raise LifecycleError("AsyncPersistent belongs to another event loop")
 
     @classmethod
-    async def open(cls, obj: Any, basedir: PathLike | None = None,
-                   **options: Any) -> AsyncPersistent:
+    async def open(
+        cls, obj: Any, basedir: PathLike | None = None, **options: Any
+    ) -> AsyncPersistent:
         """Open without a context; the caller must await ``aclose()``."""
         instance = cls(obj, basedir, **options)
         return await instance.__aenter__()
@@ -60,8 +61,11 @@ class AsyncPersistent:
         self._loop = asyncio.get_running_loop()
         self._state = "opening"
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="coopy-writer")
-        self._opening = self._executor.submit(lambda: cast(
-            CoopyProxy, init_persistent_system(self._obj, self._basedir, **self._options)))
+        self._opening = self._executor.submit(
+            lambda: cast(
+                CoopyProxy, init_persistent_system(self._obj, self._basedir, **self._options)
+            )
+        )
         future = asyncio.wrap_future(self._opening)
         future.add_done_callback(_observe)
         try:
@@ -77,8 +81,12 @@ class AsyncPersistent:
                 logger.exception("Cleanup failed while opening async persistence")
             raise
 
-    async def __aexit__(self, exc_type: type[BaseException] | None,
-                        exc: BaseException | None, traceback: TracebackType | None) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         try:
             await self.aclose()
         except Exception:

@@ -1,13 +1,12 @@
-from pathlib import Path
-
+import logging
 import os
 import re
-import logging
+from pathlib import Path
 
 logger = logging.getLogger("coopy")
 
 DIGITS = 15
-MAX_LOGFILE_SIZE = 1024 * 100 * 10 # 1 MB
+MAX_LOGFILE_SIZE = 1024 * 100 * 10  # 1 MB
 
 LOG_PREFIX = "transaction_"
 LOG_SUFIX = ".log"
@@ -19,6 +18,7 @@ SNAPSHOT_REGEX = re.compile(r"snapshot_(\d{15})\.dat", re.IGNORECASE)
 LOG_REGEX = re.compile(r"transaction_(\d{15})\.log", re.IGNORECASE)
 FILE_REGEX = re.compile(r"(transaction|snapshot)_(\d{15})\..{3}", re.IGNORECASE)
 
+
 def sync_directory(directory: str | os.PathLike[str]) -> None:
     """Persist directory entries on POSIX; propagate unsupported/I/O errors."""
     descriptor = os.open(directory, os.O_RDONLY)
@@ -28,9 +28,10 @@ def sync_directory(directory: str | os.PathLike[str]) -> None:
         os.close(descriptor)
 
 
-class RotateFileWrapper():
-    def __init__(self, file, basedir, system_data_path, max_size=MAX_LOGFILE_SIZE,
-                 durability="buffered"):
+class RotateFileWrapper:
+    def __init__(
+        self, file, basedir, system_data_path, max_size=MAX_LOGFILE_SIZE, durability="buffered"
+    ):
         self.file = file
         self.durability = durability
         self.basedir = Path(basedir)
@@ -52,7 +53,7 @@ class RotateFileWrapper():
     def rotate(self, file_name):
         self.flush()
         # Open first: a failed rotation leaves the old journal writable.
-        new_file = open(file_name, 'xb')
+        new_file = open(file_name, "xb")
         try:
             if self.durability == "sync":
                 sync_directory(os.path.dirname(os.path.abspath(file_name)))
@@ -88,6 +89,7 @@ class RotateFileWrapper():
     def set_pickler(self, pickler):
         self.pickler = pickler
 
+
 def number_as_string(number):
     s_number = str(number)
     return s_number.zfill(DIGITS)
@@ -114,16 +116,18 @@ def list_log_files(basedir):
 def check_files(files):
     if not files:
         return None
-    return files[len(files)-1]
+    return files[len(files) - 1]
 
 
 def last_snapshot_file(basedir):
     files = list_coopy_files(basedir, SNAPSHOT_REGEX)
     return check_files(files)
 
+
 def last_log_file(basedir):
     files = list_coopy_files(basedir, LOG_REGEX)
     return check_files(files)
+
 
 def lastest_snapshot_number(basedir):
     last_file = last_snapshot_file(basedir)
@@ -158,9 +162,9 @@ def next_number(basedir):
     n1 = lastest_log_number(basedir)
     n2 = lastest_snapshot_number(basedir)
     if n1 > n2:
-        return n1+1
+        return n1 + 1
     else:
-        return n2+1
+        return n2 + 1
 
 
 def next_snapshot_file(basedir):
@@ -186,15 +190,17 @@ def last_log_files(basedir):
             file_names.append(str(Path(basedir) / file))
     return file_names
 
+
 def name_to_dir(basedir):
     basedir = os.fspath(basedir)
     if len(basedir) > 0:
-        basedir = basedir.replace('\\','/')
-        if not basedir.endswith('/'):
-            basedir += '/'
+        basedir = basedir.replace("\\", "/")
+        if not basedir.endswith("/"):
+            basedir += "/"
     else:
-        basedir =  './'
+        basedir = "./"
     return basedir
+
 
 def obj_to_dir_name(obj):
     if isinstance(obj, type):

@@ -1,4 +1,5 @@
 """Importable domain shared by the maintained documentation examples."""
+
 from coopy.decorators import abort_exception, readonly
 
 

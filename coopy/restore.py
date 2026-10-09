@@ -1,22 +1,20 @@
 """Strict recovery and explicit, non-writing salvage of serialized storage."""
+
 import copy
 import inspect
-
-from pathlib import Path
-from coopy.error import CoopyError, ConfigurationError
-
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
-
 from dataclasses import dataclass, field
 from io import BytesIO
+from pathlib import Path
 from pickle import Unpickler
+from typing import Generic, TypeVar
 
 from coopy import fileutils
-from coopy.snapshot import SnapshotManager
+from coopy.error import ConfigurationError, CoopyError
 from coopy.foundation import Action, RestoreClock
-from coopy.integrity import Integrity, IntegrityError, IDENTITY_FILE, validate_secret
+from coopy.integrity import IDENTITY_FILE, Integrity, IntegrityError, validate_secret
+from coopy.snapshot import SnapshotManager
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -59,12 +57,14 @@ class RecoveryError(CoopyError, RuntimeError):
     def __init__(self, report):
         self.report = report
         issue = report.stop
-        super().__init__(f"Recovery stopped: {issue.kind} at "
-                         f"{issue.position.file}:{issue.position.offset} "
-                         f"(record {issue.position.record}): {issue.detail}")
+        super().__init__(
+            f"Recovery stopped: {issue.kind} at "
+            f"{issue.position.file}:{issue.position.offset} "
+            f"(record {issue.position.record}): {issue.detail}"
+        )
 
 
-def recover(system, basedir, mode='strict', *, secret=None, serializer=None, schemas=None):
+def recover(system, basedir, mode="strict", *, secret=None, serializer=None, schemas=None):
     """Replay in order, stopping at the first detected defect.
 
     Strict mode raises without returning state. Salvage returns an inspection
@@ -72,9 +72,10 @@ def recover(system, basedir, mode='strict', *, secret=None, serializer=None, sch
     that result's state; the report marks it and excludes it from replayed.
     """
     from coopy.serialization import ActionSchemas
+
     schemas = schemas if schemas is not None else ActionSchemas()
     validate_secret(secret)
-    if mode not in ('strict', 'salvage'):
+    if mode not in ("strict", "salvage"):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
     basedir = Path(basedir)
     current_clock = system._clock
@@ -83,7 +84,7 @@ def recover(system, basedir, mode='strict', *, secret=None, serializer=None, sch
 
     def stop(position, kind, error, changed=False):
         report.stop = RecoveryIssue(position, kind, str(error), changed)
-        if mode == 'strict':
+        if mode == "strict":
             raise RecoveryError(report) from error
         return RecoveryResult(recovered, report)
 
@@ -96,18 +97,18 @@ def recover(system, basedir, mode='strict', *, secret=None, serializer=None, sch
         try:
             integrity = Integrity.open(basedir, secret)
             report.checkpoint = fileutils.last_snapshot_file(basedir)
-            position = RecoveryPosition(str(basedir / (report.checkpoint or '')), 0, 0)
+            position = RecoveryPosition(str(basedir / (report.checkpoint or "")), 0, 0)
             if report.checkpoint is None:
-                raise IntegrityError('Missing signed checkpoint')
-            with open(position.file, 'rb') as file:
+                raise IntegrityError("Missing signed checkpoint")
+            with open(position.file, "rb") as file:
                 snapshot = BytesIO(file.read())
             snapshot_payload = integrity.read(snapshot, position.file)
             if snapshot.read(1):
-                raise IntegrityError('Trailing bytes after signed snapshot')
+                raise IntegrityError("Trailing bytes after signed snapshot")
             files = fileutils.last_log_files(basedir) or []
             for filename in files:
                 position = RecoveryPosition(filename, 0, 1)
-                with open(filename, 'rb') as file:
+                with open(filename, "rb") as file:
                     data = file.read()
                 journal = BytesIO(data)
                 record = 0
@@ -117,32 +118,43 @@ def recover(system, basedir, mode='strict', *, secret=None, serializer=None, sch
                     record += 1
                 verified_journals[filename] = data
         except Exception as error:
-            return stop(position, 'verification', error)
+            return stop(position, "verification", error)
 
     try:
         if integrity is None:
             report.checkpoint = fileutils.last_snapshot_file(basedir)
             recovered = SnapshotManager(basedir, serializer=serializer).recover_snapshot()
         else:
-            recovered = SnapshotManager(basedir, serializer=serializer).load_payload(snapshot_payload)
+            recovered = SnapshotManager(basedir, serializer=serializer).load_payload(
+                snapshot_payload
+            )
         if recovered is None:
-            raise ValueError('No usable checkpoint found')
+            raise ValueError("No usable checkpoint found")
     except Exception as error:
-        return stop(RecoveryPosition(str(basedir / (report.checkpoint or '')), 0, 0),
-                    'checkpoint', error)
+        return stop(
+            RecoveryPosition(str(basedir / (report.checkpoint or "")), 0, 0), "checkpoint", error
+        )
 
     try:
         try:
-            files = (list(verified_journals) if integrity is not None
-                     else fileutils.last_log_files(basedir) or [])
+            files = (
+                list(verified_journals)
+                if integrity is not None
+                else fileutils.last_log_files(basedir) or []
+            )
         except Exception as error:
-            return stop(RecoveryPosition(str(basedir), 0, 0), 'read', error)
+            return stop(RecoveryPosition(str(basedir), 0, 0), "read", error)
         for filename in files:
             position = RecoveryPosition(filename, 0, 1)
             try:
-                with (BytesIO(verified_journals[filename]) if integrity is not None
-                      else open(filename, 'rb')) as journal:
-                    unpickler = Unpickler(journal) if serializer is None else serializer.reader(journal)
+                with (
+                    BytesIO(verified_journals[filename])
+                    if integrity is not None
+                    else open(filename, "rb")
+                ) as journal:
+                    unpickler = (
+                        Unpickler(journal) if serializer is None else serializer.reader(journal)
+                    )
                     record = 0
                     while True:
                         position = RecoveryPosition(filename, journal.tell(), record + 1)
@@ -159,52 +171,64 @@ def recover(system, basedir, mode='strict', *, secret=None, serializer=None, sch
                                 action = unpickler.load()
                             else:
                                 payload = integrity.read(journal, filename)
-                                action = (Unpickler(BytesIO(payload)).load() if serializer is None
-                                          else serializer.loads(payload))
+                                action = (
+                                    Unpickler(BytesIO(payload)).load()
+                                    if serializer is None
+                                    else serializer.loads(payload)
+                                )
                             if not isinstance(action, Action):
-                                raise ValueError('Journal record is not an Action')
+                                raise ValueError("Journal record is not an Action")
                             if not isinstance(action.action, str):
-                                raise ValueError('Action name is not a string')
-                            if not isinstance(action.args, (tuple, list)) or not isinstance(action.kwargs, dict):
-                                raise ValueError('Invalid action arguments')
+                                raise ValueError("Action name is not a string")
+                            if not isinstance(action.args, (tuple, list)) or not isinstance(
+                                action.kwargs, dict
+                            ):
+                                raise ValueError("Invalid action arguments")
                             # Do not mutate memoized legacy records while migrating.
                             action = copy.copy(action)
                             upgraded = schemas.upgrade(action)
                             if upgraded:
-                                inspect.signature(getattr(recovered, action.action)).bind(*action.args, **action.kwargs)
-                            raised = getattr(action, 'raised', None)
+                                inspect.signature(getattr(recovered, action.action)).bind(
+                                    *action.args, **action.kwargs
+                                )
+                            raised = getattr(action, "raised", None)
                             if raised is not None and type(raised) is not bool:
-                                raise ValueError('Invalid action outcome metadata')
+                                raise ValueError("Invalid action outcome metadata")
                         except Exception as error:
-                            return stop(position, 'decode', error)
+                            return stop(position, "decode", error)
                         record += 1
-                        position = RecoveryPosition(filename, position.offset, record,
-                                                    action.action)
+                        position = RecoveryPosition(
+                            filename, position.offset, record, action.action
+                        )
                         if raised is None:
                             report.legacy_actions.append(position)
                         # A missing method is not an expected domain exception.
                         try:
                             method = getattr(recovered, action.action)
                             if not callable(method):
-                                raise TypeError('Action method is not callable')
-                            recovered._clock = RestoreClock(getattr(action, 'results', None) or [])
+                                raise TypeError("Action method is not callable")
+                            recovered._clock = RestoreClock(getattr(action, "results", None) or [])
                         except Exception as error:
-                            return stop(position, 'method', error)
+                            return stop(position, "method", error)
                         try:
                             method(*action.args, **action.kwargs)
                         except Exception as error:
                             if raised is not True:
-                                return stop(position, 'outcome', error, changed=True)
+                                return stop(position, "outcome", error, changed=True)
                             report.expected_failures += 1
                         else:
                             if raised is True:
-                                return stop(position, 'outcome', ValueError(
-                                    'Originally failing action now succeeded'), changed=True)
+                                return stop(
+                                    position,
+                                    "outcome",
+                                    ValueError("Originally failing action now succeeded"),
+                                    changed=True,
+                                )
                         report.replayed += 1
             except RecoveryError:
                 raise
             except Exception as error:
-                return stop(position, 'read', error)
+                return stop(position, "read", error)
         return RecoveryResult(recovered, report)
     finally:
         recovered._clock = current_clock

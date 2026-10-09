@@ -3,13 +3,16 @@ from typing import Callable, ParamSpec, TypeVar
 P = ParamSpec("P")
 R = TypeVar("R")
 
+
 def unlocked(func: Callable[P, R]) -> Callable[P, R]:
     setattr(func, "__unlocked", True)
     return func
 
+
 def readonly(func: Callable[P, R]) -> Callable[P, R]:
     setattr(func, "__readonly", True)
     return func
+
 
 def abort_exception(func: Callable[P, R]) -> Callable[P, R]:
     """Skip journaling failed calls; successful non-readonly calls are recorded.

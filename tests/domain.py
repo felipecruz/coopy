@@ -1,4 +1,5 @@
-from coopy.decorators import readonly, abort_exception, unlocked
+from coopy.decorators import abort_exception, readonly, unlocked
+
 
 class WikiPage(object):
     def __init__(self, id, content, last_modified, parent=None):
@@ -8,6 +9,7 @@ class WikiPage(object):
         self.last_modified = last_modified
         self.parent = parent
 
+
 class Wiki(object):
     def __init__(self):
         self.pages = {}
@@ -15,7 +17,7 @@ class Wiki(object):
     def create_page(self, id, content, parent):
         page = WikiPage(id, content, self._clock.now(), parent)
 
-        if not id in self.pages:
+        if id not in self.pages:
             self.pages[id] = page
         else:
             self.update_page(id, content, parent)
@@ -35,7 +37,6 @@ class Wiki(object):
         page = self.add_history(old_page, page)
         self.pages[page_id] = page
 
-
     def add_history(self, old_page, page):
         page.history = old_page.history
         page.history.append(old_page)
@@ -44,6 +45,7 @@ class Wiki(object):
     def multiple_call_now(self):
         self.dt1 = self._clock.now()
         import time
+
         time.sleep(0.1)
         self.dt2 = self._clock.now()
 

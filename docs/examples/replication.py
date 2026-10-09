@@ -1,8 +1,10 @@
 """Trusted-peer replication with a consistent bootstrap and ordered catch-up."""
+
 from tempfile import TemporaryDirectory
 
-from coopy.base import init_persistent_system, init_system
 from wiki import Wiki
+
+from coopy.base import init_persistent_system, init_system
 
 
 def demonstrate(directory):
@@ -13,8 +15,7 @@ def demonstrate(directory):
         master.start_primary(port=0, password="local-demo-secret")
         # Port 0 lets the OS choose a free port for this local demonstration.
         host, port = master.master.server.getsockname()
-        connection = replica.start_replica(host, port,
-                                         password="local-demo-secret")
+        connection = replica.start_replica(host, port, password="local-demo-secret")
         if not connection.wait_until_synchronized(timeout=10):
             raise RuntimeError(connection.error or "Bootstrap timed out")
         assert replica.get_page("Home") == master.get_page("Home")

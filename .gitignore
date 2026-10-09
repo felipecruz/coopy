@@ -6,5 +6,8 @@ build_history/
 coopy.log*
 !.github/
 !.gitignore
+!.pre-commit-config.yaml
+docs/_generated/
+coverage.xml
 *.egg-info/
 dist/

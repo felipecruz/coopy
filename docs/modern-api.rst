@@ -7,6 +7,8 @@ Async callers and concurrent-reader guarantees are covered in:
    :maxdepth: 1
 
    concurrency
+   api
+   development
 
 Both ``coopy.init_persistent_system(Todo, directory)`` and
 ``coopy.init_persistent_system(Todo(), directory)`` retain the domain type for
