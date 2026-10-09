@@ -130,11 +130,20 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Limitation | Other supported Python/OS combinations were not run locally. |
   | Next step | Run the supported Python and operating-system CI matrix. |
 
-- [ ] **F9 — Keep the previous checkpoint usable when snapshot creation fails.** `SnapshotManager.take_snapshot` opens the final numbered file before serialization succeeds; recovery then selects that incomplete file. Publish a snapshot only after a complete successful write, keeping incomplete work out of snapshot discovery. Accept with injected serialization/write failures and interruption before publication: the previous checkpoint remains loadable, necessary journals remain available, and successful checkpoint publication still passes F7's restart cases. Depends on F7 for coordinated journal boundaries.
+- [x] **F9 — Keep the previous checkpoint usable when snapshot creation fails.** `SnapshotManager.take_snapshot` opens the final numbered file before serialization succeeds; recovery then selects that incomplete file. Publish a snapshot only after a complete successful write, keeping incomplete work out of snapshot discovery. Accept with injected serialization/write failures and interruption before publication: the previous checkpoint remains loadable, necessary journals remain available, and successful checkpoint publication still passes F7's restart cases. Depends on F7 for coordinated journal boundaries.
+  Complexity assessment before implementation: M; clear requirements across four implementation/tracking files in snapshot error handling, recovery fault injection, documentation, and roadmap tracking, plus job notes. F3 already supplies atomic publication and F7 supplies coordinated journal boundaries; preserve both and strengthen actual file-I/O and interruption coverage. No unresolved specification ambiguity; power-loss durability remains outside scope.
 
   | Item | Content |
   | --- | --- |
-  | Status | Planned |
+  | Status | Done |
+  | Timestamp | 2026-10-09 |
+  | Complexity | M |
+  | Details | Preserved F3 atomic temporary-file publication and F7 journal coordination. Cleanup failures now log without hiding the snapshot error. Added actual file-write, flush, close, cleanup, and process-interruption regression coverage; previous checkpoint bytes and journals survive, and retry/restart restores writes exactly once. |
+  | Commit | `06b59d477898274c7472258408b0b13af871c12c` — implements F9 cleanup hardening, failure coverage, and documentation; `72ed79bba8621ed6a367b73b3b38c9d06f3831c2` — prior F3 atomic publication and journal coordination. |
+  | Validation | All 114 tests passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access, including F7 restart cases and 24 checkpoint tests. Faults cover serialization, partial write, flush, close, fsync, rotation, publication, cleanup, and process exit during write or before rotation/publication. AIFlow roadmap check and git diff --check passed. |
+  | Limitation | Interrupted snapshots or failed cleanup can leave ignored temporary files; remove them only while the system is stopped. |
+  | Limitation | Power-loss durability, pre-existing corrupted checkpoints, and mutations bypassing the proxy lock are outside this guarantee. Other supported Python/OS combinations were not run locally. |
+  | Next step | Run the supported Python and operating-system CI matrix. |
 
 - [ ] **F10 — Provide a working persistence and recovery guide.** `docs/usage.rst` and `docs/tutorial.rst` use obsolete init_system signatures/imports; clock and replication examples also disagree with code. Replace them with current `coopy.base.init_persistent_system` examples covering close/reopen, `_clock`, readonly methods, snapshots, and decorator semantics. Accept when maintained examples execute in temporary directories, the Sphinx documentation builds, and replication is explicitly marked incomplete until F13. Explain mutable-object escape paths, trusted pickle storage, replay side effects, and the current durability contract without changing README.md.
 
