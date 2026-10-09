@@ -210,6 +210,22 @@ Provisional later plan, not a scheduled release. Goal: callers can distinguish c
   | Next step | Add a configurable pending-byte limit and disconnect slow slaves that exceed it. |
   | Next step | Run the supported Python and operating-system CI matrix. |
 
+- [x] **F14 — Reject tampered journals and snapshots before unpickling.** Restore unpickles every journal record and snapshot without checking where it came from, so anyone who can write the data directory can run arbitrary code at the next restart. Add opt-in integrity protection, for example `init_persistent_system(obj, secret=...)`: each journal record and snapshot is written with an HMAC-SHA256 tag from the standard library, and restore verifies the tag before unpickling and stops with a clear error on any mismatch, missing tag or truncated tagged record. Without a secret, current files and behavior stay unchanged. Accept when a signed system restores normally across snapshots and journal rotation; flipping one byte in a journal record, swapping in a snapshot from another system or deleting a tag fails restore before any unpickling happens; using the wrong secret fails; and existing unsigned data directories still load when no secret is given. Document that the secret must be kept outside the data directory and that this detects tampering but does not encrypt data. Coordinates with F11, whose strict recovery path should report verification failures. Do not merge the 2014 `feature/secure_restore` draft (`5b2e614b72f284209697b58d708605cfeb4e3154`). It signs journal records with RSA through the unmaintained pycrypto, but never verifies them during restore, writes base64 bytes that the current restore cannot replay, and leaves snapshots unsigned.
+  Complexity assessment before implementation: M; clear acceptance criteria; estimated eight files across initialization, integrity framing, journals, snapshots, recovery, tests, and docs. Ambiguities resolved by detecting same-secret cross-system snapshot swaps with a random identity and verifying all required data before any unpickling.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | M |
+  | Details | Added opt-in secret bytes and standard-library HMAC-SHA256 envelopes bound to system identity, file name, and record offset. All selected restore bytes are verified and retained before any unpickling. Strict and salvage report verification failures; unsigned behavior is unchanged. Seven implementation files; no historical draft merged. |
+  | Commit | `150b46ad6311e6c0460b71584bf097607016a8d1` — implements F14. |
+  | Validation | 197 tests passed on Python 3.12.2/macOS with DeprecationWarning as error and local socket access, including 35 integrity cases. Covers tampering, tag removal/truncation, same-secret snapshot swaps, wrong secrets, unsigned compatibility, rotation/checkpoints, fresh-process restore, sync/faults, and verified-byte reuse. Sphinx warnings-as-errors, AIFlow, and git diff checks passed. |
+  | Limitation | Integrity does not encrypt data or detect all valid rollback, whole-file deletion, or removal of complete trailing records; freshness requires trusted external state. Keep the secret outside storage and retain the identity in backups. |
+  | Limitation | Signed recovery buffers selected storage in memory, and each signed action has an independent pickle memo. No automatic unsigned migration or key rotation; replication authentication is unchanged. |
+  | Limitation | Other supported Python/OS combinations and actual power loss were not tested locally. |
+  | Next step | Run the supported Python and operating-system CI matrix. |
+
 ## Validation record
 
 Checks ran against a temporary copy of current source/tests using the existing repository virtual environment, without installs, services, or network calls. The README and starter hashes were recorded; the target was reread immediately before replacement. `make test` was not invoked because it first runs a destructive clean target. Its pytest step was adapted to exclude socket activity and repository cache writes:
