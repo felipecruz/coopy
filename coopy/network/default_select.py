@@ -1,5 +1,6 @@
 """Ordered, trusted-peer replication with an explicit bootstrap boundary."""
 
+import hmac
 import logging
 import os
 import pickle
@@ -142,7 +143,8 @@ class CopyNet(threading.Thread):
         if len(client.auth) < _AUTH_HEADER.size + size:
             return
         password = bytes(client.auth[_AUTH_HEADER.size :])
-        if password != self.password:
+        # This timing-safe comparison does not encrypt the plaintext handshake.
+        if not hmac.compare_digest(password, self.password):
             client.queue.append((struct.pack(COPYNET_HEADER, 0, b"n"), "reject"))
             client.state = "reject"
             return

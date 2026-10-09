@@ -70,9 +70,20 @@ allowing fragmented TCP delivery and passwords longer than the old 20-byte
 read. This handshake and the explicit ready marker are incompatible with old
 peers. Snapshot/action payloads remain compressed pickles.
 
-Use only trusted peers on a trusted network: passwords are unencrypted and
-pickle loading executes code. Bootstrap and pending action queues are held in
-memory. Queues have no byte limit; a persistently slow slave can consume master
+Passwords are compared with ``hmac.compare_digest`` to avoid content-dependent
+comparison timing, but are still transmitted in plain text. This shared-password
+handshake remains a stopgap pending the encrypted transport proposed in
+``FUTURE.md`` §2.2 (pyzmq). Neither passwords nor snapshot/action payloads are
+encrypted by the current transport. Use only trusted peers on a trusted network:
+pickle loading executes code.
+
+The current backend uses ``select``. The empty ``linux_epoll.py`` and
+``osx_kqueue.py`` placeholders have been removed; if platform-specific polling
+is needed, use standard-library ``selectors`` or the future pyzmq transport
+instead of adding per-platform backends.
+
+Bootstrap and pending action queues are held in memory. Queues have no byte
+limit; a persistently slow slave can consume master
 memory and should be disconnected by the operator. Serializing a large domain
 still pauses master mutations, even though transferring it does not.
 

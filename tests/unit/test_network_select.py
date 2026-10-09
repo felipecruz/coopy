@@ -1,8 +1,10 @@
 """Socket framing, lifecycle, and explicit unsynchronized failure states."""
 
+import hmac
 import socket
 import struct
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -83,6 +85,34 @@ def test_fragmented_authentication_does_not_block_other_clients(master):
                 slow.sendall(bytes([byte]))
             assert read_packet(slow)[0] == b"s"
             assert read_packet(slow) == (b"r", b"")
+
+
+@pytest.mark.parametrize(
+    "password, accepted",
+    [
+        (b"copynet", True),
+        (b"xopynet", False),
+        (b"copynex", False),
+        (b"", False),
+        (b"copynet-too-long", False),
+        (b"\xffopynet", False),
+    ],
+)
+def test_authentication_uses_constant_time_comparison(master, password, accepted):
+    # Exercise real handshakes while verifying delegation to the timing-safe
+    # primitive; elapsed-time assertions would be noisy and cannot prove this.
+    with patch(
+        "coopy.network.default_select.hmac.compare_digest", wraps=hmac.compare_digest
+    ) as compare:
+        with socket.create_connection(master.server.getsockname(), timeout=3) as sock:
+            authenticate(sock, password)
+            if accepted:
+                assert read_packet(sock)[0] == b"s"
+                assert read_packet(sock) == (b"r", b"")
+            else:
+                assert read_packet(sock) == (b"n", b"")
+                assert sock.recv(1) == b""
+            compare.assert_called_once_with(password, master.password)
 
 
 @pytest.mark.parametrize("password", [b"wrong", b"", b"copynet-too-long"])
