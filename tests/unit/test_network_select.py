@@ -1,310 +1,213 @@
-import pickle
-import pytest
+"""Socket framing, lifecycle, and explicit unsynchronized failure states."""
 import socket
-
-from coopy.network.network import COPYNET_HEADER
-from coopy.network.default_select import CopyNet, CopyNetSlave, _HEADER_SIZE
-
-_str_to_bytes = lambda x: x.encode('utf-8') if type(x) != bytes else x
-
-# select() on a closed socket (fd == -1)
-socket_select_error = ValueError
-
-def tcp_actor(address, port, _type):
-    if _type == "inet":
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((address, port))
-    else:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.connect(address)
-    # wait a bit for data instead of racing the master thread
-    s.settimeout(1)
-    return s
-
-def tcp_server(address, port, _type, max_clients=5):
-    if _type == "inet":
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((address, port))
-    else:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(address)
-    s.listen(max_clients)
-    s.setblocking(0)
-    return s
-
-def test_network_select_init():
-    system = "a string represented system state"
-
-    copynet = CopyNet(system)
-
-    assert isinstance(copynet.server, socket.socket)
-    assert len(copynet.clientmap) == 0
-    assert copynet.queues == {}
-    assert copynet.obj == system
-
-    copynet.close()
-
-def test_network_select_init_close():
-    import select
-    system = "a string represented system state"
-
-    copynet = CopyNet(system)
-
-    #no error because socket is open
-    select.select([copynet.server], [], [], 0)
-
-    copynet.close()
-
-    assert copynet.running == False
-
-    #must raise error
-    with pytest.raises(socket_select_error):
-        select.select([copynet.server], [], [], 0)
-
-#@pytest.skip
-def test_network_select_receive():
-    from coopy.base import logging_config
-
-    logging_config(basedir="./")
-
-    system = "a string represented system state"
-
-    copynet = CopyNet(system, host="127.0.0.1", port=7777)
-    copynet.start()
-
-    actor = tcp_actor("127.0.0.1", 7777, "inet")
-    actor.send(b'copynet')
-
-    #guarantee that the client is already connected
-    import time
-    time.sleep(0.2)
-
-    copynet.receive(b"message")
-
-    #if no error, socket is open
-    import select
-    select.select([actor], [], [], 1)
-
-    import struct, zlib
-
-    size = struct.calcsize(COPYNET_HEADER)
-    header = actor.recv(size)
-    (psize, stype) = struct.unpack(COPYNET_HEADER, header)
-    data = pickle.loads(zlib.decompress(actor.recv(psize)))
-
-    assert stype == b's'
-    assert data == b"message"
-
-    copynet.close()
-    actor.close()
-
-def test_network_select_disconnect_senders():
-    from coopy.base import logging_config
-
-    logging_config(basedir="./")
-
-    system = "a string represented system state"
-
-    copynet = CopyNet(system, host="127.0.0.1", port=7777)
-    copynet.start()
-
-    actor = tcp_actor("127.0.0.1", 7777, "inet")
-    actor.send(_str_to_bytes('copynet'))
-
-    #guarantee that the client is already connected
-    import time
-    time.sleep(0.2)
-
-    actor.send(_str_to_bytes('actor should be disconnected'))
-    time.sleep(0.2)
-
-    assert 0 == len(copynet.clientmap)
-
-    copynet.close()
-    actor.close()
-
-def test_network_select_broadcast():
-    received_msgs = []
-    from coopy.base import logging_config
-
-    logging_config(basedir="./")
-
-    system = "a string represented system state"
-
-    copynet = CopyNet(system, host="127.0.0.1", port=7777)
-    copynet.start()
-
-    actor1 = tcp_actor("127.0.0.1", 7777, "inet")
-    actor1.send(_str_to_bytes('copynet'))
-
-    actor2 = tcp_actor("127.0.0.1", 7777, "inet")
-    actor2.send(_str_to_bytes('copynet'))
-
-    clients = [actor1, actor2]
-
-    #guarantee that the client is already connected
-    import time
-    time.sleep(0.2)
-
-    copynet.receive(b"message")
-
-    #both clients should receive the same message
-    for cli in clients:
-        import struct, zlib
-        size = struct.calcsize(COPYNET_HEADER)
-        header = cli.recv(size)
-        (psize, stype) = struct.unpack(COPYNET_HEADER, header)
-        data = pickle.loads(zlib.decompress(cli.recv(psize)))
-        received_msgs.append(data)
-
-        assert stype == b's'
-        assert data == b"message"
-
-    assert len(received_msgs) == 2
-    assert received_msgs == [b"message", b"message"]
-
-    copynet.close()
-    actor1.close()
-    actor2.close()
-
-def test_network_select_send_direct():
-    received_msgs = []
-    from coopy.base import logging_config
-
-    logging_config(basedir="./")
-
-    system = "a string represented system state"
-
-    copynet = CopyNet(system, host="127.0.0.1", port=7777)
-    copynet.start()
-
-    actor1 = tcp_actor("127.0.0.1", 7777, "inet")
-    actor1.send(_str_to_bytes('copynet'))
-
-    actor2 = tcp_actor("127.0.0.1", 7777, "inet")
-    actor2.send(_str_to_bytes('copynet'))
-
-    actors = [actor1, actor2]
-
-    #guarantee that the client is already connected
-    import time
-    time.sleep(0.2)
-
-    copynet_client1 = list(copynet.clientmap.values())[0]
-    copynet.send_direct(copynet_client1.client, _str_to_bytes("message"))
-
-    time.sleep(0.2)
-
-    import struct, zlib
-    size = struct.calcsize(COPYNET_HEADER)
-
-    #one of the 2 reads will raise an error and the other will work
-    error_count = 0
-
-    for actor in actors:
-        try:
-            header = actor.recv(size)
-            (psize, stype) = struct.unpack(COPYNET_HEADER, header)
-            data = pickle.loads(zlib.decompress(actor.recv(psize)))
-            received_msgs.append(data)
-        except Exception:
-            error_count += 1
-
-    assert len(received_msgs) == 1
-    assert error_count == 1
-
-    copynet.close()
-    actor1.close()
-    actor2.close()
-
-def test_network_select_check_if_authorized_client():
-    from coopy.base import logging_config
-
-    logging_config(basedir="./")
-
-    system = "a string represented system state"
-
-    copynet = CopyNet(system, host="127.0.0.1", port=7777)
-    copynet.start()
-
-    actor1 = tcp_actor("127.0.0.1", 7777, "inet")
-    actor1.send(_str_to_bytes('copynet'))
-
-    #guarantee that the client is already connected
-    import time
-    time.sleep(0.2)
-
-    copynet_client1 = list(copynet.clientmap.values())[0]
-    actor1.send(_str_to_bytes('copynet'))
-    assert True == copynet.check_if_authorized_client(copynet_client1.client)
-
-    actor1.close()
-
-    actor2 = tcp_actor("127.0.0.1", 7777, "inet")
-    actor2.send(_str_to_bytes('copynet'))
-
-    time.sleep(0.2)
-
-    copynet_client2 = list(copynet.clientmap.values())[0]
-    actor2.send(_str_to_bytes('_copynet'))
-    assert False == copynet.check_if_authorized_client(copynet_client2.client)
-
-    actor2.close()
-    copynet.close()
-
-def test_copynetslave_init():
-    class mock(object):
-        def __init__(self):
-            self.value = 0
-        def inc(self):
-            self.value += 1
-            return self.value
-
-    server = tcp_server('127.0.0.1', 5466, "inet")
-
-    system = mock()
-    slave = CopyNetSlave(system)
-
-    slave.close()
-    assert slave.running == False
-
-    server.close()
-
-def test_copynetslave_disconnect_on_empty_data():
-    class mock(object):
-        def __init__(self):
-            self.value = 0
-        def inc(self):
-            self.value += 1
-            return self.value
-
-    from coopy.base import logging_config
-
-    logging_config()
-
-    server = tcp_server('127.0.0.1', 5466, "inet")
-
-    system = mock()
-    slave = CopyNetSlave(system, host='127.0.0.1')
+import struct
+import time
+
+import pytest
+
+from coopy.base import CoopyProxy
+from coopy.network.default_select import CopyNet, CopyNetSlave, _recv_exactly
+from coopy.network.network import COPYNET_HEADER, prepare_data
+from tests.domain import Wiki
+
+
+def wait_for(predicate, timeout=3):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.005)
+    assert predicate()
+
+
+def read_packet(sock):
+    size, kind = struct.unpack(COPYNET_HEADER, _recv_exactly(sock, 5))
+    return kind, _recv_exactly(sock, size)
+
+
+def authenticate(sock, password=b'copynet'):
+    sock.sendall(struct.pack('!I', len(password)) + password)
+
+
+@pytest.fixture
+def master():
+    master = CopyNet('initial state', host='127.0.0.1', port=0)
+    master.start()
+    try:
+        yield master
+    finally:
+        master.close()
+        assert not master.is_alive()
+
+
+def connect(master):
+    sock = socket.create_connection(master.server.getsockname(), timeout=3)
+    authenticate(sock)
+    assert read_packet(sock)[0] == b's'
+    assert read_packet(sock) == (b'r', b'')
+    return sock
+
+
+def test_broadcast_and_send_direct_follow_bootstrap(master):
+    import pickle
+    import zlib
+
+    with connect(master) as first, connect(master) as second:
+        master.receive(b'broadcast')
+        for sock in (first, second):
+            kind, data = read_packet(sock)
+            assert kind == b's'
+            assert pickle.loads(zlib.decompress(data)) == b'broadcast'
+        with master.clients_lock:
+            target = next(c for c in master.clientmap.values()
+                          if c.address == first.getsockname())
+        master.send_direct(target.client, b'direct')
+        assert pickle.loads(zlib.decompress(read_packet(first)[1])) == b'direct'
+        second.settimeout(0.05)
+        with pytest.raises(socket.timeout):
+            second.recv(1)
+
+
+def test_master_disconnects_senders(master):
+    with connect(master) as sock:
+        sock.sendall(b'unexpected client data')
+        wait_for(lambda: not master.clientmap)
+
+
+def test_fragmented_authentication_does_not_block_other_clients(master):
+    with socket.create_connection(master.server.getsockname(), timeout=3) as slow:
+        packet = struct.pack('!I', 7) + b'copynet'
+        slow.sendall(packet[:1])
+        with connect(master):
+            for byte in packet[1:]:
+                slow.sendall(bytes([byte]))
+            assert read_packet(slow)[0] == b's'
+            assert read_packet(slow) == (b'r', b'')
+
+
+@pytest.mark.parametrize('password', [b'wrong', b'', b'copynet-too-long'])
+def test_rejected_slave_stays_unsynchronized(master, password):
+    proxy = CoopyProxy(Wiki(), [])
+    slave = CopyNetSlave(proxy, *master.server.getsockname(), password=password)
+    proxy.slave = slave
     slave.start()
+    try:
+        slave.join(3)
+        assert not slave.is_alive()
+        assert not slave.synchronized
+        assert 'authorized' in slave.error
+        with pytest.raises(RuntimeError, match='not synchronized'):
+            proxy.get_page('anything')
+    finally:
+        proxy.close()
 
-    import time
-    time.sleep(0.2)
 
-    cli, address = server.accept()
+@pytest.fixture
+def fake_master():
+    server = socket.socket()
+    server.bind(('127.0.0.1', 0))
+    server.listen()
+    proxy = CoopyProxy(Wiki(), [])
+    slave = CopyNetSlave(proxy, *server.getsockname())
+    proxy.slave = slave
+    peer, _ = server.accept()
+    peer.settimeout(3)
+    assert _recv_exactly(peer, 11) == struct.pack('!I', 7) + b'copynet'
+    slave.start()
+    try:
+        yield proxy, slave, peer
+    finally:
+        slave.close()
+        peer.close()
+        server.close()
+        assert not slave.is_alive()
 
-    time.sleep(0.2)
-    # a truncated header followed by EOF must stop the slave
-    cli.sendall(_str_to_bytes('1'))
-    cli.close()
 
-    time.sleep(0.2)
-    assert slave.running == False
+def test_fragmented_snapshot_stays_private_until_ready(fake_master):
+    proxy, slave, peer = fake_master
+    original = proxy.obj
+    snapshot = Wiki()
+    snapshot.pages['bootstrap'] = 'value'
+    header, payload = prepare_data(snapshot)
+    for byte in header + payload:
+        peer.sendall(bytes([byte]))
+    assert not slave.synchronized
+    assert proxy.obj is original
+    with pytest.raises(RuntimeError, match='not synchronized'):
+        proxy.pages
+    for byte in struct.pack(COPYNET_HEADER, 0, b'r'):
+        peer.sendall(bytes([byte]))
+    assert slave.wait_until_synchronized(3)
+    assert proxy.pages == {'bootstrap': 'value'}
+    peer.close()
+    slave.join(3)
+    assert not slave.synchronized
 
-    import select
-    with pytest.raises(socket_select_error):
-        select.select([slave.sock], [], [], 0)
 
-    server.close()
+@pytest.mark.parametrize('cut', ['header', 'payload', 'before-ready', 'corrupt', 'ready-first'])
+def test_interrupted_or_invalid_bootstrap_is_not_exposed(fake_master, cut):
+    proxy, slave, peer = fake_master
+    original = proxy.obj
+    header, payload = prepare_data(Wiki())
+    packets = {
+        'header': header[:2],
+        'payload': header + payload[:3],
+        'before-ready': header + payload,
+        'corrupt': struct.pack(COPYNET_HEADER, 3, b's') + b'bad',
+        'ready-first': struct.pack(COPYNET_HEADER, 0, b'r'),
+    }
+    peer.sendall(packets[cut])
+    peer.shutdown(socket.SHUT_WR)
+    slave.join(3)
+    assert not slave.is_alive()
+    assert not slave.synchronized
+    assert slave.error
+    assert proxy.obj is original
+
+
+def test_close_interrupts_partial_packet_read(fake_master):
+    _, slave, peer = fake_master
+    peer.sendall(b'\x00')
+    slave.close()
+    assert not slave.is_alive()
+    assert not slave.synchronized
+
+
+def test_failed_master_snapshot_does_not_synchronize_client(monkeypatch):
+    master = CopyNet(Wiki(), host='127.0.0.1', port=0)
+    master.start()
+    proxy = CoopyProxy(Wiki(), [])
+    original = proxy.obj
+    monkeypatch.setattr('coopy.network.default_select.prepare_data',
+                        lambda value: (_ for _ in ()).throw(ValueError('cannot serialize')))
+    try:
+        slave = proxy.start_slave(*master.server.getsockname())
+        slave.join(3)
+        assert not slave.is_alive()
+        assert not slave.synchronized
+        assert proxy.obj is original
+        wait_for(lambda: not master.clientmap)
+    finally:
+        proxy.close()
+        master.close()
+
+
+def test_unix_socket_bootstrap_and_cleanup(monkeypatch):
+    import os
+    import tempfile
+
+    # macOS limits Unix socket paths to 104 bytes; pytest's temp root is longer.
+    with tempfile.TemporaryDirectory(prefix='coopy-', dir='/tmp') as directory:
+        address = os.path.join(directory, 'replication.sock')
+        monkeypatch.setattr('coopy.network.default_select.COPYNET_SOCK', address)
+        master = CopyNet(Wiki(), ipc=True)
+        master.start()
+        proxy = CoopyProxy(Wiki(), [])
+        try:
+            slave = proxy.start_slave('unused', 0, ipc=True)
+            assert slave.wait_until_synchronized(3)
+            assert proxy.pages == {}
+        finally:
+            proxy.close()
+            master.close()
+        assert not os.path.exists(address)

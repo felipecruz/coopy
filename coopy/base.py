@@ -137,11 +137,13 @@ class CoopyProxy():
         self.server = CopyNet(self.obj,
                               port=port,
                               password=_to_password(password),
-                              ipc=ipc)
-        self.server.start()
-        self.publisher.register(self.server)
-        self.master = self.server
-        self.slave = None
+                              ipc=ipc,
+                              lock=self.lock)
+        with self.lock:
+            self.publisher.register(self.server)
+            self.master = self.server
+            self.slave = None
+            self.server.start()
 
     def start_slave(self, host, port, password=None, ipc=False):
         self.server = None
@@ -151,8 +153,11 @@ class CoopyProxy():
                                   password=_to_password(password),
                                   ipc=ipc)
         self.slave.start()
+        return self.slave
 
     def __getattr__(self, name):
+        if self.slave and not self.slave.synchronized:
+            raise RuntimeError('Slave is not synchronized with its master.')
         method =  method_or_none(self.obj, name)
 
         if not method:
@@ -169,6 +174,11 @@ class CoopyProxy():
             try:
                 if not unlocked:
                     self.lock.acquire(1)
+
+                if self.slave and not self.slave.synchronized:
+                    raise RuntimeError('Slave is not synchronized with its master.')
+                if self.slave and not readonly:
+                    raise RuntimeError('This is a slave/read-only instance.')
 
                 #record all calls to clock.now()
                 self.obj._clock = RecordClock()
@@ -225,6 +235,8 @@ class CoopyProxy():
         try:
             self.lock.acquire()
             try:
+                if slave and not slave.synchronized:
+                    raise RuntimeError('Cannot snapshot an unsynchronized slave.')
                 if self.snapshot_manager:
                     def advance_journals(destination):
                         for journal in self.publisher.subscribers:
@@ -244,6 +256,8 @@ class CoopyProxy():
             self.snapshot_timer.stop()
             self.snapshot_timer = None
         self.publisher.close()
+        if self.slave:
+            self.slave.close()
 
     def shutdown(self):
         if self.master:

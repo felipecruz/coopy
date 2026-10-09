@@ -1,100 +1,82 @@
+"""Ordered, trusted-peer replication with an explicit bootstrap boundary."""
+from collections import deque
 from select import select
-import os
-import socket
-import zlib
-import struct
-import pickle
-from queue import Queue
-import threading
 import logging
-
+import os
+import pickle
+import socket
+import struct
+import threading
+import time
+import zlib
 
 from coopy.foundation import RestoreClock
-from coopy.network.network import prepare_data, CopyNetPacket, CopyNetClient,\
-                                  CopyNetSnapshotThread
+from coopy.network.network import prepare_data, COPYNET_HEADER, COPYNET_SOCK
 
-COPYNET_MASTER_PREFIX = '[coopynet - master]'
-COPYNET_SLAVE_PREFIX = '[coopynet - slave]'
-
-l = logging.getLogger("coopy")
-
-_minfo = lambda x: l.info("%s %s" % (COPYNET_MASTER_PREFIX, x))
-_sinfo = lambda x: l.info("%s %s" % (COPYNET_SLAVE_PREFIX, x))
-
-_mdebug = lambda x: l.debug("%s %s" % (COPYNET_MASTER_PREFIX, x))
-_sdebug = lambda x: l.debug("%s %s" % (COPYNET_SLAVE_PREFIX, x))
-
-_mwarn = lambda x: l.warning("%s %s" % (COPYNET_MASTER_PREFIX, x))
-_swarn = lambda x: l.warning("%s %s" % (COPYNET_SLAVE_PREFIX, x))
-
-COPYNET_SOCK = '/tmp/coopy.sock'
-COPYNET_HEADER = '!Ic'
-
+logger = logging.getLogger('coopy')
 _HEADER_SIZE = struct.calcsize(COPYNET_HEADER)
+_AUTH_HEADER = struct.Struct('!I')
+_MAX_PASSWORD = 4096
+
 
 def _recv_exactly(sock, size):
-    '''
-        read exactly size bytes; returns less only if the peer closed
-    '''
-    buf = b''
-    while len(buf) < size:
-        chunk = sock.recv(size - len(buf))
+    chunks = bytearray()
+    while len(chunks) < size:
+        chunk = sock.recv(size - len(chunks))
         if not chunk:
             break
-        buf += chunk
-    return buf
+        chunks.extend(chunk)
+    return bytes(chunks)
 
-#TODO: re-write all code below!!! :) (and tests)
+
+class _Client:
+    def __init__(self, client, address):
+        self.client = client
+        self.address = address
+        self.state = 'auth'
+        self.auth = bytearray()
+        self.deadline = time.monotonic() + 5
+        self.queue = deque()
+        self.offset = 0
+
 
 class CopyNet(threading.Thread):
-    def __init__(self,
-                 obj,
-                 host=None,
-                 port=5466,
-                 max_clients=5,
-                 password=b'copynet',
-                 ipc=False):
-
-        threading.Thread.__init__(self, daemon=True)
+    def __init__(self, obj, host=None, port=5466, max_clients=5,
+                 password=b'copynet', ipc=False, lock=None):
+        super().__init__(daemon=True)
         self.obj = obj
+        self.lock = lock if lock is not None else threading.RLock()
+        self.clients_lock = threading.RLock()
         self.host = host
         self.port = port
         self.max_clients = max_clients
         self.password = password
         self.ipc = ipc
-
         self.clientmap = {}
         self.queues = {}
-
-        if not self.ipc:
-            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-
+        self.running = False
+        self.stopped = threading.Event()
+        self.server = socket.socket(socket.AF_UNIX if ipc else socket.AF_INET,
+                                    socket.SOCK_STREAM)
         if not host:
             try:
                 host = socket.gethostbyname(socket.gethostname())
-            except Exception as e:
-                _mwarn("Error on gethostname %s" % (str(e)))
-                host = "127.0.0.1"
-
+            except OSError:
+                host = '127.0.0.1'
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        if not self.ipc:
-            self.server.bind((host, port))
-        else:
-            self.server.bind(COPYNET_SOCK)
-
+        self.server.bind(COPYNET_SOCK if ipc else (host, port))
         self.server.listen(max_clients)
-        _minfo("Listening to %d" % max_clients)
+        self.server.setblocking(False)
 
     def close(self):
+        self.stopped.set()
         self.running = False
-        try:
-            self.server.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
         self.server.close()
+        with self.clients_lock:
+            for sock in list(self.clientmap):
+                self.disconnect(sock)
+        if self.is_alive() and self is not threading.current_thread():
+            self.join(timeout=2)
         if self.ipc and os.path.exists(COPYNET_SOCK):
             os.remove(COPYNET_SOCK)
 
@@ -105,203 +87,235 @@ class CopyNet(threading.Thread):
         pass
 
     def receive(self, message):
-        _mdebug('Receive')
-
-        if len(self.clientmap) == 0:
-            return
-
-        (header, data) = prepare_data(message)
-        self.broadcast(header, data)
+        # Proxy publication holds the same lock used by snapshot capture.
+        with self.lock:
+            self.broadcast(*prepare_data(message))
 
     def broadcast(self, header, data):
-       _mdebug('Broadcast')
+        with self.clients_lock:
+            for client in self.clientmap.values():
+                if client.state in ('b', 'c', 'r'):
+                    client.queue.append((header + data, 'action'))
 
-       for copynetclient in self.clientmap.values():
-            if copynetclient.state == 'r':
-                copynetclient.client.sendall(header)
-                copynetclient.client.sendall(data)
-            elif copynetclient.state == 'b':
-                self.queues[copynetclient.client].put_nowait(
-                                                   CopyNetPacket(header,data))
-            else:
-                _mdebug('Unknow client state')
+    def send_direct(self, sock, message):
+        header, data = prepare_data(message)
+        with self.clients_lock:
+            self.clientmap[sock].queue.append((header + data, 'action'))
 
-    def send_direct(self, client, message):
-        (header, data) = prepare_data(message)
-        client.sendall(header)
-        client.sendall(data)
-
-    def check_if_authorized_client(self, client):
-        password = client.recv(20)
-
-        if self.password != password.rstrip():
-            unauthdata = struct.pack(COPYNET_HEADER, 0, b'n')
-            client.sendall(unauthdata)
-            client.close()
-            _minfo('Client rejected')
-            return False
-
-        return True
-
-    def initialize_client(self, client, address):
-        self.clientmap[client] = CopyNetClient(client, address, 'r')
-        self.queues[client] = Queue(999999)
+    def initialize_client(self, sock, address):
+        sock.setblocking(False)
+        with self.clients_lock:
+            client = _Client(sock, address)
+            self.clientmap[sock] = client
+            self.queues[sock] = client.queue
 
     def disconnect(self, sock):
-        _mdebug('Master received data. Close client')
-        sock.close()
-        self.clientmap.pop(sock, None)
-        self.queues.pop(sock, None)
+        with self.clients_lock:
+            sock.close()
+            self.clientmap.pop(sock, None)
+            self.queues.pop(sock, None)
+
+    def _authenticate(self, client):
+        chunk = client.client.recv(4096)
+        if not chunk:
+            self.disconnect(client.client)
+            return
+        client.auth.extend(chunk)
+        if len(client.auth) < _AUTH_HEADER.size:
+            return
+        size = _AUTH_HEADER.unpack(client.auth[:_AUTH_HEADER.size])[0]
+        if size > _MAX_PASSWORD:
+            self.disconnect(client.client)
+            return
+        if len(client.auth) < _AUTH_HEADER.size + size:
+            return
+        password = bytes(client.auth[_AUTH_HEADER.size:])
+        if password != self.password:
+            client.queue.append((struct.pack(COPYNET_HEADER, 0, b'n'), 'reject'))
+            client.state = 'reject'
+            return
+        # Capture and registration share the mutation/publication lock. No
+        # action can fall between the snapshot and this client's action queue.
+        with self.lock:
+            header, data = prepare_data(self.obj)
+            with self.clients_lock:
+                client.queue.append((header + data, 'snapshot'))
+                client.state = 'b'
+
+    def _write_client(self, client):
+        # Only this event loop writes sockets; packets cannot interleave.
+        with self.clients_lock:
+            if not client.queue:
+                return
+            packet, kind = client.queue[0]
+            sent = client.client.send(memoryview(packet)[client.offset:])
+            if not sent:
+                raise ConnectionError('peer stopped receiving')
+            client.offset += sent
+            if client.offset != len(packet):
+                return
+            client.queue.popleft()
+            client.offset = 0
+            if kind == 'snapshot':
+                # Include every action queued during snapshot transfer before
+                # exposing readiness. Later live actions follow this marker.
+                client.queue.append((struct.pack(COPYNET_HEADER, 0, b'r'), 'ready'))
+                client.state = 'c'
+            elif kind == 'ready':
+                client.state = 'r'
+            elif kind == 'reject':
+                self.disconnect(client.client)
 
     def run(self):
-        self.running = True
-
-        while self.running:
-
-            try:
-                to_read, to_write, exception_mode = \
-                    select([self.server] + list(self.clientmap.keys()), [], [], 5)
-            except (OSError, ValueError) as e:
-                # ValueError: server socket already closed (fd == -1)
-                _mdebug("Select error")
-                self.running = False
-                break
-
-            for sock in to_read:
-                if sock == self.server:
-                    try:
-                        client, address = self.server.accept()
-                    except Exception as e:
-                        _mdebug('Cannot accept client: %s' % e)
-                        continue
-
-                    _minfo('Server: got connection %d from %s' %
-                                                   (client.fileno(), address))
-
-                    if not self.check_if_authorized_client(client):
-                       continue
-
-                    _minfo('Client connected')
-                    self.initialize_client(client, address)
-                    #CopyNetSnapshotThread(self.clientmap[client], self.obj).start()
-                else:
+        self.running = not self.stopped.is_set()
+        try:
+            while not self.stopped.is_set():
+                with self.clients_lock:
+                    clients = list(self.clientmap.values())
+                    writable = [c.client for c in clients if c.queue]
+                try:
+                    readable, writable, _ = select(
+                        [self.server] + [c.client for c in clients], writable, [], 0.05)
+                except (OSError, ValueError):
+                    break
+                for sock in readable:
+                    if sock is self.server:
+                        try:
+                            client, address = self.server.accept()
+                            if len(self.clientmap) >= self.max_clients:
+                                client.close()
+                            else:
+                                self.initialize_client(client, address)
+                        except OSError:
+                            pass
+                    else:
+                        client = self.clientmap.get(sock)
+                        if client is None:
+                            continue
+                        try:
+                            if client.state == 'auth':
+                                self._authenticate(client)
+                            else:
+                                self.disconnect(sock)
+                        except BlockingIOError:
+                            pass
+                        except Exception:
+                            logger.exception('Replication bootstrap failed')
+                            self.disconnect(sock)
+                for sock in writable:
+                    client = self.clientmap.get(sock)
+                    if client is not None:
+                        try:
+                            self._write_client(client)
+                        except BlockingIOError:
+                            pass
+                        except OSError:
+                            self.disconnect(sock)
+                for client in clients:
+                    if client.state == 'auth' and time.monotonic() > client.deadline:
+                        self.disconnect(client.client)
+        finally:
+            self.running = False
+            self.server.close()
+            with self.clients_lock:
+                for sock in list(self.clientmap):
                     self.disconnect(sock)
 
-            for sock in to_write:
-                while not self.queues[sock].empty():
-                    self.send_direct(sock, self.queues[sock].get_nowait())
-
-        self.server.close()
 
 class CopyNetSlave(threading.Thread):
-    def __init__(self,
-                 parent,
-                 host='localhost',
-                 port=5466,
-                 password=b'copynet',
-                 ipc=False):
-
-        threading.Thread.__init__(self, daemon=True)
+    def __init__(self, parent, host='localhost', port=5466,
+                 password=b'copynet', ipc=False):
+        super().__init__(daemon=True)
         self.parent = parent
         self.host = host
         self.port = port
+        self.lock = getattr(parent, 'lock', threading.RLock())
         self.running = False
-        self.lock = threading.RLock()
-
+        self.ready = threading.Event()
+        self.stopped = threading.Event()
+        self.error = None
+        self.sock = socket.socket(socket.AF_UNIX if ipc else socket.AF_INET,
+                                  socket.SOCK_STREAM)
         try:
-            if not ipc:
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.connect((host, self.port))
-            else:
-                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                self.sock.connect(COPYNET_SOCK)
+            self.sock.connect(COPYNET_SOCK if ipc else (host, port))
+            self.sock.sendall(_AUTH_HEADER.pack(len(password)) + password)
+        except OSError:
+            self.sock.close()
+            raise
 
-            self.sock.sendall(password)
-            _sdebug('Slave connected to server@%d' % self.port)
-        except OSError as e:
-            _sdebug("Error connecting to server %s" % (e))
-            raise Exception("Network Error: Could not connect to: %s:%d" %
-                    (host, port))
+    @property
+    def synchronized(self):
+        return self.ready.is_set()
+
+    def wait_until_synchronized(self, timeout=None):
+        return self.ready.wait(timeout) and self.synchronized
 
     def acquire(self):
-        self.lock.acquire(1)
+        self.lock.acquire()
 
     def release(self):
         self.lock.release()
 
     def close(self):
+        self.stopped.set()
+        self.ready.clear()
         self.running = False
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         self.sock.close()
+        if self.is_alive() and self is not threading.current_thread():
+            self.join(timeout=2)
 
     def run(self):
-        self.running = True
-
-        while self.running:
-            try:
-                to_read, to_write, exception_mode = \
-                    select([self.sock], [],[], 1)
-            except Exception as e:
-                _mdebug('Error on select %s..\nShutting down' % (e))
-                self.running = False
-                break
-
-            _mdebug("waitin for data..")
-
-            for sock in to_read:
-                if sock == self.sock:
-                    try:
-                        data = _recv_exactly(self.sock, _HEADER_SIZE)
-                    except Exception as e:
-                        _mdebug('Exception %s'  % e)
-                        data = None
-
-                    if not data:
-                        _mdebug('Shutting down')
-                        self.running = False
-                        break
+        self.running = not self.stopped.is_set()
+        pending = None
+        try:
+            while not self.stopped.is_set():
+                header = _recv_exactly(self.sock, _HEADER_SIZE)
+                if len(header) != _HEADER_SIZE:
+                    raise ConnectionError('Master disconnected before a complete header')
+                size, kind = struct.unpack(COPYNET_HEADER, header)
+                if kind == b'n':
+                    raise PermissionError('Not authorized by master')
+                if kind == b'r':
+                    if size or pending is None or self.synchronized:
+                        raise ValueError('Unexpected synchronization marker')
+                    with self.lock:
+                        self.parent.obj = pending
+                        pending = None
+                        self.ready.set()
+                    continue
+                if kind not in (b's', b'a'):
+                    raise ValueError('Unknown replication packet')
+                payload = _recv_exactly(self.sock, size)
+                if len(payload) != size:
+                    raise ConnectionError('Master disconnected mid-message')
+                value = pickle.loads(zlib.decompress(payload))
+                with self.lock:
+                    if kind == b's':
+                        if pending is not None or self.synchronized:
+                            raise ValueError('Unexpected snapshot')
+                        pending = value
                     else:
+                        obj = self.parent.obj if self.synchronized else pending
+                        if obj is None:
+                            raise ValueError('Action received before snapshot')
+                        obj._clock = RestoreClock(value.results or [])
                         try:
-                            (psize, stype) = struct.unpack(COPYNET_HEADER, data)
-                        except struct.error as e:
-                            l.error("%s Malformed header %r, shutting down" %
-                                    (COPYNET_SLAVE_PREFIX, data))
-                            self.running = False
-                            break
-                        if stype == b'n':
-                            l.error("%s Not authorized by master" %
-                                    COPYNET_SLAVE_PREFIX)
-                            self.running = False
-                            break
-
-                        _sdebug('Reading %d bytes' % (psize))
-                        buf = _recv_exactly(self.sock, psize)
-                        if len(buf) < psize:
-                            _sdebug('Connection closed mid-message')
-                            self.running = False
-                            break
-
-                        un_data = zlib.decompress(buf)
-
-                        with self.lock:
-                            if stype == b'a':
-                                _sdebug('Receiving action')
-                                action = pickle.loads(un_data)
-                                obj = self.parent.obj
-                                # replay with the master's clock values
-                                obj._clock = RestoreClock(action.results or [])
-                                try:
-                                    action.execute_action(obj)
-                                except Exception as e:
-                                    # it may have failed on master too
-                                    _sdebug('Error executing %s: %r' %
-                                            (action, e))
-                                _sdebug(str(action))
-                            else:
-                                _sdebug('Receiving system')
-                                self.parent.obj = pickle.loads(un_data)
-
-                else:
-                    _sdebug("Unexcpected")
-
-        _mdebug("Slave close")
-        self.sock.close()
+                            value.execute_action(obj)
+                        except Exception:
+                            if not getattr(value, 'raised', False):
+                                raise
+                        else:
+                            if getattr(value, 'raised', False):
+                                raise ValueError('Action outcome differs from master')
+        except Exception as exc:
+            if not self.stopped.is_set():
+                self.error = str(exc)
+                logger.warning('Slave unsynchronized: %s', exc)
+        finally:
+            self.ready.clear()
+            self.running = False
+            self.sock.close()
