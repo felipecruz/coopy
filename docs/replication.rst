@@ -18,9 +18,11 @@ Experimental local example
 ------------------------------
 
 This runnable example uses the tutorial's ``wiki.py`` alongside
-``replication.py``. Run it only on a trusted host/network; the master listener
-binds the host's resolved address, falling back to loopback if resolution
-fails. It uses an OS-selected port and closes both endpoints.
+``replication.py``. Run it only on a trusted host/network. By default the
+master listens on loopback (``127.0.0.1``) only; to accept slaves from other
+machines pass an interface address, for example
+``start_master(host="0.0.0.0")``, and only do so on a trusted network. The
+example uses an OS-selected port and closes both endpoints.
 
 .. literalinclude:: examples/replication.py
    :language: python

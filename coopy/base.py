@@ -160,13 +160,15 @@ class CoopyProxy():
         self.snapshot_timer = SnapshotTimer(snapshot_time, self)
         self.snapshot_timer.start()
 
-    def start_master(self, port=8012, password=None, ipc=False):
+    def start_master(self, port=8012, password=None, ipc=False,
+                     host='127.0.0.1'):
         with self.lock:
             if self.slave is not None:
                 raise RuntimeError('Cannot promote a slave to master.')
             if self.master is not None:
                 raise RuntimeError('Master is already started.')
             self.server = CopyNet(self.obj,
+                                  host=host,
                                   port=port,
                                   password=_to_password(password),
                                   ipc=ipc,

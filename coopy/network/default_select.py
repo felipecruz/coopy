@@ -40,8 +40,11 @@ class _Client:
         self.offset = 0
 
 
+DEFAULT_HOST = '127.0.0.1'
+
+
 class CopyNet(threading.Thread):
-    def __init__(self, obj, host=None, port=5466, max_clients=5,
+    def __init__(self, obj, host=DEFAULT_HOST, port=5466, max_clients=5,
                  password=b'copynet', ipc=False, lock=None):
         super().__init__(daemon=True)
         self.obj = obj
@@ -58,11 +61,12 @@ class CopyNet(threading.Thread):
         self.stopped = threading.Event()
         self.server = socket.socket(socket.AF_UNIX if ipc else socket.AF_INET,
                                     socket.SOCK_STREAM)
+        # Replication sends pickles, which can run code when loaded, so only
+        # listen on loopback unless the caller asks for another interface.
+        # No hostname lookup: it can block for ~30s on hosts that can't
+        # resolve their own name.
         if not host:
-            try:
-                host = socket.gethostbyname(socket.gethostname())
-            except OSError:
-                host = '127.0.0.1'
+            host = DEFAULT_HOST
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind(COPYNET_SOCK if ipc else (host, port))
         self.server.listen(max_clients)

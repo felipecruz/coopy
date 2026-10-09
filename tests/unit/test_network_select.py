@@ -283,3 +283,25 @@ def test_unix_socket_bootstrap_and_cleanup(monkeypatch):
             proxy.close()
             master.close()
         assert not os.path.exists(address)
+
+
+def test_master_listens_on_loopback_without_hostname_lookup(monkeypatch):
+    # resolving the own hostname blocked for ~30s on macOS CI runners
+    def no_lookup(*args):
+        raise AssertionError('hostname lookup attempted')
+    monkeypatch.setattr(socket, 'gethostbyname', no_lookup)
+    monkeypatch.setattr(socket, 'gethostname', no_lookup)
+
+    proxy = CoopyProxy(Wiki(), [])
+    proxy.start_master(port=0)
+    try:
+        assert proxy.master.server.getsockname()[0] == '127.0.0.1'
+    finally:
+        proxy.shutdown()
+        proxy.close()
+
+    master = CopyNet(Wiki(), host=None, port=0)
+    try:
+        assert master.server.getsockname()[0] == '127.0.0.1'
+    finally:
+        master.close()
