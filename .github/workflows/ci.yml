@@ -46,6 +46,18 @@ jobs:
       - name: Run tests including Hypothesis properties and coverage gate
         run: python -m pytest --verbose -W error::DeprecationWarning --cov=coopy --cov-report=term-missing --cov-report=xml
         timeout-minutes: 5
+      - name: Upload coverage to Codecov
+        # Upload even when the coverage gate fails, so the drop is visible.
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          disable_search: true
+          flags: py${{ matrix.python-version }}-${{ runner.os }}
+          name: Python ${{ matrix.python-version }} (${{ matrix.os }})
+          # Fork and Dependabot PRs have no access to the token; don't fail them.
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
 
   free-threaded:
     name: Free-threaded (Python ${{ matrix.python-version }}, ${{ matrix.os }})

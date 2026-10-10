@@ -1,6 +1,7 @@
 # coopy
 
 [![CI](https://github.com/felipecruz/coopy/actions/workflows/ci.yml/badge.svg)](https://github.com/felipecruz/coopy/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/felipecruz/coopy/graph/badge.svg)](https://codecov.io/gh/felipecruz/coopy)
 [![PyPI](https://img.shields.io/pypi/v/coopy.svg)](https://pypi.org/project/coopy/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)

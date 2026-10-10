@@ -1,0 +1,17 @@
+# Codecov merges the uploads from every Python/OS test job into one report.
+# The hard floor (fail_under) stays in pyproject.toml; these statuses add
+# per-PR feedback on top of it.
+coverage:
+  precision: 2
+  status:
+    project:
+      default:
+        target: auto      # compare with the base commit
+        threshold: 0.5%   # allow small noise from network timing paths
+    patch:
+      default:
+        informational: true  # report coverage of changed lines, don't block
+
+comment:
+  layout: "condensed_header, diff, flags, files"
+  require_changes: true

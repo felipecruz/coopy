@@ -67,6 +67,11 @@ fails pytest. Raise the baseline when sustained improvements justify it; do not
 lower it or omit modules merely to pass CI. This fixed floor prevents regression
 below the baseline; it does not automatically ratchet upward on each commit.
 
+Each regular test job uploads ``coverage.xml`` to `Codecov`_, flagged by Python
+version and OS. Codecov merges the uploads, keeps the history, and comments on
+pull requests. ``codecov.yml`` makes the project status fail on a drop of more
+than 0.5% from the base commit; patch coverage is reported but does not block.
+
 Generated reference and dependency updates
 ------------------------------------------
 
@@ -90,6 +95,7 @@ review and merge the resulting pull requests normally.
 
 .. _Ruff integration documentation: https://docs.astral.sh/ruff/integrations/
 .. _Hypothesis stateful testing: https://hypothesis.readthedocs.io/en/latest/stateful.html
+.. _Codecov: https://app.codecov.io/gh/felipecruz/coopy
 .. _autodoc: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 .. _autosummary: https://www.sphinx-doc.org/en/master/usage/extensions/autosummary.html
 .. _GitHub configuration guide: https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/auto-update-actions
