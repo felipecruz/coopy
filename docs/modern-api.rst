@@ -217,8 +217,34 @@ errors stop strict recovery with ``RecoveryError``. Salvage returns the valid
 prefix and the stop report without writing. Write-time serialization failures
 raise ``PersistenceError`` for journals (with ``SerializationError`` as the
 cause), because memory may already have changed. A snapshot encoding failure
-leaves the previous checkpoint usable. Changing formats requires an explicit
-export/import to a new directory; no conversion command is provided.
+leaves the previous checkpoint usable.
+
+Converting a data directory
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Formats are never changed in place. ``coopy.convert`` recovers a closed source
+directory strictly and writes its state as a single fresh checkpoint into a new
+or empty destination directory::
+
+    coopy.convert("data", "data-json",
+                  new_serializer=coopy.JsonSerializer(registry))
+
+``serializer``, ``secret``, ``schemas`` and ``state_schemas`` open the source
+exactly as ``coopy.open`` would. ``new_serializer`` and ``new_secret`` configure
+the destination and default to the source settings; ``new_secret=None`` writes
+unsigned storage and ``new_secret=key`` signs it with a new system identity.
+``snapshot_compression`` applies to the new checkpoint. The destination is
+reopened strictly with its new settings before ``convert`` returns the source
+``RecoveryReport``.
+
+The source storage files are never written, but its writer lock is held while
+reading, so convert only closed directories (``LockError`` otherwise). A
+non-empty destination raises ``ConfigurationError`` before recovery. If
+recovery, encoding or the final check fails, everything created for the
+destination is removed and the error propagates. The destination starts a new
+history: journals are not copied, and replay outcomes are already applied.
+Swap directories yourself once the result is verified, and keep the source as a
+backup.
 
 Trust boundaries
 ~~~~~~~~~~~~~~~~

@@ -6,6 +6,11 @@ Changelog
 Unreleased
 ----------
 
+* ``coopy.convert(src, dst, ...)`` copies a closed data directory into a new
+  or empty one with another serializer (``new_serializer``), signing setting
+  (``new_secret``) or snapshot compression. The source is recovered strictly
+  and never written; the destination receives one fresh checkpoint and is
+  removed again if anything fails. See :doc:`modern-api`.
 * Registered snapshot-state upgraders: ``coopy.StateSchemas`` and the
   ``state_schemas`` argument of ``coopy.open``/``recover``. Snapshots of a
   root class declaring ``__coopy_version__`` record that version; recovery

@@ -4,7 +4,7 @@ from typing_extensions import assert_type
 
 import coopy
 from coopy.decorators import abort_exception, readonly, unlocked
-from coopy.restore import RecoveryResult
+from coopy.restore import RecoveryReport, RecoveryResult
 
 
 class Todo:
@@ -48,6 +48,10 @@ if TYPE_CHECKING:
         coopy.open(Todo, serializer=coopy.JsonSerializer(), schemas=coopy.ActionSchemas()), Todo
     )
     assert_type(coopy.open(Todo, state_schemas=coopy.StateSchemas()), Todo)
+    assert_type(
+        coopy.convert("data", "json-data", new_serializer=coopy.JsonSerializer(), new_secret=None),
+        RecoveryReport,
+    )
     assert_type(coopy.open(Todo(), recovery="salvage"), RecoveryResult[Todo])
     mode: str = "strict"
     assert_type(coopy.open(Todo, recovery=mode), Todo | RecoveryResult[Todo])

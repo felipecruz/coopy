@@ -199,8 +199,10 @@ Obsolete files excluded by the checkpoint boundary are not verified.
 Without a secret the existing unsigned format and recovery behavior remain
 unchanged. There is no automatic signing of legacy directories, key rotation,
 or downgrade: supplying a secret for unsigned storage fails. To migrate,
-recover a trusted unsigned backup in a controlled environment and export its
-domain state into a separate new signed directory with application tooling.
+recover a trusted unsigned backup in a controlled environment with
+``coopy.convert(src, dst, new_secret=secret)``, which writes a separate new
+signed directory (``new_secret=None`` converts signed storage back to unsigned;
+see :doc:`modern-api`).
 Use the same secret for all writers and reopen operations on signed storage.
 Each signed journal record uses its own pickle memo; aliases within a record
 survive, but cross-record object identity is not preserved. Use stable IDs.

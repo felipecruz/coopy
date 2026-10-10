@@ -17,6 +17,7 @@ Persistence and async controls
    coopy.open
    coopy.init_persistent_system
    coopy.control
+   coopy.convert
    coopy.logging_config
    coopy.base.PersistenceControl
    coopy.AsyncPersistent
