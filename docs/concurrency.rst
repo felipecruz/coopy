@@ -133,7 +133,7 @@ but cannot protect against direct access or external domain threads. Readonly
 is a declaration, not an enforcement of immutability. Lifecycle/control changes
 on a synchronous proxy should be coordinated by the owner after stopping callers.
 
-CI is configured to run the core suite on Python 3.13t and 3.14t on Linux/macOS,
+CI is configured to run the core suite on Python 3.14t on Linux/macOS,
 with ``PYTHON_GIL=0`` and assertions checking that the interpreter actually has
 the GIL disabled. Concurrency tests overlap multiple readers, writers and
 snapshots, check multi-field consistency, and compare reopened state with the
