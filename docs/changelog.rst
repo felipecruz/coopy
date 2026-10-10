@@ -3,6 +3,26 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+* Recovery is strict by default: detected decoding failures and replay outcome
+  changes raise ``RecoveryError`` with a structured report. Explicit
+  ``recovery="salvage"`` returns inspection state and a report without modifying
+  persistence files. See :doc:`usage` for limitations and recovery procedures.
+* ``durability="sync"`` adds journal and directory synchronization before
+  acknowledging writes. Buffered durability remains the default. Journal
+  persistence failures disable subsequent mutations; memory is not rolled back.
+* Checkpoints coordinate snapshot publication and journal rotation under the
+  proxy lock. Recovery replays only journals numbered after the checkpoint;
+  older files remain available. See :doc:`snapshots`.
+* Replication bootstraps a populated domain and queues catch-up actions before
+  marking a replica synchronized. The authentication framing and readiness
+  marker require upgrading both peers together. Replication remains experimental;
+  see :doc:`replication` for unsupported durability and failover behavior.
+* The documentation includes executable examples checked by pytest and an
+  HTML build that treats Sphinx warnings as errors.
+
 0.5.0
 -----
 

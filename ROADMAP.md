@@ -239,7 +239,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | L |
   | Details | Added class/instance and strict/salvage overloads, ParamSpec decorators, py.typed, a typed control handle, domain-first control names, and staged mypy CI with installed-wheel examples. Fifteen implementation files. |
-  | Commit | `aaff9ab1fa9ae725740499b770ca8521af9d6c4b` — implements F15. |
+  | Commit | `aaff9ab1fa9ae725740499b770ca8521af9d6c4b` — implements F15.; `8b233e7305cd71f500611474666008a151162b47` |
   | Validation | 201 tests passed at the F15 commit; final suite 253 passed on Python 3.12.2/macOS. Six-module mypy and installed-wheel positive/negative signature checks passed, including dynamic recovery modes. Python 3.10.14 imports and persistence smoke passed. |
   | Limitation | Dynamic replay and networking internals are not yet strictly typed; proxy implementation attributes remain reserved. |
   | Limitation | The full Python 3.10–3.14 and Linux/macOS CI matrix was not run locally. |
@@ -255,7 +255,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | L |
   | Details | Added coopy.open alias, direct and typed-control contexts, idempotent cleanup, timer/replication shutdown, native Path storage, nested directories, CoopyError subclasses, primary/replica names, and opt-in file logging. Seventeen implementation files. |
-  | Commit | `23ba9eabb92b548a5c9e410f54aee87b36a4e1aa` — implements F16. |
+  | Commit | `23ba9eabb92b548a5c9e410f54aee87b36a4e1aa` — implements F16.; `8b233e7305cd71f500611474666008a151162b47` |
   | Validation | 212 tests passed at the F16 commit; final suite 253 passed. Normal/exceptional exits, cleanup failures, path variants, alias warnings, logging defaults/opt-in, typed contexts, and existing replication checks passed. Sphinx warnings-as-errors passed. |
   | Limitation | Direct with coopy.open works at runtime; use with coopy.control(coopy.open(...)) to retain domain typing in a context. |
   | Limitation | Deprecated master/slave methods remain available through v0.8; underlying OS errors and domain exceptions can still propagate in their original types. |
@@ -270,7 +270,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | XL |
   | Details | Added a typed serializer protocol, compatible pickle streams, registered JSON codecs, action schema metadata/upcasters, and pickle class aliases. Integrity preflight remains before decoding. Documented format selection, migrations, and trust boundaries. Twelve implementation files. |
-  | Commit | `8741418ba1553b4b611fadf30eb9934e1f2101ee` — implements F17. |
+  | Commit | `8741418ba1553b4b611fadf30eb9934e1f2101ee` — implements F17.; `8b233e7305cd71f500611474666008a151162b47` |
   | Validation | 41 serializer/migration tests and all 253 suite tests passed on Python 3.12.2/macOS. Covers signed/unsigned rotation and checkpoints, old schemas, moved classes in snapshots/arguments, invalid upgrades, custom codecs, and fresh-process JSON recovery. Mypy, installed-wheel typing, Sphinx, Python 3.10 smoke, diff checks, and AIFlow validation passed. |
   | Limitation | JSON supports trees and rejects cycles/shared container identities; named timezone identity is not retained and resource-exhaustion limits are not provided. |
   | Limitation | There is no automatic in-place format conversion or snapshot-state upcaster; explicit domain codecs and compatible pickle state restoration are required. |
@@ -286,7 +286,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | XL |
   | Details | Added opt-in sync group commit, parent-published POSIX copy-on-write snapshot jobs with guarded blocking fallback, zstd/lz4 extras, authenticated compression, and reproducible before/after benchmarks. Estimated 10–14 implementation files; delivered 14 plus four measurement artifacts. |
-  | Commit | `1b2d9f06309c5e31d25b86139a0c59f1ec1f23e8` — implements F18. |
+  | Commit | `1b2d9f06309c5e31d25b86139a0c59f1ec1f23e8` — implements F18.; `a26dd78c10536b16f2edc122e0362f3ce7681f6a` |
   | Validation | 294 tests passed; 30 native fork cases skipped on macOS. Separate controlled subprocess run: 40 passed, including all 30 fork cases with a test-only platform-guard bypass. Mypy, installed-wheel typing, Python 3.10 smoke, Sphinx, diff checks, and AIFlow validation passed. Actual million-action restores and write/pause samples published in docs/performance.rst and benchmarks/. |
   | Limitation | Native Linux execution and fork pause measurements were unavailable locally; controlled macOS mechanism tests do not certify Linux or production macOS safety. |
   | Limitation | Fork requires an explicitly audited single-threaded POSIX main process outside macOS; native threads, serializer callbacks, at-fork hooks, and external resources cannot be proven safe automatically. |
@@ -304,7 +304,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | L |
   | Details | Added AsyncPersistent with one dedicated writer, ordered awaitable domain methods and queries, off-loop open/checkpoint/close, cancellation-safe accepted work, defined errors, and drain-and-join shutdown. Added GIL-disabled 3.13t/3.14t Linux/macOS CI and explicit reader/direct-access/unlocked guarantees. Ten implementation files. |
-  | Commit | `091c7bac2acfebdc9ae4acb8cd34282719e8a2e2` — implements F19. |
+  | Commit | `091c7bac2acfebdc9ae4acb8cd34282719e8a2e2` — implements F19.; `55407ef5e8b8e44cab9622962224d0eb2f5520bd` |
   | Validation | Python 3.12.2/macOS: 308 passed, 31 skipped (30 native fork cases and one no-GIL assertion); includes 14 new async/concurrency cases. Seven-module mypy, installed-wheel typing, Python 3.10 async checkpoint/replay smoke, Sphinx warnings-as-errors, diff checks, and AIFlow validation passed. Full suite required local socket access. |
   | Limitation | Free-threaded interpreters were unavailable locally; the configured hosted jobs have not been executed here. Free-threaded CI omits optional compression extensions. |
   | Limitation | The queue is unbounded and has no forced shutdown timeout. Accepted writes continue after caller cancellation; applications must bound concurrency and await close before stopping the loop. |
@@ -320,7 +320,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | M |
   | Details | Added pinned Ruff lint/import sorting/formatting and pre-commit hooks, CI quality/release gates, eight Hypothesis state-machine configurations, malformed-storage regression tests, a measured 93% package coverage floor, weekly Actions Dependabot updates, and Sphinx autosummary/autodoc from annotations and overloads. Applied the formatter across existing Python sources; 65 implementation files. |
-  | Commit | `573682037d9405dbba6f18bd9373ff0fe55fc593` — implements F20. |
+  | Commit | `573682037d9405dbba6f18bd9373ff0fe55fc593` — implements F20.; `375097e3b4eefdc164e1a97d77e96a1975dd1617` |
   | Validation | Python 3.12.2/macOS: 329 passed, 31 skipped; coverage 93.27% (1,747/1,873 statements), with a verified failing under-coverage gate. Ruff and both pre-commit hooks passed. Mypy, installed-wheel typing, Python 3.10 syntax/recovery smoke, YAML schema validation, clean staged-source Sphinx warnings-as-errors, diff checks, and AIFlow validation passed. The property oracle rejected an injected lost journal tail. |
   | Limitation | Coverage is a fixed line-coverage floor, not an automatic ratchet or branch/subprocess coverage; network cleanup timing can slightly change results. |
   | Limitation | Generated properties cover sequential clean restarts, not power loss or concurrent schedules; existing fault/concurrency tests remain. Dynamic domain methods and unannotated internals cannot provide a complete typed API reference. |
@@ -337,7 +337,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | S |
   | Details | Authentication uses hmac.compare_digest; removed both empty platform backends. Replication documentation explicitly describes plaintext passwords and payloads, the stopgap handshake, and future selectors/pyzmq options. |
-  | Commit | `a6e3ee195e06b534a598a5312637d23a0c159af6` — implements F21. |
+  | Commit | `a6e3ee195e06b534a598a5312637d23a0c159af6` — implements F21.; `abb219c2fe0f3582c7d8d9b49a12ccb407db5fd6` |
   | Validation | Python 3.12.2/macOS: 335 passed, 31 skipped; coverage 93.33% exceeds the 93% floor. Six new real-socket cases verify compare_digest delegation for valid, first/last-byte mismatch, empty, longer, and non-ASCII passwords. Existing bootstrap/rejection tests pass. Ruff lint/format, strict Sphinx build, deleted-backend import audit, diff checks, and AIFlow validation passed. Socket tests required execution outside the sandbox. |
   | Limitation | Passwords and replication payloads remain unencrypted; shared-password authentication is a stopgap, and pickle replication requires trusted peers on a trusted network. |
   | Limitation | Local validation covers Python 3.12/macOS; 30 native Linux fork cases and one free-threaded assertion were skipped. The hosted platform/interpreter matrix was not run here. |

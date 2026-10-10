@@ -11,10 +11,11 @@
 from coopy.base import init_persistent_system
 
 todo = init_persistent_system(TodoList)   # that's the whole integration
-todo.add("write the README")              # this change is now durable
+todo.add("write the README")              # journal this change
 ```
 
-Restart your program, and your `TodoList` is exactly where you left it.
+Reopen the same data directory to restore your `TodoList` from its snapshot
+and journal, provided your methods replay deterministically and storage is intact.
 
 ## Why coopy
 
@@ -23,11 +24,11 @@ Restart your program, and your `TodoList` is exactly where you left it.
   mapping layer. Your domain classes are plain Python.
 - **Memory speed.** Reads are ordinary attribute access - no queries, no
   network round trips, no serialization.
-- **Full history.** Every change is a journal entry, so state can always be
-  rebuilt by replaying what happened.
-- **Thread-safe by default.** Method calls are serialized for you.
-- **Replication built in.** Stream changes to read-only replicas over TCP or
-  Unix sockets.
+- **Journaled methods.** Recover recorded changes by replaying method calls
+  after the latest snapshot.
+- **Serialized calls.** Method calls through the proxy take a lock by default.
+- **Experimental replication.** Bootstrap read-only replicas and stream
+  subsequent changes over TCP or Unix sockets.
 
 ## The idea: object prevalence
 
@@ -39,8 +40,9 @@ a log.** This technique is called
 1. **Every change is a method call.** coopy wraps your object in a proxy.
    When you call a method that changes state, the call itself - method name
    and arguments - is appended to a journal on disk.
-2. **Snapshots save time.** Now and then the whole object is saved as a
-   snapshot, so the journal doesn't grow forever.
+2. **Snapshots save time.** Request or schedule a snapshot of the whole object
+   to reduce replay work. Old snapshots and journals are retained; there is no
+   automatic pruning.
 3. **Restart = snapshot + replay.** On startup coopy loads the latest snapshot
    and re-runs the journaled calls made after it. Same calls, same order,
    same state.
@@ -60,14 +62,16 @@ it does, and you get a much simpler stack in exchange.
 ## Quick start
 
 ```sh
-pip install coopy
+python -m pip install coopy
 ```
 
+Requires Python 3.10 or newer. Save your domain class in `todo_domain.py` so
+another process can import it during recovery:
+
 ```python
-from coopy.base import init_persistent_system
 from coopy.decorators import readonly
 
-class TodoList(object):
+class TodoList:
     def __init__(self):
         self.items = []
 
@@ -81,17 +85,35 @@ class TodoList(object):
     @readonly
     def pending(self):
         return [item["text"] for item in self.items if not item["done"]]
+```
+
+From the same directory, run this once to create and reopen a persistent list:
+
+```python
+from coopy.base import init_persistent_system
+from todo_domain import TodoList
 
 todo = init_persistent_system(TodoList)
-todo.add("buy milk")
-todo.add("write the README")
-todo.done(0)
-print(todo.pending())   # ['write the README'] - also after a restart
-todo.close()
+try:
+    todo.add("buy milk")
+    todo.add("write the README")
+    todo.done(0)
+    print(todo.pending())   # ['write the README'] on the first run
+finally:
+    todo.close()
+
+todo = init_persistent_system(TodoList)
+try:
+    print(todo.pending())   # the same list, recovered from disk
+finally:
+    todo.close()
 ```
 
 Data is stored in a directory named after your class (`todolist/` here).
-Pass `basedir="some/dir"` to choose another location.
+Pass `basedir="some/dir"` to choose another location; its parent must exist.
+Use one process and one persistent proxy per data directory. Stop writers
+before closing. Closing does not take a snapshot. Running the writes above
+again adds more items to the existing list.
 
 ## The rules
 
@@ -103,8 +125,8 @@ That means:
   journaled.
 - **Use `self._clock` for time.** Call `self._clock.now()`, `utcnow()` or
   `today()` instead of `datetime.now()`. coopy records the value and hands
-  back the same one on replay. coopy rejects classes that call
-  `datetime.now()` directly.
+  back the same one on replay. Source validation catches some direct clock
+  calls, but cannot prove that your methods are deterministic.
 - **No other outside input inside methods** - no random numbers, network
   calls or file reads. Do those outside and pass the results in as
   arguments.
@@ -117,50 +139,92 @@ That means:
 | Decorator | Effect |
 | --- | --- |
 | `@readonly` | Not journaled. Use for queries. |
-| `@abort_exception` | If the method raises, the call is not journaled. |
+| `@abort_exception` | If the method raises, the call is not journaled. No rollback is performed. |
 | `@unlocked` | Skips coopy's lock; you handle thread safety yourself. |
 
 **Snapshots** keep restarts fast:
 
 ```python
-todo.take_snapshot()               # take one now
-todo.start_snapshot_manager(3600)  # or every hour, in the background
+todo = init_persistent_system(TodoList)
+try:
+    todo.take_snapshot()               # take one now
+    todo.start_snapshot_manager(3600)  # first background snapshot after an hour
+    # Run your application here.
+finally:
+    todo.close()                       # stops the snapshot timer
 ```
 
-**Replication** streams every change to read-only replicas:
+**Replication** is experimental. A new replica receives the primary's state
+and queued actions before becoming readable. From a source checkout, run the
+[complete local example](docs/examples/replication.py):
+
+```sh
+python docs/examples/replication.py
+```
+
+Wait for `connection.wait_until_synchronized(timeout=10)` before querying a
+replica, and handle a false result. Replication is asynchronous and does not
+provide durable replica journaling, automatic reconnect, or failover. See the
+[replication guide](docs/replication.rst) for lifecycle and protocol limits.
+
+## Recovery and durability
+
+`init_persistent_system` defaults to `recovery="strict"` and
+`durability="buffered"`. Strict recovery raises `coopy.restore.RecoveryError`
+on detected corruption or replay divergence; the exception's `report` identifies
+where replay stopped. A recovered proxy exposes `recovery_report`.
+
+Buffered writes flush to the operating system, but do not sync every action to
+disk. For per-action `os.fsync` before acknowledgment, open with:
 
 ```python
-# primary
-todo.start_master(port=8012, password="secret")
-
-# replica, started from a copy of the primary's state
-replica.start_slave("primary-host", 8012, password="secret")
+todo = init_persistent_system(TodoList, durability="sync")
 ```
+
+Choose the policy on each open and close the proxy as above. Synchronous mode
+requires POSIX directory-sync support and remains subject to filesystem and
+device guarantees. A `coopy.journal.PersistenceError` can occur after memory
+has changed or a record has persisted; there is no rollback. Stop writers and
+inspect recovery before retrying a failed mutation.
+
+For explicit inspection of damaged, trusted storage, `recovery="salvage"`
+returns a `RecoveryResult` containing `system` and `report`, rather than a
+writable proxy. It stops at the first defect and does not modify persistence
+files. Preserve a backup first; salvage is not a repair operation. Read the
+[persistence and recovery guide](docs/usage.rst) for the full contract.
 
 ## Good to know
 
 - **Security:** journals, snapshots and replication use `pickle`, which can
   run arbitrary code when loaded. Only restore data directories you trust,
   and only replicate between trusted hosts on a trusted network.
-- **Durability:** each change is written and flushed to the journal as soon
-  as the call completes, so it survives a crash of your program. coopy does
-  not `fsync` every write, so a power failure can lose the most recent
-  changes.
+- **Replay:** keep external effects outside journaled methods; recovery can
+  execute those methods again. Use compatible, importable domain classes.
 - **Python:** 3.10 or newer. Python 2 support ended with coopy 0.4.x.
 
 ## Documentation
 
 Full docs: http://coopy.readthedocs.org
 
+The checkout includes an [executable tutorial](docs/tutorial.rst),
+[decorator semantics](docs/method_decorators.rst), and
+[checkpoint guarantees](docs/snapshots.rst).
+
 ## Development
 
 ```sh
 git clone https://github.com/felipecruz/coopy.git
 cd coopy
-pip install -e ".[test]"
-make test       # run the tests
-make coverage   # HTML coverage report in htmlcov/
+python -m pip install -e ".[test,docs]"
+python -m pytest --verbose -W error::DeprecationWarning
+python -m pytest --cov-report html --cov coopy  # report in htmlcov/
+python -m sphinx -W --keep-going -b html docs build/docs
 ```
+
+Open `build/docs/index.html` for the local guide. See
+[testing documentation](docs/tests.rst) for focused example checks. `make test`
+also runs the tests, but first removes build outputs, coverage reports, and
+coopy logs through `make clean`.
 
 Contributions are welcome - fork the repo and open a pull request.
 

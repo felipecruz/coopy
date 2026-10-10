@@ -6,15 +6,17 @@
 coopy
 -------
 
-**coopy** is a simple, transparent, non-intrusive persistence library for python language. It's released under `BSD License`_
+**coopy** persists plain Python objects using snapshots and method-call
+journals. It is released under the `BSD License`_.
 
-* **Simple** - you don't have to learn an API. You can use it with just one line of code.
-* **Transparent** - you don't need to call any API functions, just your Object methods.
-* **Non-Intrusive** - no inheritance, no interface.. only pure-python-business code.
+Wrap your domain object with ``coopy.base.init_persistent_system`` and call
+methods on the returned proxy. No domain base class or ORM mapping is required.
+The object graph stays in memory, so it must fit in memory. Reopening loads
+the latest snapshot and replays subsequent journaled calls.
 
-It is based on the techniques of system snapshotting and transaction journalling. In the prevalent model, the object data is kept in memory in native object format, rather than being marshalled to an RDBMS or other data storage system. A snapshot of data is regularly saved to disk, and in addition to this, all changes are serialised and a log of transactions is also stored on disk.
-
-http://en.wikipedia.org/wiki/Object_prevalence
+Request snapshots manually or schedule them through the proxy. Snapshots
+reduce recovery work; old snapshots and journals are retained without
+automatic pruning.
 
 Using
 -----
@@ -28,22 +30,30 @@ for the storage model.
 Restrictions
 ------------
 
-This should not affect end-user code. To get datetime or date objects you
-need to get from an internal clock. Check this page :doc:`use_clock`
+Mutate state through proxy methods and keep their behavior deterministic.
+Use the :doc:`recorded clock <use_clock>` for time, pass other external inputs
+as arguments, and keep external effects outside replayed methods. Direct
+changes to exposed mutable objects are not journaled.
+
+Use one process and one persistent proxy per data directory. Only load trusted
+snapshots and journals: they contain pickles that can execute code. The
+:doc:`persistence guide <usage>` describes strict recovery, salvage inspection,
+and buffered versus synchronous durability.
 
 Status
 ------
 
-coopy requires Python 3.10 or newer.
+coopy requires Python 3.10 or newer. :doc:`replication` is experimental; it
+does not provide durable replica journaling or automatic failover.
 
-contribute
+Contribute
 ----------
 
-**coopy** code is hosted on github at: http://github.com/felipecruz/coopy
+Source and issue tracking: https://github.com/felipecruz/coopy
 
-Found a bug? http://github.com/felipecruz/coopy
+See :doc:`installation` and :doc:`tests` to set up a checkout and validate changes.
 
-contents
+Contents
 --------
 
 .. toctree::

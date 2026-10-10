@@ -3,49 +3,36 @@
 Tests
 -----
 
-First time::
+Install the optional test dependencies from the repository root, using your
+virtual environment's Python::
 
-    pip install -e ".[test]"
+    python -m pip install -e ".[test]"
 
-To actually run the tests::
+Run the suite with the same deprecation-warning policy as CI::
 
-    make test
+    python -m pytest --verbose -W error::DeprecationWarning
 
-Coverage Report
+The suite includes local socket tests, so the environment must permit binding
+and connecting to local ports. CI runs on Linux and macOS with Python 3.10–3.14.
+A local run verifies only the interpreter and platform used for that run.
+
+``make test`` also runs pytest, but first invokes ``make clean``, which removes
+build outputs, coverage reports, package metadata, bytecode, and coopy logs.
+Use the direct pytest command above to keep existing artifacts.
+
+Coverage report
 ---------------
 
-First time::
+Generate an HTML report for the current checkout::
 
-    pip install -e ".[test]"
+    python -m pytest --cov-report html --cov coopy
 
-And then::
+Open ``htmlcov/index.html``. For a terminal report instead, run::
 
-    make coverage
+    python -m pytest --cov coopy
 
-Coverage report::
-
-    $ python -m pytest --cov coopy
-
-    Name                           Stmts   Miss  Cover
-    --------------------------------------------------
-    coopy/__init__                     0      0   100%
-    coopy/base                       135     17    87%
-    coopy/decorators                   9      0   100%
-    coopy/error                        3      0   100%
-    coopy/fileutils                  125      5    96%
-    coopy/foundation                  71      8    89%
-    coopy/journal                     30      2    93%
-    coopy/network/__init__             1      0   100%
-    coopy/network/default_select     192     56    71%
-    coopy/network/linux_epoll          0      0   100%
-    coopy/network/network             42     10    76%
-    coopy/network/osx_kqueue           0      0   100%
-    coopy/restore                     42      6    86%
-    coopy/snapshot                    45      3    93%
-    coopy/utils                        9      0   100%
-    coopy/validation                  45      1    98%
-    --------------------------------------------------
-    TOTAL                            749    108    86%
+``make coverage`` is equivalent to the HTML report command. Coverage figures
+depend on the current code and tests; generate a fresh report when needed.
 
 Maintained documentation examples
 ---------------------------------
