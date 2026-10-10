@@ -9,11 +9,13 @@ Evidence reviewed on 2026-10-09: `README.md` first, then implementation and test
 
 History is non-shallow with 122 reachable commits. Review covered the latest 50, older capability-specific diffs, and rename-following README history. The only local tag is `0.4b`, matching its historical package manifest; subsequent manifests reached `0.4.6b`. Current code, README, and changelog declare `0.5.0`, but there is no local 0.5.0 tag or verified publication. CI defines testing on Python 3.10–3.14 for Linux/macOS and tag-triggered PyPI publishing; configuration is not evidence of successful runs or releases. Core persistence already exists in the initial import, so its original implementation provenance cannot be reconstructed. Old planning files only ask for a stable release and finished documentation. The proposed priority is therefore recoverable local persistence before wider replication use.
 
+**Release plan (updated 2026-10-10).** PyPI's latest release is still 0.3.1; `0.4b` exists only as a git tag, and 0.5.0 was declared in code but never tagged or published. The next release is **0.6.0**. It ships everything already implemented below (F1–F21) together with the release blockers F22–F25. Development milestones that were numbered v0.5.1, v0.6.0 and v0.7.0 while that work was planned are kept as subsections of the 0.6.0 release, so their history and evidence stay intact. Migrations and operational tooling follow in v0.7.0, and transactional rollback in v0.8.0. Distribution and decentralization stay in [FUTURE.md](FUTURE.md) Parts 2 and 3.
+
 Checked items record verified implemented behavior. AIFlow also uses checks as request selections: clear the completed selections and select the desired planned items before copying an implementation request. Done timestamps record this audit date, not release dates.
 
 ## v0.5.0 — Establish the current persistence baseline
 
-Current declared code baseline; release publication is unverified. Goal: identify what developers can use today and where correctness ends. Audit exit criterion: implemented paths have code/test evidence, and incomplete workflows remain explicitly partial. This baseline does not certify production readiness.
+Declared in code but never tagged or published; this baseline ships as part of the 0.6.0 release. Goal: identify what developers can use today and where correctness ends. Audit exit criterion: implemented paths have code/test evidence, and incomplete workflows remain explicitly partial. This baseline does not certify production readiness.
 
 - [x] **F1 — Persist ordinary method calls across a clean restart.** The proxy records non-readonly, non-abort-decorated calls, returns domain results, and reconstructs state from an initial snapshot plus journal replay.
 
@@ -80,9 +82,13 @@ Current declared code baseline; release publication is unverified. Goal: identif
   | Next step | Bound pending replication bytes per slave and disconnect clients exceeding the configured limit. |
   | Next step | Run the supported Python and operating-system CI matrix; this job validated local Python 3.12 only. |
 
-## v0.5.1 — Make installation and local recovery dependable
+## v0.6.0 — First release since 0.3.1
 
-Planned corrective version, not a release claim. Goal: users can install the package and retain successful local changes through snapshots and clean restarts. Exit criterion: F6–F10 acceptance checks pass, with regression coverage for the three reproduced persistence failures and accurate executable documentation.
+Next release. It contains the persistence baseline above, the implemented milestones below (F6–F21), and the open release blockers F22–F25. Goal: a published, installable package whose storage format, single-writer rule and migration story are explicit before users accumulate data. Exit criterion: F22–F25 acceptance checks pass, the full hosted CI matrix is green on the release commit, and the `v0.6.0` tag publishes to PyPI through the trusted-publishing job.
+
+### Implemented: installation and local recovery (planned as v0.5.1)
+
+Originally a planned corrective version. Goal: users can install the package and retain successful local changes through snapshots and clean restarts. Exit criterion: F6–F10 acceptance checks pass, with regression coverage for the three reproduced persistence failures and accurate executable documentation.
 
 - [x] **F6 — Build distributions with the actual README.** At the original audit, `pyproject.toml` pointed to `README.markdown`, absent from HEAD after its rename to `README.md`. An untracked replacement appeared during that audit; preserve and reconcile that work when fixing metadata, while preserving `README.md` content. Accept when sdist and wheel build, `twine check --strict` passes, both include the expected project description, and installation from the built artifacts can import coopy and complete a temporary-directory persistence round trip.
   Complexity assessment before implementation: M; clear acceptance criteria across two implementation/tracking files, plus job notes; distribution validation and existing CI integration are the affected components. This job strengthens the installed-artifact round trip to restore in a fresh Python process. The stale metadata and replacement README were already reconciled in `986fecea236ea415207c1eddc0b9b1218f6f97b4`; preserve the current README verbatim and validate that result. No unresolved specification ambiguity.
@@ -160,9 +166,9 @@ Planned corrective version, not a release claim. Goal: users can install the pac
   | Limitation | Hosted CI, other supported Python/OS combinations, and Sphinx 7 were not run locally. |
   | Next step | Run the hosted documentation job and supported Python/OS test matrix. |
 
-## v0.6.0 — Expose recovery guarantees and complete slave bootstrap
+### Implemented: recovery guarantees and slave bootstrap (planned as v0.6.0)
 
-Provisional later plan, not a scheduled release. Goal: callers can distinguish complete recovery from partial state and use replication with a defined synchronization boundary. Exit criterion: the selected recovery/durability contracts are documented and fault-tested, and a slave joining a populated master reaches matching state through concurrent updates.
+Originally a provisional later plan. Goal: callers can distinguish complete recovery from partial state and use replication with a defined synchronization boundary. Exit criterion: the selected recovery/durability contracts are documented and fault-tested, and a slave joining a populated master reaches matching state through concurrent updates.
 
 - [x] **F11 — Make incomplete recovery visible to callers.** `restore.py` logs several decoding/replay failures and continues, while EOFError is always treated as ordinary end-of-file. Provide an explicit strict recovery path that refuses to expose a usable proxy after detected corruption or divergence, plus an explicitly chosen salvage path reporting what was recovered and where it stopped. Accept fixtures for a truncated record, corrupt middle record, missing method, originally successful action now failing, and originally failing action now succeeding; preserve expected exceptions and identify legacy actions lacking outcome metadata. Depends on F7 and F9 so checkpoint defects do not masquerade as recovery policy.
   Complexity assessment before implementation: M; Clear acceptance fixtures; estimated five implementation files across recovery, initialization, tests, and documentation, plus tracking and job notes. API ambiguities resolved with strict recovery by default and explicit salvage returning inspection state and a report. Boolean outcome compatibility is retained and legacy records are identified.
@@ -226,7 +232,7 @@ Provisional later plan, not a scheduled release. Goal: callers can distinguish c
   | Limitation | Other supported Python/OS combinations and actual power loss were not tested locally. |
   | Next step | Run the supported Python and operating-system CI matrix. |
 
-## v0.7.0 — Modern Python
+### Implemented: modern Python (planned as v0.7.0)
 
 Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python), covering all items 1.1–1.7. These entries are planned work, not implementation or release claims. Goal: improve typing, everyday API use, schema evolution, performance, concurrency, and contributor tooling while preserving plain domain objects and Python 3.10+ compatibility. Exit criterion: each item below meets its acceptance criteria, with compatibility and operational limits documented. Distribution and decentralization proposals in Parts 2 and 3 remain future work.
 
@@ -344,6 +350,42 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Next step | Implement the encrypted transport proposed in FUTURE.md §2.2 as a separate feature. |
 
 
+### Release blockers
+
+These items change the on-disk format or protect data, so they must land before the first release creates data that later versions have to read.
+
+- [ ] **F22 — Enforce one writer per data directory.** The documentation says to use one process and one persistent proxy per data directory, but nothing enforces it: opening the same directory twice in one process returns two writable proxies, and both journal writes without error (reproduced 2026-10-10). Two processes would interleave journal records silently. Hold an exclusive lock for the lifetime of a writable system: a lock file in the data directory locked with `fcntl.flock` on POSIX and `msvcrt.locking` on Windows, released by `close()`, the context manager and process exit. A second open of the same directory, in the same or another process, raises a new `LockError` (subclass of `LifecycleError`) naming the directory and, where available, the holder's PID. Salvage recovery is read-only and must not take the lock. Acceptance: same-process and cross-process double opens fail; close, context-manager exit and a killed holder release the lock; salvage works while a writer holds the lock; `AsyncPersistent` and replicas follow the same rule. Document that network filesystems may not honor advisory locks.
+
+- [ ] **F23 — Version the on-disk format.** Only HMAC-signed files carry a magic header (`COOPY-HMAC-1`); plain pickle and JSON journals and snapshots have no marker, so a future format change cannot be told apart from corruption. Write a small manifest (for example `coopy.json` with format version, serializer name, signing on/off and creating coopy version) when a data directory is created, and refuse to open a directory whose format version is newer than the running library with a clear error. Directories without a manifest are treated as legacy format 0 and remain readable; the manifest is written on the next writable open. Acceptance: new directories get a manifest; legacy 0.3/0.4/0.5 fixtures still restore; a future-version manifest fails before any decoding; switching serializer or signing against an existing manifest fails with a clear message instead of a decode error. Coordinates with F22 so the manifest is written under the lock.
+
+- [ ] **F24 — Document migrating snapshot state.** F17 upgrades journal actions and maps renamed classes, but a snapshot taken before a domain class gained, renamed or restructured a field loads with the old shape. Until F26 adds first-class support, document the supported pattern: a class-level state version plus `__setstate__` that upgrades old dictionaries, with a worked example (adding a field with a default, renaming a field, splitting one field into two) and a test that restores a committed old-format snapshot fixture. Acceptance: the example runs in the documentation tests against a stored fixture, and the migration guide explains when to use action upcasters, class aliases or `__setstate__`.
+
+- [ ] **F25 — Prepare and publish 0.6.0.** Set `__version__ = "0.6.0"` and the Sphinx `version`; fold the changelog's 0.5.0 and Unreleased sections into a dated 0.6.0 entry with an "Upgrading" section listing breaking changes (strict recovery by default, the new replication handshake, the `start_master`/`start_slave` deprecations and their v0.9 removal). Verify the PyPI trusted publisher for `felipecruz/coopy`, workflow `ci.yml`, environment `pypi`. Rebase and merge or close the open Dependabot pull requests. Remove stale references to deleted `.aiflow` notes. Acceptance: hosted CI is green on the release commit, `v0.6.0` publishes, a fresh `pip install coopy==0.6.0` imports and completes a persistence round trip, and the README badges resolve.
+
+## v0.7.0 — Migrations and operations
+
+Planned. Goal: users can evolve their data, manage disk usage and inspect storage without writing custom scripts. Exit criterion: each item meets its acceptance checks with documentation and tests against stored fixtures from 0.6.0.
+
+- [ ] **F26 — Migrate snapshot state with registered upgraders.** Record a domain state version in each snapshot (from a class attribute such as `__coopy_version__`) and let applications register upgraders, mirroring F17's `ActionSchemas`: `StateSchemas().register(TodoList, from_version=1, upgrade=fn)`. Recovery applies upgraders in order before replay; unknown or missing versions fail through the recovery policy. Acceptance: 0.6.0 snapshot fixtures upgrade across several versions; strict mode fails on a missing upgrader and salvage reports it; F24's `__setstate__` pattern keeps working.
+
+- [ ] **F27 — Convert a data directory between formats.** The modern API guide states that changing formats "requires an explicit export/import to a new directory; no conversion command is provided". Add `coopy.convert(src, dst, *, serializer=..., secret=..., new_secret=...)` that recovers `src` strictly, writes a fresh checkpoint to an empty `dst` with the target serializer and signing, and never modifies `src`. Acceptance: pickle→JSON, JSON→pickle, unsigned→signed and signed→unsigned round trips restore identical state; non-empty destinations and failed recovery leave nothing behind.
+
+- [ ] **F28 — Rotate integrity secrets.** F14 has no key rotation: changing the secret makes existing signed storage unreadable. Support reading with a list of accepted secrets while writing with the newest, and provide an explicit re-sign path (through F27) after which old secrets can be retired. Acceptance: a directory signed with key A opens with `[B, A]`, new records are signed with B, re-signing removes the dependence on A, and wrong or retired keys still fail before decoding.
+
+- [ ] **F29 — Prune old snapshots and journals.** Every snapshot and journal is kept forever, so disk use only grows. Add `coopy.control(system).prune(keep=N)` (and an optional `keep_for=timedelta`) that deletes checkpoints older than the newest N together with journals no longer needed to replay from the oldest kept checkpoint. Never delete the files needed to recover the current state; take the F22 lock. Acceptance: recovery after pruning matches live state; pruning during concurrent writes and snapshot publication is safe; signed directories stay verifiable.
+
+- [ ] **F30 — Add a command-line tool.** Inspecting or maintaining a directory currently requires Python code. Add `python -m coopy` with `inspect DIR` (files, checkpoint, action counts, format manifest), `verify DIR` (strict recovery without writing; non-zero exit on failure), `log DIR` (list journaled actions with method names, arguments summary and recorded times), `snapshot DIR CLASS`, `prune DIR --keep N` and `convert SRC DST`. Commands that load data must state that they unpickle trusted data and require the domain module on `PYTHONPATH`. Acceptance: each command is tested against fixtures, honors F22 locking, and exits non-zero on errors.
+
+- [ ] **F31 — Restore to a point in time.** The journal already holds everything needed to rebuild past states. Add read-only recovery up to a bound: `coopy.open(..., recovery="salvage", until=ActionRef | datetime)` or a dedicated `coopy.replay(..., until=...)`, using recorded clock values for time bounds. Acceptance: state at action N or time T matches a live capture taken at that point; bounds before the oldest kept checkpoint fail clearly; nothing is written.
+
+- [ ] **F32 — Optionally snapshot on close.** `close()` never takes a snapshot, so every restart replays the whole journal since the last checkpoint. Add `close(snapshot=True)` and a matching context-manager option, keeping the current default. Acceptance: with the option, the next open replays no actions; snapshot failures during close are reported and leave the previous checkpoint usable.
+
+## v0.8.0 — Transactions
+
+Planned. Goal: domain methods that fail can leave state unchanged instead of partially mutated. Exit criterion: the chosen design is documented with its cost, and the opt-in mechanism passes fault tests.
+
+- [ ] **F33 — Roll back in-memory changes when a call fails.** `@abort_exception` keeps a failing call out of the journal but leaves its in-memory mutations in place, and synchronous-durability persistence failures can likewise leave memory changed. Evaluate copy-on-write or snapshot-and-restore rollback, choose an opt-in mechanism (for example `@transactional` or a per-system policy), and document its memory and latency cost. Acceptance: a failing transactional call leaves state equal to the state before the call, live and after restart; non-transactional behavior is unchanged; nested calls and replicas are defined.
+
 ## Validation record
 
 Checks ran against a temporary copy of current source/tests using the existing repository virtual environment, without installs, services, or network calls. The README and starter hashes were recorded; the target was reread immediately before replacement. `make test` was not invoked because it first runs a destructive clean target. Its pytest step was adapted to exclude socket activity and repository cache writes:
@@ -358,7 +400,7 @@ Additional temporary Python probes invoked the real library: creating `before`, 
 
 AIFlow validation used `'/Users/felipecruz/Projects/aiflow/build/AIflow.app/Contents/MacOS/MarkdownPreview' --check '/Users/felipecruz/Projects/coopy/ROADMAP.md'`: **0 errors, 2 warnings**. Both warnings recommend marking partial items with implementation commits Done. F3 and F5 deliberately retain Partial status and their provenance because the corresponding recovery/synchronization outcomes are incomplete; marking them Done would contradict the evidence.
 
-Open decisions for v0.6.0: choose whether strict recovery becomes the default or stays opt-in, define how synchronous durability interacts with existing buffered behavior, and decide which historical pickle formats merit explicit migration support before making compatibility promises.
+Open decisions at the time of this audit (since resolved by F11, F12 and F17): choose whether strict recovery becomes the default or stays opt-in, define how synchronous durability interacts with existing buffered behavior, and decide which historical pickle formats merit explicit migration support before making compatibility promises.
 
 ## Implementation validation — 2026-10-09
 
@@ -366,4 +408,4 @@ Job BE4A3268-73C5-40D5-ABB5-4B0F5AAB00A8 implemented the selected F3 and F5 item
 
 The final full-suite command was `.venv/bin/python -m pytest -q -W error::DeprecationWarning`: **83 passed** on local Python 3.12.2. Socket checks ran with local network permissions after the sandbox rejected binding; both TCP and Unix-socket integration checks passed. The suite includes a real subprocess exit before checkpoint publication. It does not verify power-loss behavior or the multi-platform CI matrix. `git diff --check` passed, and the AIFlow MarkdownPreview roadmap check reported **OK, with no errors or warnings** before the tracking commit.
 
-Upgrade/readiness instructions and remaining operational caveats are recorded in `.aiflow/notes/NOTES_BE4A3268-73C5-40D5-ABB5-4B0F5AAB00A8.MD`, `docs/snapshots.rst`, and `docs/replication.rst`. No implementation blockers remain; limitations and follow-up actions are listed separately in the selected items' tables.
+Upgrade/readiness instructions and remaining operational caveats are recorded in `docs/snapshots.rst` and `docs/replication.rst`. The job's AIFlow notes file was removed from the repository on 2026-10-10. No implementation blockers remain; limitations and follow-up actions are listed separately in the selected items' tables.
