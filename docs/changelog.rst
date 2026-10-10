@@ -20,6 +20,9 @@ Unreleased
   marking a replica synchronized. The authentication framing and readiness
   marker require upgrading both peers together. Replication remains experimental;
   see :doc:`replication` for unsupported durability and failover behavior.
+* Type information ships with the package (``py.typed``). The proxy keeps the
+  domain class type, decorators preserve signatures, and ``coopy.control``
+  gives typed persistence controls. See :doc:`modern-api`.
 * The documentation includes executable examples checked by pytest and an
   HTML build that treats Sphinx warnings as errors.
 

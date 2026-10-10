@@ -28,6 +28,59 @@ Typing is gradual: decorators, errors and integrity use strict checks; base
 requires annotated definitions. Dynamic replay and networking internals are
 not yet strictly checked.
 
+Typing your domain
+------------------
+
+Annotate the domain class as usual; the proxy returned by ``coopy.open`` is
+typed as that class, so type checkers verify arguments and return values::
+
+    # todo_domain.py
+    from datetime import datetime
+    from typing import TypedDict
+
+    from coopy.decorators import readonly
+    from coopy.foundation import RecordClock
+
+
+    class Item(TypedDict):
+        text: str
+        done: bool
+        created: datetime
+
+
+    class TodoList:
+        _clock: RecordClock  # injected by coopy
+
+        def __init__(self) -> None:
+            self.items: list[Item] = []
+
+        def add(self, text: str) -> int:
+            self.items.append({"text": text, "done": False, "created": self._clock.now()})
+            return len(self.items) - 1
+
+        def done(self, index: int) -> None:
+            self.items[index]["done"] = True
+
+        @readonly
+        def pending(self) -> list[str]:
+            return [item["text"] for item in self.items if not item["done"]]
+
+::
+
+    # app.py
+    import coopy
+    from todo_domain import TodoList
+
+    with coopy.control(coopy.open(TodoList, "data")) as todo:
+        todo.done(todo.add("buy milk"))  # todo is TodoList
+        print(todo.pending())            # list[str]
+        todo.add(42)                     # mypy: expected "str"
+
+Declare ``_clock: RecordClock`` without a value: coopy injects the clock when
+the system opens and replaces it with a replaying clock during recovery.
+Keep the domain class in an importable module (not ``__main__``) so snapshots
+can be loaded by a later process. The example passes ``mypy --strict``.
+
 Opening and closing
 -------------------
 

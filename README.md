@@ -26,6 +26,8 @@ and journal, provided your methods replay deterministically and storage is intac
   network round trips, no serialization.
 - **Journaled methods.** Recover recorded changes by replaying method calls
   after the latest snapshot.
+- **Typed.** `init_persistent_system(TodoList)` returns a `TodoList` to your
+  type checker, so editors autocomplete methods and mypy checks arguments.
 - **Serialized calls.** Method calls through the proxy take a lock by default.
 - **Experimental replication.** Bootstrap read-only replicas and stream
   subsequent changes over TCP or Unix sockets.
@@ -131,6 +133,62 @@ That means:
   calls or file reads. Do those outside and pass the results in as
   arguments.
 - **Arguments and state must be picklable.**
+
+## Type hints
+
+coopy ships type information (`py.typed`). The proxy is typed as your domain
+class, decorators keep method signatures, and persistence controls go
+through `coopy.control()` so they don't clash with your own method names:
+
+```python
+# todo_domain.py
+from datetime import datetime
+from typing import TypedDict
+
+from coopy.decorators import readonly
+from coopy.foundation import RecordClock
+
+
+class Item(TypedDict):
+    text: str
+    done: bool
+    created: datetime
+
+
+class TodoList:
+    _clock: RecordClock  # injected by coopy
+
+    def __init__(self) -> None:
+        self.items: list[Item] = []
+
+    def add(self, text: str) -> int:
+        self.items.append({"text": text, "done": False, "created": self._clock.now()})
+        return len(self.items) - 1
+
+    def done(self, index: int) -> None:
+        self.items[index]["done"] = True
+
+    @readonly
+    def pending(self) -> list[str]:
+        return [item["text"] for item in self.items if not item["done"]]
+```
+
+```python
+# app.py
+import coopy
+from todo_domain import TodoList
+
+with coopy.control(coopy.open(TodoList, "data")) as todo:  # todo: TodoList
+    todo.done(todo.add("buy milk"))
+    print(todo.pending())                                    # list[str]
+    todo.add(42)  # mypy: incompatible type "int"; expected "str"
+```
+
+`coopy.open` is an alias of `init_persistent_system`. `coopy.control(todo)`
+gives typed access to `take_snapshot()`, `close()`, `start_snapshot_manager()`
+and replication, and works as a context manager. `recovery="salvage"` is typed
+as `RecoveryResult[TodoList]`. See the
+[typed API guide](docs/modern-api.rst) for details and current limits.
 
 ## More features
 

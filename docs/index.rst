@@ -24,7 +24,8 @@ Using
 Follow the executable :doc:`tutorial` to open a persistent domain, record
 mutations and clock values, take a checkpoint, close, and reopen it. Read
 :doc:`usage` for the current durability and recovery contract and :doc:`basics`
-for the storage model.
+for the storage model. Domain classes can be fully type-annotated; see
+:doc:`modern-api` for how the proxy keeps their types.
 
 
 Restrictions
