@@ -30,7 +30,21 @@ where available, the holder's PID. ``recovery="salvage"`` is read-only and does
 not take the lock, so it can inspect a directory while a writer runs. The lock
 is advisory: network filesystems such as NFS or SMB may not honor it, so keep
 data directories on local storage. Leave ``coopy.lock`` in place; it is reused
-on the next open. Stop application callers, then call ``close()`` in
+on the next open.
+
+Each data directory carries a manifest, ``coopy.json``, recording the on-disk
+``format_version``, the ``serializer`` name, whether storage is HMAC-``signed``
+and the ``coopy_version`` that wrote it. A writable open creates it, under the
+directory lock, when the directory is new; a directory without one (written by
+coopy 0.5 or earlier) is read as legacy format 0 and gains a manifest on its
+next successful writable open. Salvage never writes it. Every open, including
+salvage and ``coopy.restore.restore``, checks the manifest before decoding
+anything: a newer ``format_version`` than the running library supports, an
+unreadable manifest, a different serializer, or a secret given for unsigned
+storage (or missing for signed storage) raises ``coopy.error.FormatError``
+naming the directory and the mismatch. Do not edit the manifest by hand.
+
+Stop application callers, then call ``close()`` in
 ``finally`` to stop the snapshot timer and close subscribers. There is no proxy
 context manager. Do not reuse a closed proxy. Reopen with the same data path
 and compatible, importable domain classes. ``close()`` does not take a snapshot.

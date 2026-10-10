@@ -10,6 +10,7 @@ import pytest
 import coopy
 from coopy.error import PersistenceError
 from coopy.foundation import Action
+from coopy.manifest import MANIFEST_FILE
 from coopy.restore import RecoveryError
 
 
@@ -96,6 +97,8 @@ def test_json_rejects_cycles_and_shared_objects():
 def test_json_never_falls_back_to_pickle(tmp_path):
     with coopy.open(Tasks, tmp_path) as tasks:
         tasks.add("pickle")
+    # Without a manifest (legacy format 0) the codec itself must refuse pickle.
+    (tmp_path / MANIFEST_FILE).unlink()
     before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
     with pytest.raises(RecoveryError, match="checkpoint"):
         coopy.open(Tasks, tmp_path, serializer=json_serializer())

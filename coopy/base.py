@@ -22,7 +22,7 @@ from types import TracebackType
 from typing import Any, Generic, Literal, TypeVar, cast, overload
 
 from coopy import __version__ as __version__
-from coopy import fileutils
+from coopy import fileutils, manifest
 from coopy.error import ConfigurationError, LifecycleError, ReplicationError
 from coopy.foundation import Action, Publisher, RecordClock
 from coopy.integrity import IDENTITY_FILE, Integrity, validate_secret
@@ -255,14 +255,19 @@ def _open_writable(
     serializer: Serializer | None,
     schemas: ActionSchemas | None,
 ) -> CoopyProxy:
-    # if no snapshot files, create first one with a 'empty' system
-    integrity = None
-    new_signed = (
-        secret is not None
-        and not fileutils.list_snapshot_files(basedir)
+    # Runs under the directory lock, so the manifest has a single writer.
+    existing = manifest.check(basedir, serializer=serializer, secret=secret)
+    empty = (
+        not fileutils.list_snapshot_files(basedir)
         and not fileutils.list_log_files(basedir)
         and not os.path.exists(os.path.join(basedir, IDENTITY_FILE))
     )
+    if existing is None and empty:
+        manifest.write(basedir, serializer=serializer, secret=secret, durability=durability)
+
+    # if no snapshot files, create first one with a 'empty' system
+    integrity = None
+    new_signed = secret is not None and empty
     if new_signed:
         assert secret is not None
         integrity = Integrity.open(basedir, secret, create=True, durability=durability)
@@ -291,6 +296,9 @@ def _open_writable(
         obj, basedir, mode=recovery, secret=secret, serializer=serializer, schemas=schemas
     )
     obj = result.system
+    if existing is None and not empty:
+        # A legacy (format 0) directory restored cleanly with these settings.
+        manifest.write(basedir, serializer=serializer, secret=secret, durability=durability)
 
     delta = time.perf_counter() - start
     logger.info(CORE_LOG_PREFIX + "restore spent %.6f seconds" % delta)

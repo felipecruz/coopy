@@ -116,7 +116,10 @@ Data is stored in a directory named after your class (`todolist/` here).
 Pass `basedir="some/dir"` to choose another location; its parent must exist.
 Use one process and one persistent proxy per data directory: a writable open
 locks the directory, and a second one raises `LockError` until the first is
-closed (network filesystems may not honor the lock). Stop writers
+closed (network filesystems may not honor the lock). The directory's
+`coopy.json` manifest records its format version, serializer and signing, and
+reopening with different settings or with an older coopy than the format needs
+raises `FormatError` before anything is decoded. Stop writers
 before closing. Closing does not take a snapshot. Running the writes above
 again adds more items to the existing list.
 

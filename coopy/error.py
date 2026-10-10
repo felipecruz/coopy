@@ -31,3 +31,7 @@ class IntegrityError(CoopyError, ValueError):
 
 class LockError(LifecycleError):
     """Another writer already holds the data directory lock."""
+
+
+class FormatError(CoopyError, ValueError):
+    """The data directory's on-disk format or settings do not match this open."""

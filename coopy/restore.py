@@ -8,7 +8,7 @@ from pathlib import Path
 from pickle import Unpickler
 from typing import Generic, TypeVar
 
-from coopy import fileutils
+from coopy import fileutils, manifest
 from coopy.error import ConfigurationError, CoopyError
 from coopy.foundation import Action, RestoreClock
 from coopy.integrity import IDENTITY_FILE, Integrity, IntegrityError, validate_secret
@@ -78,6 +78,8 @@ def recover(system, basedir, mode="strict", *, secret=None, serializer=None, sch
     if mode not in ("strict", "salvage"):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
     basedir = Path(basedir)
+    # Newer formats and mismatched settings fail before anything is decoded.
+    manifest.check(basedir, serializer=serializer, secret=secret)
     current_clock = system._clock
     report = RecoveryReport()
     recovered = None

@@ -51,6 +51,8 @@ class _AliasUnpickler(pickle.Unpickler):
 class PickleSerializer:
     """Trusted pickle, with optional aliases for moved/renamed classes."""
 
+    format_name = "pickle"
+
     def __init__(self, *, class_aliases: Mapping[tuple[str, str], type[Any]] | None = None) -> None:
         self.class_aliases = dict(class_aliases or {})
 
@@ -113,6 +115,8 @@ class _JsonReader:
 
 class JsonSerializer:
     """Versioned JSON trees. Never imports classes named by input data."""
+
+    format_name = "json"
 
     def __init__(self, registry: TypeRegistry | None = None) -> None:
         self.registry = registry if registry is not None else TypeRegistry()

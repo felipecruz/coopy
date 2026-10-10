@@ -138,7 +138,13 @@ Pickle remains the default, including its existing stream memo and file names.
 Old unsigned and HMAC-protected pickle storage remains readable. Explicit
 ``serializer=coopy.PickleSerializer()`` has the same wire format. Pass the same
 serializer, type registry, schema configuration and secret whenever reopening.
-Storage format is not auto-detected or converted in place.
+Storage format is not auto-detected or converted in place. The data
+directory manifest (``coopy.json``, see :doc:`usage`) records the serializer's
+``format_name`` (``"pickle"`` or ``"json"``) and whether storage is signed, and
+reopening with a different one raises ``coopy.error.FormatError`` before any
+decoding. A custom serializer may set a ``format_name`` class attribute to be
+checked the same way; one without it is recorded as ``custom:<class path>`` and
+is not compared.
 
 JSON is opt-in and only constructs registered application types. For example::
 

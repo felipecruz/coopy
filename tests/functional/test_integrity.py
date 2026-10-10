@@ -11,6 +11,7 @@ import pytest
 from coopy import restore, snapshot
 from coopy.base import init_persistent_system
 from coopy.integrity import HEADER, IDENTITY_FILE, MAGIC, TAG_SIZE, Integrity
+from coopy.manifest import MANIFEST_FILE
 from coopy.restore import RecoveryError
 
 from .test_recovery_policy import Ledger
@@ -127,6 +128,8 @@ def test_identity_and_mode_fail_closed(tmp_path, monkeypatch, damage):
         p = init_persistent_system(Ledger, str(tmp_path))
         p.add("legacy")
         p.close()
+        # A legacy directory has no manifest to reject the secret up front.
+        (tmp_path / MANIFEST_FILE).unlink()
     else:
         signed(tmp_path)
     if damage == "missing_identity":

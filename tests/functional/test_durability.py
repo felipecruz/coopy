@@ -170,7 +170,8 @@ def test_sync_creation_rotation_and_snapshot_sync_directory(tmp_path, monkeypatc
     monkeypatch.setattr(os, "fsync", observe)
     data = tmp_path / "new"
     proxy = init_persistent_system(Ledger, str(data), durability="sync")
-    assert events == ["directory", "file", "directory", "directory"]
+    # parent, manifest + its directory entry, checkpoint + directory, journal directory
+    assert events == ["directory", "file", "directory", "file", "directory", "directory"]
     events.clear()
     proxy.publisher.subscribers[0].file.max_size = 1
     proxy.add("rotated")

@@ -28,6 +28,12 @@ Unreleased
   writable open of the same directory, in the same or another process, raises
   ``coopy.error.LockError`` (a ``LifecycleError``). Salvage recovery does not
   take the lock. See :doc:`usage`.
+* New and upgraded data directories carry a ``coopy.json`` manifest with the
+  on-disk format version, serializer name, signing flag and coopy version,
+  written under the directory lock. Directories without one are legacy format 0
+  and gain it on the next writable open. A newer format, or reopening with a
+  different serializer or signing setting, raises ``coopy.error.FormatError``
+  before anything is decoded. See :doc:`usage`.
 * The documentation includes executable examples checked by pytest and an
   HTML build that treats Sphinx warnings as errors.
 

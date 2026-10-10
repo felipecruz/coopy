@@ -67,6 +67,7 @@ Recovery and errors
    coopy.error.PersistenceError
    coopy.error.LifecycleError
    coopy.error.LockError
+   coopy.error.FormatError
    coopy.error.ReplicationError
    coopy.integrity.IntegrityError
    coopy.SerializationError
