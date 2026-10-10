@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     assert_type(
         coopy.open(Todo, serializer=coopy.JsonSerializer(), schemas=coopy.ActionSchemas()), Todo
     )
+    assert_type(coopy.open(Todo, state_schemas=coopy.StateSchemas()), Todo)
     assert_type(coopy.open(Todo(), recovery="salvage"), RecoveryResult[Todo])
     mode: str = "strict"
     assert_type(coopy.open(Todo, recovery=mode), Todo | RecoveryResult[Todo])

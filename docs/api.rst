@@ -48,6 +48,7 @@ Serialization and migrations
    coopy.JsonSerializer
    coopy.TypeRegistry
    coopy.ActionSchemas
+   coopy.StateSchemas
 
 Recovery and errors
 -------------------

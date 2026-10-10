@@ -55,6 +55,18 @@ class RestoreClock(object):
         return None
 
 
+class VersionedState(object):
+    """Snapshot envelope: the root object and its class's ``__coopy_version__``.
+
+    Only written for classes that declare the attribute, so unversioned
+    snapshots keep the 0.6.0 layout and count as version 1.
+    """
+
+    def __init__(self, version: int, state: Any) -> None:
+        self.version = version
+        self.state = state
+
+
 class Action(object):
     def __init__(
         self,

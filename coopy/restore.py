@@ -64,16 +64,26 @@ class RecoveryError(CoopyError, RuntimeError):
         )
 
 
-def recover(system, basedir, mode="strict", *, secret=None, serializer=None, schemas=None):
+def recover(
+    system,
+    basedir,
+    mode="strict",
+    *,
+    secret=None,
+    serializer=None,
+    schemas=None,
+    state_schemas=None,
+):
     """Replay in order, stopping at the first detected defect.
 
     Strict mode raises without returning state. Salvage returns an inspection
     result, never a writable proxy. A divergent method may already have changed
     that result's state; the report marks it and excludes it from replayed.
     """
-    from coopy.serialization import ActionSchemas
+    from coopy.serialization import ActionSchemas, StateSchemas
 
     schemas = schemas if schemas is not None else ActionSchemas()
+    state_schemas = state_schemas if state_schemas is not None else StateSchemas()
     validate_secret(secret)
     if mode not in ("strict", "salvage"):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
@@ -125,13 +135,13 @@ def recover(system, basedir, mode="strict", *, secret=None, serializer=None, sch
     try:
         if integrity is None:
             report.checkpoint = fileutils.last_snapshot_file(basedir)
-            recovered = SnapshotManager(basedir, serializer=serializer).recover_snapshot()
+            stored = SnapshotManager(basedir, serializer=serializer).recover_snapshot()
         else:
-            recovered = SnapshotManager(basedir, serializer=serializer).load_payload(
-                snapshot_payload
-            )
-        if recovered is None:
+            stored = SnapshotManager(basedir, serializer=serializer).load_payload(snapshot_payload)
+        if stored is None:
             raise ValueError("No usable checkpoint found")
+        # Older snapshot state reaches the current shape before any replay.
+        recovered = state_schemas.upgrade(stored)
     except Exception as error:
         return stop(
             RecoveryPosition(str(basedir / (report.checkpoint or "")), 0, 0), "checkpoint", error
@@ -236,6 +246,13 @@ def recover(system, basedir, mode="strict", *, secret=None, serializer=None, sch
         recovered._clock = current_clock
 
 
-def restore(system, basedir, *, secret=None, serializer=None, schemas=None):
+def restore(system, basedir, *, secret=None, serializer=None, schemas=None, state_schemas=None):
     """Compatibility entry point, now strict; use recover for reports/salvage."""
-    return recover(system, basedir, secret=secret, serializer=serializer, schemas=schemas).system
+    return recover(
+        system,
+        basedir,
+        secret=secret,
+        serializer=serializer,
+        schemas=schemas,
+        state_schemas=state_schemas,
+    ).system

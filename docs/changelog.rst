@@ -3,6 +3,17 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+* Registered snapshot-state upgraders: ``coopy.StateSchemas`` and the
+  ``state_schemas`` argument of ``coopy.open``/``recover``. Snapshots of a
+  root class declaring ``__coopy_version__`` record that version; recovery
+  runs the registered upgraders in order before journal replay, and missing
+  upgraders or unknown versions fail through the recovery policy. Unversioned
+  classes keep the 0.6.0 snapshot layout. A snapshot written for a versioned
+  class cannot be read by 0.6.0. See :doc:`migrations`.
+
 0.6.0 (2026-10-10)
 ------------------
 

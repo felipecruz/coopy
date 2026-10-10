@@ -1,4 +1,4 @@
-"""Explicit storage codecs and action migrations; no automatic format guessing."""
+"""Explicit storage codecs and action/state migrations; no automatic format guessing."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from io import BytesIO
 from typing import Any, BinaryIO, Callable, Mapping, Protocol
 
 from coopy.error import CoopyError
-from coopy.foundation import Action, RecordClock
+from coopy.foundation import Action, RecordClock, VersionedState
 
 
 class SerializationError(CoopyError, ValueError):
@@ -87,6 +87,14 @@ class TypeRegistry:
         self._names[name] = (cls, decode)
 
 
+_BUILTIN_OBJECTS: dict[type[Any], str] = {
+    Action: "coopy.action",
+    RecordClock: "coopy.clock",
+    VersionedState: "coopy.state",
+}
+_BUILTIN_NAMES = {name: cls for cls, name in _BUILTIN_OBJECTS.items()}
+
+
 class _JsonWriter:
     def __init__(self, serializer: JsonSerializer, file: BinaryIO) -> None:
         self.serializer = serializer
@@ -147,8 +155,8 @@ class JsonSerializer:
                 return {"t": cls.__name__, "v": [encode(item) for item in value]}
             if cls is dict:
                 return {"t": "dict", "v": [[encode(k), encode(v)] for k, v in value.items()]}
-            if cls in (Action, RecordClock):
-                name = "coopy.action" if cls is Action else "coopy.clock"
+            if cls in _BUILTIN_OBJECTS:
+                name = _BUILTIN_OBJECTS[cls]
                 state = vars(value)
             else:
                 entry = self.registry._types.get(cls)
@@ -201,9 +209,9 @@ class JsonSerializer:
                 return tuple(items) if tag == "tuple" else items
             if tag == "object":
                 name = value["n"]
-                if name in ("coopy.action", "coopy.clock"):
-                    cls = Action if name == "coopy.action" else RecordClock
-                    obj = cls.__new__(cls)
+                if name in _BUILTIN_NAMES:
+                    cls = _BUILTIN_NAMES[name]
+                    obj = object.__new__(cls)
                     obj.__dict__.update(decode(state))
                     return obj
                 entry = self.registry._names.get(name)
@@ -297,3 +305,81 @@ class ActionSchemas:
             version += 1
         action.schema_version = target
         return changed
+
+
+StateUpgrade = Callable[[Any], Any]
+
+STATE_VERSION = "__coopy_version__"
+
+
+def declared_state_version(cls: type[Any]) -> int | None:
+    """The class's ``__coopy_version__``, or None when it declares none."""
+    version = getattr(cls, STATE_VERSION, None)
+    if version is not None and (type(version) is not int or version < 1):
+        raise SerializationError(
+            f"{cls.__qualname__}.{STATE_VERSION} must be a positive integer, not {version!r}"
+        )
+    return version
+
+
+def wrap_state(obj: Any) -> Any:
+    """Record the root object's declared state version in a snapshot."""
+    version = declared_state_version(type(obj))
+    return obj if version is None else VersionedState(version, obj)
+
+
+class StateSchemas:
+    """Consecutive per-class snapshot upgrades; unversioned snapshots mean version 1.
+
+    The current version is the root class's ``__coopy_version__`` (default 1).
+    An upgrader receives the restored root object in the old shape and returns
+    an instance of the same class in the next version's shape.
+    """
+
+    def __init__(self) -> None:
+        self._upgrades: dict[tuple[type[Any], int], StateUpgrade] = {}
+
+    @staticmethod
+    def version(cls: type[Any]) -> int:
+        return declared_state_version(cls) or 1
+
+    def register(self, cls: type[Any], from_version: int, upgrade: StateUpgrade) -> None:
+        if not isinstance(cls, type):
+            raise SerializationError("State upgrades are registered for a class")
+        key = (cls, from_version)
+        if (
+            type(from_version) is not int
+            or not 1 <= from_version < self.version(cls)
+            or key in self._upgrades
+        ):
+            raise SerializationError(
+                "Upgrade must be unique and advance toward the current version"
+            )
+        self._upgrades[key] = upgrade
+
+    def upgrade(self, stored: Any) -> Any:
+        """Unwrap a loaded snapshot and upgrade it to the current version."""
+        if isinstance(stored, VersionedState):
+            version, state = stored.version, stored.state
+        else:
+            version, state = 1, stored
+        cls = type(state)
+        name = cls.__qualname__
+        target = self.version(cls)
+        if type(version) is not int or not 1 <= version <= target:
+            raise SerializationError(f"Unsupported state version for {name}: {version!r}")
+        while version < target:
+            callback = self._upgrades.get((cls, version))
+            if callback is None:
+                raise SerializationError(f"Missing state upgrader for {name} version {version}")
+            try:
+                result = callback(state)
+            except Exception as error:
+                raise SerializationError(
+                    f"State upgrader failed for {name} version {version}"
+                ) from error
+            if type(result) is not cls:
+                raise SerializationError(f"State upgrader must return a {name} instance")
+            state = result
+            version += 1
+        return state

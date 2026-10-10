@@ -30,7 +30,7 @@ from coopy.journal import DiskJournal
 from coopy.locking import DirectoryLock
 from coopy.network.default_select import CopyNet, CopyNetSlave
 from coopy.restore import RecoveryReport, RecoveryResult, recover
-from coopy.serialization import ActionSchemas, Serializer
+from coopy.serialization import ActionSchemas, Serializer, StateSchemas
 from coopy.snapshot import SnapshotJob, SnapshotManager, SnapshotTimer, fork_supported
 from coopy.utils import action_check, inject, method_or_none
 from coopy.validation import validate_system
@@ -84,6 +84,7 @@ def init_persistent_system(
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
+    state_schemas: StateSchemas | None = None,
 ) -> T: ...
 
 
@@ -99,6 +100,7 @@ def init_persistent_system(
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
+    state_schemas: StateSchemas | None = None,
 ) -> T: ...
 
 
@@ -114,6 +116,7 @@ def init_persistent_system(
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
+    state_schemas: StateSchemas | None = None,
 ) -> RecoveryResult[T]: ...
 
 
@@ -129,6 +132,7 @@ def init_persistent_system(
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
+    state_schemas: StateSchemas | None = None,
 ) -> RecoveryResult[T]: ...
 
 
@@ -144,6 +148,7 @@ def init_persistent_system(
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
+    state_schemas: StateSchemas | None = None,
 ) -> T | RecoveryResult[T]: ...
 @overload
 def init_persistent_system(
@@ -157,6 +162,7 @@ def init_persistent_system(
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
+    state_schemas: StateSchemas | None = None,
 ) -> T | RecoveryResult[T]: ...
 
 
@@ -171,6 +177,7 @@ def init_persistent_system(
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
+    state_schemas: StateSchemas | None = None,
 ) -> Any:
     validate_secret(secret)
     if not math.isfinite(group_commit_delay) or group_commit_delay < 0:
@@ -209,7 +216,13 @@ def init_persistent_system(
     if recovery == "salvage":
         inject(obj, "_clock", RecordClock())
         return recover(
-            obj, basedir, mode="salvage", secret=secret, serializer=serializer, schemas=schemas
+            obj,
+            basedir,
+            mode="salvage",
+            secret=secret,
+            serializer=serializer,
+            schemas=schemas,
+            state_schemas=state_schemas,
         )
 
     # check if basedir exists, if not, create it
@@ -234,6 +247,7 @@ def init_persistent_system(
             group_commit_delay=group_commit_delay,
             serializer=serializer,
             schemas=schemas,
+            state_schemas=state_schemas,
         )
     except BaseException:
         directory_lock.release()
@@ -254,6 +268,7 @@ def _open_writable(
     group_commit_delay: float,
     serializer: Serializer | None,
     schemas: ActionSchemas | None,
+    state_schemas: StateSchemas | None,
 ) -> CoopyProxy:
     # Runs under the directory lock, so the manifest has a single writer.
     existing = manifest.check(basedir, serializer=serializer, secret=secret)
@@ -293,7 +308,13 @@ def _open_writable(
     # transations files extracting actions executed previously and
     # re-executing them again
     result = recover(
-        obj, basedir, mode=recovery, secret=secret, serializer=serializer, schemas=schemas
+        obj,
+        basedir,
+        mode=recovery,
+        secret=secret,
+        serializer=serializer,
+        schemas=schemas,
+        state_schemas=state_schemas,
     )
     obj = result.system
     if existing is None and not empty:

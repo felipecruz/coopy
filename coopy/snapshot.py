@@ -16,6 +16,7 @@ from coopy import fileutils as fu
 from coopy.compression import MAGIC, compress, decompress, validate_compression
 from coopy.error import PersistenceError
 from coopy.integrity import IntegrityError
+from coopy.serialization import wrap_state
 
 logger = logging.getLogger("coopy")
 
@@ -150,6 +151,7 @@ class SnapshotManager(object):
         return SnapshotJob(pid, file.name, destination, self)
 
     def _serialize(self, object, file, destination):
+        object = wrap_state(object)
         if self.integrity is None and self.compression is None:
             writer = (
                 Pickler(file, pickle.HIGHEST_PROTOCOL)

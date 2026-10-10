@@ -11,6 +11,7 @@ from .serialization import JsonSerializer as JsonSerializer
 from .serialization import PickleSerializer as PickleSerializer
 from .serialization import SerializationError as SerializationError
 from .serialization import Serializer as Serializer
+from .serialization import StateSchemas as StateSchemas
 from .serialization import TypeRegistry as TypeRegistry
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "JsonSerializer",
     "TypeRegistry",
     "ActionSchemas",
+    "StateSchemas",
     "SerializationError",
     "AsyncPersistent",
 ]
