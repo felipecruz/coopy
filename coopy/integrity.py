@@ -5,7 +5,7 @@ import hmac
 import os
 import struct
 from os import PathLike
-from typing import BinaryIO
+from typing import BinaryIO, Sequence
 
 from coopy import fileutils
 from coopy.error import ConfigurationError
@@ -17,31 +17,53 @@ HEADER = struct.Struct("!Q")
 TAG_SIZE = hashlib.sha256().digest_size
 
 
-def validate_secret(secret: bytes | None) -> None:
-    if secret is not None and (not isinstance(secret, bytes) or not secret):
-        raise ConfigurationError("secret must be nonempty bytes or None")
+# One key, or accepted keys newest first: records verify with any, new ones use the first.
+Secret = bytes | Sequence[bytes]
+
+
+def secret_keys(secret: Secret | None) -> tuple[bytes, ...] | None:
+    """Normalize ``secret`` to its accepted keys, newest (the signing key) first."""
+    if secret is None:
+        return None
+    keys = (secret,) if isinstance(secret, bytes) else secret
+    if (
+        not isinstance(keys, (list, tuple))
+        or not keys
+        or any(not isinstance(key, bytes) or not key for key in keys)
+    ):
+        raise ConfigurationError(
+            "secret must be nonempty bytes, a nonempty list of nonempty bytes, or None"
+        )
+    return tuple(keys)
+
+
+def validate_secret(secret: Secret | None) -> None:
+    secret_keys(secret)
 
 
 class Integrity:
-    def __init__(self, secret: bytes, system_id: bytes) -> None:
-        validate_secret(secret)
-        self.secret = secret
+    def __init__(self, secret: Secret, system_id: bytes) -> None:
+        keys = secret_keys(secret)
+        assert keys is not None
+        self.keys = keys
+        self.secret = keys[0]
         self.system_id = system_id
 
     @classmethod
     def open(
         cls,
         basedir: str | PathLike[str],
-        secret: bytes,
+        secret: Secret,
         *,
         create: bool = False,
         durability: str = "buffered",
     ) -> "Integrity":
-        validate_secret(secret)
+        keys = secret_keys(secret)
+        assert keys is not None
         filename = os.path.join(basedir, IDENTITY_FILE)
         if create:
             identity = MAGIC + os.urandom(32)
-            tag = hmac.digest(secret, b"identity\x00" + identity, "sha256")
+            tag = hmac.digest(keys[0], b"identity\x00" + identity, "sha256")
             # Exclusive creation prevents silently replacing an existing identity.
             with open(filename, "xb") as file:
                 file.write(identity + tag)
@@ -60,17 +82,25 @@ class Integrity:
         if (
             len(data) != size + TAG_SIZE
             or not data.startswith(MAGIC)
-            or not hmac.compare_digest(
-                data[size:], hmac.digest(secret, b"identity\x00" + data[:size], "sha256")
+            or not any(
+                hmac.compare_digest(
+                    data[size:], hmac.digest(key, b"identity\x00" + data[:size], "sha256")
+                )
+                for key in keys
             )
         ):
             raise IntegrityError(
                 "Integrity identity verification failed (wrong secret or tampered identity)"
             )
-        return cls(secret, data[len(MAGIC) : size])
+        return cls(keys, data[len(MAGIC) : size])
 
     def _mac(
-        self, filename: str | PathLike[str], offset: int, header: bytes, payload: bytes
+        self,
+        key: bytes,
+        filename: str | PathLike[str],
+        offset: int,
+        header: bytes,
+        payload: bytes,
     ) -> bytes:
         # Bind to system, file kind/number, and record location, so valid
         # envelopes cannot be transplanted between systems/files/positions.
@@ -82,13 +112,13 @@ class Integrity:
             + HEADER.pack(offset)
             + header
         )
-        mac = hmac.new(self.secret, context, hashlib.sha256)
+        mac = hmac.new(key, context, hashlib.sha256)
         mac.update(payload)
         return mac.digest()
 
     def encode(self, payload: bytes, filename: str | PathLike[str], offset: int = 0) -> bytes:
         header = MAGIC + HEADER.pack(len(payload))
-        return header + payload + self._mac(filename, offset, header, payload)
+        return header + payload + self._mac(self.secret, filename, offset, header, payload)
 
     def read(self, file: BinaryIO, filename: str | PathLike[str]) -> bytes:
         offset = file.tell()
@@ -105,6 +135,9 @@ class Integrity:
             raise IntegrityError("Truncated signed record or missing HMAC tag")
         payload = file.read(size)
         tag = file.read(TAG_SIZE)
-        if not hmac.compare_digest(tag, self._mac(filename, offset, header, payload)):
+        if not any(
+            hmac.compare_digest(tag, self._mac(key, filename, offset, header, payload))
+            for key in self.keys
+        ):
             raise IntegrityError("HMAC verification failed (wrong secret or tampered record)")
         return payload

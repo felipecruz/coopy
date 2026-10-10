@@ -25,7 +25,7 @@ from coopy import __version__ as __version__
 from coopy import fileutils, manifest
 from coopy.error import ConfigurationError, LifecycleError, ReplicationError
 from coopy.foundation import Action, Publisher, RecordClock
-from coopy.integrity import IDENTITY_FILE, Integrity, validate_secret
+from coopy.integrity import IDENTITY_FILE, Integrity, Secret, validate_secret
 from coopy.journal import DiskJournal
 from coopy.locking import DirectoryLock
 from coopy.network.default_select import CopyNet, CopyNetSlave
@@ -79,7 +79,7 @@ def init_persistent_system(
     *,
     recovery: Literal["strict"] = "strict",
     durability: Literal["buffered", "sync"] = "buffered",
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     snapshot_compression: str | None = None,
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
@@ -95,7 +95,7 @@ def init_persistent_system(
     *,
     recovery: Literal["strict"] = "strict",
     durability: Literal["buffered", "sync"] = "buffered",
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     snapshot_compression: str | None = None,
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
@@ -111,7 +111,7 @@ def init_persistent_system(
     *,
     recovery: Literal["salvage"],
     durability: Literal["buffered", "sync"] = "buffered",
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     snapshot_compression: str | None = None,
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
@@ -127,7 +127,7 @@ def init_persistent_system(
     *,
     recovery: Literal["salvage"],
     durability: Literal["buffered", "sync"] = "buffered",
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     snapshot_compression: str | None = None,
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
@@ -143,7 +143,7 @@ def init_persistent_system(
     *,
     recovery: str,
     durability: str = "buffered",
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     snapshot_compression: str | None = None,
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
@@ -157,7 +157,7 @@ def init_persistent_system(
     *,
     recovery: str,
     durability: str = "buffered",
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     snapshot_compression: str | None = None,
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
@@ -172,7 +172,7 @@ def init_persistent_system(
     *,
     recovery: str = "strict",
     durability: str = "buffered",
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     snapshot_compression: str | None = None,
     group_commit_delay: float = 0.0,
     serializer: Serializer | None = None,
@@ -263,7 +263,7 @@ def _open_writable(
     *,
     recovery: str,
     durability: str,
-    secret: bytes | None,
+    secret: Secret | None,
     snapshot_compression: str | None,
     group_commit_delay: float,
     serializer: Serializer | None,

@@ -9,6 +9,7 @@ from typing import Any
 
 from coopy import fileutils
 from coopy.error import FormatError
+from coopy.integrity import Secret
 
 MANIFEST_FILE = "coopy.json"
 
@@ -51,7 +52,7 @@ def read(basedir: str | os.PathLike[str]) -> dict[str, Any] | None:
 
 
 def check(
-    basedir: str | os.PathLike[str], *, serializer: Any, secret: bytes | None
+    basedir: str | os.PathLike[str], *, serializer: Any, secret: Secret | None
 ) -> dict[str, Any] | None:
     """Fail before decoding when the directory is newer or opened differently."""
     manifest = read(basedir)
@@ -83,7 +84,7 @@ def write(
     basedir: str | os.PathLike[str],
     *,
     serializer: Any,
-    secret: bytes | None,
+    secret: Secret | None,
     durability: str = "buffered",
 ) -> None:
     """Atomically write the manifest; callers hold the directory lock."""

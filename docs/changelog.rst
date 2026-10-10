@@ -6,6 +6,10 @@ Changelog
 Unreleased
 ----------
 
+* Integrity key rotation: ``secret`` may be a list of accepted keys, newest
+  first. Signed storage verifies with any listed key and new records are
+  signed with the first; ``coopy.convert(..., new_secret=new_key)`` re-signs a
+  directory so old keys can be retired. See :doc:`usage`.
 * ``coopy.convert(src, dst, ...)`` copies a closed data directory into a new
   or empty one with another serializer (``new_serializer``), signing setting
   (``new_secret``) or snapshot compression. The source is recovered strictly

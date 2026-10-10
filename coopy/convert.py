@@ -12,7 +12,7 @@ from coopy import fileutils, manifest
 from coopy.compression import validate_compression
 from coopy.error import ConfigurationError
 from coopy.foundation import RecordClock
-from coopy.integrity import Integrity, validate_secret
+from coopy.integrity import Integrity, Secret, validate_secret
 from coopy.locking import DirectoryLock
 from coopy.restore import RecoveryReport, recover
 from coopy.serialization import ActionSchemas, Serializer, StateSchemas
@@ -59,9 +59,9 @@ def convert(
     dst: PathLike,
     *,
     serializer: Serializer | None = None,
-    secret: bytes | None = None,
+    secret: Secret | None = None,
     new_serializer: Serializer | None | _Unchanged = UNCHANGED,
-    new_secret: bytes | None | _Unchanged = UNCHANGED,
+    new_secret: Secret | None | _Unchanged = UNCHANGED,
     snapshot_compression: str | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,

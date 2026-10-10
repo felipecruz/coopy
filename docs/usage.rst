@@ -197,13 +197,35 @@ storage or unpickling a partial prefix. It never bypasses authentication.
 Obsolete files excluded by the checkpoint boundary are not verified.
 
 Without a secret the existing unsigned format and recovery behavior remain
-unchanged. There is no automatic signing of legacy directories, key rotation,
-or downgrade: supplying a secret for unsigned storage fails. To migrate,
+unchanged. There is no automatic signing of legacy directories or downgrade:
+supplying a secret for unsigned storage fails. To migrate,
 recover a trusted unsigned backup in a controlled environment with
 ``coopy.convert(src, dst, new_secret=secret)``, which writes a separate new
 signed directory (``new_secret=None`` converts signed storage back to unsigned;
 see :doc:`modern-api`).
 Use the same secret for all writers and reopen operations on signed storage.
+
+Key rotation
+~~~~~~~~~~~~
+
+``secret`` also accepts a nonempty list (or tuple) of keys, newest first. The
+identity and every snapshot and journal record verify with any listed key; all
+new records, snapshots and identities are signed with the first one. To rotate
+from key ``A`` to key ``B``:
+
+1. Reopen with ``secret=[B, A]``. Existing storage still verifies with ``A``,
+   and everything written from now on is signed with ``B``.
+2. Re-sign: with the system closed, run
+   ``coopy.convert("data", "data-b", secret=[B, A], new_secret=B)``. The new
+   directory has a fresh identity and one checkpoint, all signed with ``B``.
+3. Verify ``data-b`` opens with ``secret=B``, keep ``data`` as a backup, swap
+   the directories, and retire ``A``.
+
+Until step 2 the directory still depends on ``A``: its identity and older
+records are signed with it, so opening with ``secret=B`` alone fails
+verification. A wrong or retired key fails verification before anything is
+decoded, exactly like a wrong single secret. Every listed key is trusted to
+forge records, so drop retired keys from the list as soon as re-signing is done.
 Each signed journal record uses its own pickle memo; aliases within a record
 survive, but cross-record object identity is not preserved. Use stable IDs.
 
