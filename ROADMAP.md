@@ -406,7 +406,7 @@ These items change the on-disk format or protect data, so they must land before 
   | Timestamp | 2026-10-10 |
   | Complexity | M |
   | Details | Version 0.6.0 in `coopy/__init__.py` and Sphinx `version` 0.6; changelog folds Unreleased and 0.5.0 into a dated 0.6.0 entry with an Upgrading section (strict recovery, new replication handshake, `start_master`/`start_slave` deprecated for v0.9 removal, directory lock, manifest, opt-in logging, Python 3.10+) plus entries for F14 and F16–F21 that it lacked. The four Dependabot Actions bumps were applied in the release commit; Dependabot closed PRs #6–#9 itself. Tag `v0.6.0` pushed and published to PyPI through trusted publishing. Stale `.aiflow` note references in tracked files were already removed in `3a5d1a1`. Spec clear; 4 files. |
-  | Commit | `d42654018fb69e5c54e7092bbb388b4db18c6675` — implements F25 (release commit, tagged `v0.6.0`). |
+  | Commit | `d42654018fb69e5c54e7092bbb388b4db18c6675` — implements F25 (release commit, tagged `v0.6.0`).; `f5d0619bdc8f9ea067f6e82ffc258629d74f4c38` |
   | Validation | Local: ruff clean, 369 passed/31 skipped, Sphinx -W clean, sdist/wheel build + twine --strict + check_distributions.py passed. Hosted CI green on main (run 38051327181) and on tag (run 38051477791, full matrix + Publish to PyPI). PyPI JSON lists 0.6.0; fresh venv `pip install coopy==0.6.0` imported from site-packages and restored write/snapshot/write after reopen. All five README badges return HTTP 200; CI shows passing, PyPI shows v0.6.0. |
   | Limitation | The trusted publisher was verified only through the successful publish run; its PyPI settings page was not inspected. |
   | Limitation | The Codecov badge resolves but shows "unknown" right after release; coverage processing for main was not confirmed. |
@@ -418,7 +418,20 @@ These items change the on-disk format or protect data, so they must land before 
 
 Planned. Goal: users can evolve their data, manage disk usage and inspect storage without writing custom scripts. Exit criterion: each item meets its acceptance checks with documentation and tests against stored fixtures from 0.6.0.
 
-- [ ] **F26 — Migrate snapshot state with registered upgraders.** Record a domain state version in each snapshot (from a class attribute such as `__coopy_version__`) and let applications register upgraders, mirroring F17's `ActionSchemas`: `StateSchemas().register(TodoList, from_version=1, upgrade=fn)`. Recovery applies upgraders in order before replay; unknown or missing versions fail through the recovery policy. Acceptance: 0.6.0 snapshot fixtures upgrade across several versions; strict mode fails on a missing upgrader and salvage reports it; F24's `__setstate__` pattern keeps working.
+- [x] **F26 — Migrate snapshot state with registered upgraders.** Record a domain state version in each snapshot (from a class attribute such as `__coopy_version__`) and let applications register upgraders, mirroring F17's `ActionSchemas`: `StateSchemas().register(TodoList, from_version=1, upgrade=fn)`. Recovery applies upgraders in order before replay; unknown or missing versions fail through the recovery policy. Acceptance: 0.6.0 snapshot fixtures upgrade across several versions; strict mode fails on a missing upgrader and salvage reports it; F24's `__setstate__` pattern keeps working.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | `coopy.StateSchemas().register(cls, from_version, upgrade)` plus a `state_schemas` argument on `coopy.open`, `recover` and `restore`. Snapshots of a root class declaring `__coopy_version__` are wrapped in `coopy.foundation.VersionedState` (pickle and JSON `coopy.state`); unversioned classes keep the 0.6.0 layout and count as version 1. Recovery unwraps and applies upgraders in order before replay; missing upgraders, newer/invalid versions, raising upgraders or wrong return types stop as `checkpoint` issues (strict raises, salvage reports with no system). Docs: migrations guide, modern API, API reference, changelog. Spec clear; ~12 files. |
+  | Commit | `0124f037494597a47f685c4da50cd7b92daa127f` — implements F26. |
+  | Validation | 0.6.0 TodoList fixture (`tests/fixtures/state/todo_v1`, generated before the change) upgrades 1→2→3 then replays its journal; strict fails and salvage reports a missing upgrader; JSON, signed and zstd snapshots record versions; F24 `__setstate__` doc tests pass. ruff clean, mypy clean, typing check passed, 391 passed/31 skipped, Sphinx -W clean. |
+  | Limitation | Only the root object is versioned; nested objects still need F24's `__setstate__` pattern. |
+  | Limitation | The manifest format version is unchanged, so coopy 0.6.0 reading a versioned snapshot fails at checkpoint decode rather than with a clear format error. |
+  | Limitation | Upgraders run on every recovery until a new snapshot is taken; old snapshot files are not rewritten. |
+  | Next step | Bump or extend the manifest when a versioned snapshot is written so older coopy refuses the directory up front. |
 
 - [ ] **F27 — Convert a data directory between formats.** The modern API guide states that changing formats "requires an explicit export/import to a new directory; no conversion command is provided". Add `coopy.convert(src, dst, *, serializer=..., secret=..., new_secret=...)` that recovers `src` strictly, writes a fresh checkpoint to an empty `dst` with the target serializer and signing, and never modifies `src`. Acceptance: pickle→JSON, JSON→pickle, unsigned→signed and signed→unsigned round trips restore identical state; non-empty destinations and failed recovery leave nothing behind.
 
