@@ -1,4 +1,4 @@
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from .asyncio import AsyncPersistent as AsyncPersistent
 from .base import control as control
