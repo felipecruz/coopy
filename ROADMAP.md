@@ -245,7 +245,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | L |
   | Details | Added class/instance and strict/salvage overloads, ParamSpec decorators, py.typed, a typed control handle, domain-first control names, and staged mypy CI with installed-wheel examples. Fifteen implementation files. |
-  | Commit | `aaff9ab1fa9ae725740499b770ca8521af9d6c4b` — implements F15.; `8b233e7305cd71f500611474666008a151162b47` |
+  | Commit | `aaff9ab1fa9ae725740499b770ca8521af9d6c4b` — implements F15.; `8b233e7305cd71f500611474666008a151162b47`; `72d5225974351e33ea417bac7ca3dd7f80505da9` |
   | Validation | 201 tests passed at the F15 commit; final suite 253 passed on Python 3.12.2/macOS. Six-module mypy and installed-wheel positive/negative signature checks passed, including dynamic recovery modes. Python 3.10.14 imports and persistence smoke passed. |
   | Limitation | Dynamic replay and networking internals are not yet strictly typed; proxy implementation attributes remain reserved. |
   | Limitation | The full Python 3.10–3.14 and Linux/macOS CI matrix was not run locally. |
@@ -343,7 +343,7 @@ Accepted roadmap scope from [FUTURE.md, Part 1](FUTURE.md#part-1--modern-python)
   | Timestamp | 2026-10-10 |
   | Complexity | S |
   | Details | Authentication uses hmac.compare_digest; removed both empty platform backends. Replication documentation explicitly describes plaintext passwords and payloads, the stopgap handshake, and future selectors/pyzmq options. |
-  | Commit | `a6e3ee195e06b534a598a5312637d23a0c159af6` — implements F21.; `abb219c2fe0f3582c7d8d9b49a12ccb407db5fd6` |
+  | Commit | `a6e3ee195e06b534a598a5312637d23a0c159af6` — implements F21.; `abb219c2fe0f3582c7d8d9b49a12ccb407db5fd6`; `72d5225974351e33ea417bac7ca3dd7f80505da9` |
   | Validation | Python 3.12.2/macOS: 335 passed, 31 skipped; coverage 93.33% exceeds the 93% floor. Six new real-socket cases verify compare_digest delegation for valid, first/last-byte mismatch, empty, longer, and non-ASCII passwords. Existing bootstrap/rejection tests pass. Ruff lint/format, strict Sphinx build, deleted-backend import audit, diff checks, and AIFlow validation passed. Socket tests required execution outside the sandbox. |
   | Limitation | Passwords and replication payloads remain unencrypted; shared-password authentication is a stopgap, and pickle replication requires trusted peers on a trusted network. |
   | Limitation | Local validation covers Python 3.12/macOS; 30 native Linux fork cases and one free-threaded assertion were skipped. The hosted platform/interpreter matrix was not run here. |
@@ -362,7 +362,7 @@ These items change the on-disk format or protect data, so they must land before 
   | Timestamp | 2026-10-10 |
   | Complexity | M |
   | Details | New `coopy/locking.py` `DirectoryLock` holds `coopy.lock` (PID inside) via `fcntl.flock`/`msvcrt.locking` plus an in-process registry keyed by resolved path; `init_persistent_system` takes it before any write and releases it on failed opens; `close()`/context exit release it; new `coopy.error.LockError(LifecycleError)` names the directory and holder PID. Salvage takes no lock. Docs (README, usage, index, modern-api, api, changelog) updated, including the network-filesystem caveat. Spec was clear; ~10 files. |
-  | Commit | `b883c0d14cd7ba338c430dea681450ed7ba4db2f` — implements F22. |
+  | Commit | `b883c0d14cd7ba338c430dea681450ed7ba4db2f` — implements F22.; `1045234049c60bdde2644b3e1573de88dbe85001` |
   | Validation | New `tests/functional/test_locking.py` (10 tests: same/cross-process, equivalent paths, close, context exit, failed open, SIGKILLed holder, salvage, AsyncPersistent, replicas) passes; full suite 345 passed, 31 skipped; ruff check/format clean; Sphinx -W build clean; mypy shows no errors in changed files (pre-existing errors elsewhere). |
   | Limitation | The Windows `msvcrt.locking` path is untested: CI and local runs cover only macOS/Linux. |
   | Limitation | Advisory locks may not be honored on network filesystems (NFS, SMB); only documented, not detected. |
@@ -377,14 +377,26 @@ These items change the on-disk format or protect data, so they must land before 
   | Timestamp | 2026-10-10 |
   | Complexity | M |
   | Details | New `coopy/manifest.py` writes `coopy.json` (format_version 1, serializer, signed, coopy_version) atomically under the F22 lock: before the first checkpoint of a new directory, or after a clean restore of a legacy (format 0) one. `recover()` checks it before decoding, so strict, salvage and `restore()` raise new `coopy.error.FormatError` for newer/unreadable manifests and serializer or signing mismatches. Serializers name themselves via a `format_name` class attribute (`pickle`, `json`). Committed 0.3.1, 0.4b and 0.5.0 fixtures. Spec was clear; ~15 files. |
-  | Commit | `06572eb4bdc46f6d5911a943c6456ce4188d1946` — implements F23. |
+  | Commit | `06572eb4bdc46f6d5911a943c6456ce4188d1946` — implements F23.; `404d138f152e74b1b33e7da389b6dcc36bc0ef97` |
   | Validation | New `tests/functional/test_manifest.py` (manifest contents, legacy fixtures restore and upgrade, future version with Unpickler forbidden, corrupt manifest, serializer/signing switches, lock coverage) passes; full suite 366 passed, 31 skipped; ruff check/format clean; Sphinx -W build clean. Three existing tests now remove the manifest to keep covering legacy-directory behavior. |
   | Limitation | Custom serializers without a `format_name` are recorded as `custom:<class path>` and never compared, so switching to or from them is still caught only by decoding. |
   | Limitation | 0.3.1 and 0.4b fixtures were generated by those releases' sources under Python 3.9, not Python 2; they hold what those releases restore (their post-checkpoint write loss is preserved). |
   | Limitation | A crash between creating a new directory's manifest and its first checkpoint leaves a manifest-only directory, which reopens normally. |
   | Next step | Have F27's conversion command write the target manifest and F28's key rotation keep `signed` in sync. |
 
-- [ ] **F24 — Document migrating snapshot state.** F17 upgrades journal actions and maps renamed classes, but a snapshot taken before a domain class gained, renamed or restructured a field loads with the old shape. Until F26 adds first-class support, document the supported pattern: a class-level state version plus `__setstate__` that upgrades old dictionaries, with a worked example (adding a field with a default, renaming a field, splitting one field into two) and a test that restores a committed old-format snapshot fixture. Acceptance: the example runs in the documentation tests against a stored fixture, and the migration guide explains when to use action upcasters, class aliases or `__setstate__`.
+- [x] **F24 — Document migrating snapshot state.** F17 upgrades journal actions and maps renamed classes, but a snapshot taken before a domain class gained, renamed or restructured a field loads with the old shape. Until F26 adds first-class support, document the supported pattern: a class-level state version plus `__setstate__` that upgrades old dictionaries, with a worked example (adding a field with a default, renaming a field, splitting one field into two) and a test that restores a committed old-format snapshot fixture. Acceptance: the example runs in the documentation tests against a stored fixture, and the migration guide explains when to use action upcasters, class aliases or `__setstate__`.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-10 |
+  | Complexity | M |
+  | Details | New `docs/migrations.rst` guide (in the toctree, linked from modern-api) with a table for choosing action upcasters, class aliases or a versioned `__setstate__`. `docs/examples/address_book.py` evolves `Contact` through four state versions (add `email` default, rename `phone`→`telephone`, split `name`); `state_migration.py` restores the committed `docs/examples/fixtures/address_book_v1` snapshot plus a v1 journal call (with an `add` upcaster), snapshots and reopens. `scripts/make_state_migration_fixture.py` regenerates the fixture. Spec was clear; "migration guide" had no existing page, so one was added. ~10 files. |
+  | Commit | `413a34fa9b4f83716b942e9824d1c54d25d210a8` — implements F24. |
+  | Validation | test_documentation.py runs the example against the stored fixture, guards the fixture's v1 shape, and checks the rewritten snapshot carries state_version 4 and newer versions are rejected (7 passed). Full suite 354 passed, 46 skipped (fork, free-threaded, missing zstd/lz4 extras); ruff check/format clean; Sphinx -W build clean. Strict/salvage handling of a failing `__setstate__` checked manually. |
+  | Limitation | The state version is a user convention (`STATE_VERSION` key in pickled state); coopy neither records nor validates it, and JSON storage needs the same logic in registered decoders. |
+  | Limitation | The fixture was generated by the current coopy (manifest format 1) from a v1 domain module, not by an older coopy release. |
+  | Next step | Implement F26 registered state upgraders and keep this `__setstate__` example passing under them. |
 
 - [ ] **F25 — Prepare and publish 0.6.0.** Set `__version__ = "0.6.0"` and the Sphinx `version`; fold the changelog's 0.5.0 and Unreleased sections into a dated 0.6.0 entry with an "Upgrading" section listing breaking changes (strict recovery by default, the new replication handshake, the `start_master`/`start_slave` deprecations and their v0.9 removal). Verify the PyPI trusted publisher for `felipecruz/coopy`, workflow `ci.yml`, environment `pypi`. Rebase and merge or close the open Dependabot pull requests. Remove stale references to deleted `.aiflow` notes. Acceptance: hosted CI is green on the release commit, `v0.6.0` publishes, a fresh `pip install coopy==0.6.0` imports and completes a persistence round trip, and the README badges resolve.
 
