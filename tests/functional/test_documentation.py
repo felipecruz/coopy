@@ -31,6 +31,7 @@ def run_example(tmp_path, *arguments):
         "persistence.py",
         "decorator_semantics.py",
         "replication.py",
+        "state_migration.py",
     ],
 )
 def test_documented_example(tmp_path, example):
@@ -72,5 +73,43 @@ try:
     assert actual == Path("expected.json").read_text()
 finally:
     wiki.close()
+""",
+    )
+
+
+STATE_FIXTURE = EXAMPLES / "fixtures" / "address_book_v1"
+
+
+def test_state_migration_fixture_holds_version_1_state():
+    # Guards the fixture: it must keep the old shape the example upgrades.
+    snapshot = max(STATE_FIXTURE.glob("snapshot_*.dat")).read_bytes()
+    assert b"phone" in snapshot and b"name" in snapshot
+    assert b"state_version" not in snapshot and b"telephone" not in snapshot
+
+
+def test_state_migration_rewrites_snapshot_and_rejects_newer_state(tmp_path):
+    run_example(
+        tmp_path,
+        "-c",
+        f"""
+import pickle
+import shutil
+from pathlib import Path
+import state_migration
+from address_book import Contact
+shutil.copytree({str(STATE_FIXTURE)!r}, "data")
+state_migration.migrate("data")
+latest = max(Path("data").glob("snapshot_*.dat"))
+book = pickle.loads(latest.read_bytes())
+contact = book.contacts["Ada Lovelace"]
+assert contact.__getstate__()["state_version"] == 4
+assert b"state_version" in latest.read_bytes()
+newer = Contact.__new__(Contact)
+try:
+    newer.__setstate__({{"state_version": 5}})
+except ValueError as error:
+    assert "newer" in str(error)
+else:
+    raise AssertionError("newer state accepted")
 """,
     )

@@ -195,7 +195,8 @@ Upcasters must be deterministic and free of external effects. Keep all needed
 upcasters until older journals are no longer recovery inputs. New writes use
 the configured current version. Do not mutate configuration while a system is
 open. Method renaming and automatic snapshot-state migration are not provided;
-use explicit registered codecs or a domain compatibility method for these.
+use explicit registered codecs or a versioned ``__setstate__`` (see
+:doc:`migrations`) for these.
 
 For moved or renamed pickle classes, map the old module and class name to the
 current class::

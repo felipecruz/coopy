@@ -68,6 +68,7 @@ Contents
    use_clock
    method_decorators
    snapshots
+   migrations
    util_api
    client_server
    replication

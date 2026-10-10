@@ -34,6 +34,9 @@ Unreleased
   and gain it on the next writable open. A newer format, or reopening with a
   different serializer or signing setting, raises ``coopy.error.FormatError``
   before anything is decoded. See :doc:`usage`.
+* A migration guide explains when to use action upcasters, class aliases or a
+  versioned ``__setstate__``, with an executable example that upgrades a
+  committed old-format snapshot. See :doc:`migrations`.
 * The documentation includes executable examples checked by pytest and an
   HTML build that treats Sphinx warnings as errors.
 
