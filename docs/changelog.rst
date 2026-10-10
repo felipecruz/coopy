@@ -23,6 +23,11 @@ Unreleased
 * Type information ships with the package (``py.typed``). The proxy keeps the
   domain class type, decorators preserve signatures, and ``coopy.control``
   gives typed persistence controls. See :doc:`modern-api`.
+* A writable system holds an exclusive lock on its data directory
+  (``coopy.lock``) until ``close()``, context exit or process exit. A second
+  writable open of the same directory, in the same or another process, raises
+  ``coopy.error.LockError`` (a ``LifecycleError``). Salvage recovery does not
+  take the lock. See :doc:`usage`.
 * The documentation includes executable examples checked by pytest and an
   HTML build that treats Sphinx warnings as errors.
 

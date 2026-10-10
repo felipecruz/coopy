@@ -27,3 +27,7 @@ class ReplicationError(CoopyError, RuntimeError):
 
 class IntegrityError(CoopyError, ValueError):
     """Storage could not be authenticated; do not deserialize it."""
+
+
+class LockError(LifecycleError):
+    """Another writer already holds the data directory lock."""

@@ -115,7 +115,8 @@ Use ``coopy.control(todo).start_primary(...)`` and ``start_replica(...)``.
 for v0.9. Existing role fields and the wire protocol are unchanged.
 
 Library errors derive from ``coopy.CoopyError``: ``ConfigurationError``,
-``PrevalentError``, ``PersistenceError``, ``LifecycleError``,
+``PrevalentError``, ``PersistenceError``, ``LifecycleError`` (and its
+``LockError`` subclass for an already-locked data directory),
 ``ReplicationError``, ``IntegrityError``, and ``RecoveryError``. Existing
 imports from journal, integrity and restore remain supported. Configuration
 and integrity errors still derive from ValueError; persistence, lifecycle,

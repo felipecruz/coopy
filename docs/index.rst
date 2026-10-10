@@ -36,7 +36,8 @@ Use the :doc:`recorded clock <use_clock>` for time, pass other external inputs
 as arguments, and keep external effects outside replayed methods. Direct
 changes to exposed mutable objects are not journaled.
 
-Use one process and one persistent proxy per data directory. Only load trusted
+Use one process and one persistent proxy per data directory; a second writable
+open raises ``LockError``. Only load trusted
 snapshots and journals: they contain pickles that can execute code. The
 :doc:`persistence guide <usage>` describes strict recovery, salvage inspection,
 and buffered versus synchronous durability.

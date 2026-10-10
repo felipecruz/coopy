@@ -27,6 +27,7 @@ from coopy.error import ConfigurationError, LifecycleError, ReplicationError
 from coopy.foundation import Action, Publisher, RecordClock
 from coopy.integrity import IDENTITY_FILE, Integrity, validate_secret
 from coopy.journal import DiskJournal
+from coopy.locking import DirectoryLock
 from coopy.network.default_select import CopyNet, CopyNetSlave
 from coopy.restore import RecoveryReport, RecoveryResult, recover
 from coopy.serialization import ActionSchemas, Serializer
@@ -219,6 +220,41 @@ def init_persistent_system(
         if durability == "sync":
             fileutils.sync_directory(os.path.dirname(os.path.abspath(basedir)))
 
+    # Writable systems own the directory until close() or process exit.
+    directory_lock = DirectoryLock(basedir)
+    try:
+        proxy = _open_writable(
+            obj,
+            basedir,
+            system_data_path,
+            recovery=recovery,
+            durability=durability,
+            secret=secret,
+            snapshot_compression=snapshot_compression,
+            group_commit_delay=group_commit_delay,
+            serializer=serializer,
+            schemas=schemas,
+        )
+    except BaseException:
+        directory_lock.release()
+        raise
+    proxy._directory_lock = directory_lock
+    return proxy
+
+
+def _open_writable(
+    obj: Any,
+    basedir: Path,
+    system_data_path: str,
+    *,
+    recovery: str,
+    durability: str,
+    secret: bytes | None,
+    snapshot_compression: str | None,
+    group_commit_delay: float,
+    serializer: Serializer | None,
+    schemas: ActionSchemas | None,
+) -> CoopyProxy:
     # if no snapshot files, create first one with a 'empty' system
     integrity = None
     new_signed = (
@@ -315,6 +351,7 @@ class CoopyProxy:
         self.snapshot_manager = snapshot_manager
         self.snapshot_timer: SnapshotTimer | None = None
         self._snapshot_job: SnapshotJob | None = None
+        self._directory_lock: DirectoryLock | None = None
 
     def start_snapshot_manager(self, snapshot_time: float) -> None:
         # the timer waits snapshot_time before the first snapshot, so this
@@ -582,6 +619,11 @@ class CoopyProxy:
         for resource in list(self.publisher.subscribers) + ([self.slave] if self.slave else []):
             try:
                 resource.close()
+            except Exception as error:
+                errors.append(error)
+        if self._directory_lock is not None:
+            try:
+                self._directory_lock.release()
             except Exception as error:
                 errors.append(error)
         if errors:

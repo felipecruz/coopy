@@ -20,8 +20,17 @@ to the current working directory. Prefer an absolute path and keep the working
 directory stable while a proxy is open. ``coopy.log`` is written in the current
 working directory, separately from persistence files.
 
-Use one owning process and one persistent proxy per data directory; there is
-no interprocess writer lock. Stop application callers, then call ``close()`` in
+Use one owning process and one persistent proxy per data directory. A writable
+open takes an exclusive lock on ``coopy.lock`` in the data directory
+(``fcntl.flock`` on POSIX, ``msvcrt.locking`` on Windows) and holds it until
+``close()``, context-manager exit or process exit, including a killed process.
+Opening the same directory again for writing, from the same or another process,
+raises ``coopy.error.LockError``, a ``LifecycleError`` naming the directory and,
+where available, the holder's PID. ``recovery="salvage"`` is read-only and does
+not take the lock, so it can inspect a directory while a writer runs. The lock
+is advisory: network filesystems such as NFS or SMB may not honor it, so keep
+data directories on local storage. Leave ``coopy.lock`` in place; it is reused
+on the next open. Stop application callers, then call ``close()`` in
 ``finally`` to stop the snapshot timer and close subscribers. There is no proxy
 context manager. Do not reuse a closed proxy. Reopen with the same data path
 and compatible, importable domain classes. ``close()`` does not take a snapshot.

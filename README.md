@@ -114,7 +114,9 @@ finally:
 
 Data is stored in a directory named after your class (`todolist/` here).
 Pass `basedir="some/dir"` to choose another location; its parent must exist.
-Use one process and one persistent proxy per data directory. Stop writers
+Use one process and one persistent proxy per data directory: a writable open
+locks the directory, and a second one raises `LockError` until the first is
+closed (network filesystems may not honor the lock). Stop writers
 before closing. Closing does not take a snapshot. Running the writes above
 again adds more items to the existing list.
 
