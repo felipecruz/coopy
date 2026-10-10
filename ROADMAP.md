@@ -426,16 +426,41 @@ Planned. Goal: users can evolve their data, manage disk usage and inspect storag
   | Timestamp | 2026-10-11 |
   | Complexity | M |
   | Details | `coopy.StateSchemas().register(cls, from_version, upgrade)` plus a `state_schemas` argument on `coopy.open`, `recover` and `restore`. Snapshots of a root class declaring `__coopy_version__` are wrapped in `coopy.foundation.VersionedState` (pickle and JSON `coopy.state`); unversioned classes keep the 0.6.0 layout and count as version 1. Recovery unwraps and applies upgraders in order before replay; missing upgraders, newer/invalid versions, raising upgraders or wrong return types stop as `checkpoint` issues (strict raises, salvage reports with no system). Docs: migrations guide, modern API, API reference, changelog. Spec clear; ~12 files. |
-  | Commit | `0124f037494597a47f685c4da50cd7b92daa127f` — implements F26. |
+  | Commit | `0124f037494597a47f685c4da50cd7b92daa127f` — implements F26.; `c48a6603a1f0fae76f9211ad599cd9a29fce3f97` |
   | Validation | 0.6.0 TodoList fixture (`tests/fixtures/state/todo_v1`, generated before the change) upgrades 1→2→3 then replays its journal; strict fails and salvage reports a missing upgrader; JSON, signed and zstd snapshots record versions; F24 `__setstate__` doc tests pass. ruff clean, mypy clean, typing check passed, 391 passed/31 skipped, Sphinx -W clean. |
   | Limitation | Only the root object is versioned; nested objects still need F24's `__setstate__` pattern. |
   | Limitation | The manifest format version is unchanged, so coopy 0.6.0 reading a versioned snapshot fails at checkpoint decode rather than with a clear format error. |
   | Limitation | Upgraders run on every recovery until a new snapshot is taken; old snapshot files are not rewritten. |
   | Next step | Bump or extend the manifest when a versioned snapshot is written so older coopy refuses the directory up front. |
 
-- [ ] **F27 — Convert a data directory between formats.** The modern API guide states that changing formats "requires an explicit export/import to a new directory; no conversion command is provided". Add `coopy.convert(src, dst, *, serializer=..., secret=..., new_secret=...)` that recovers `src` strictly, writes a fresh checkpoint to an empty `dst` with the target serializer and signing, and never modifies `src`. Acceptance: pickle→JSON, JSON→pickle, unsigned→signed and signed→unsigned round trips restore identical state; non-empty destinations and failed recovery leave nothing behind.
+- [x] **F27 — Convert a data directory between formats.** The modern API guide states that changing formats "requires an explicit export/import to a new directory; no conversion command is provided". Add `coopy.convert(src, dst, *, serializer=..., secret=..., new_secret=...)` that recovers `src` strictly, writes a fresh checkpoint to an empty `dst` with the target serializer and signing, and never modifies `src`. Acceptance: pickle→JSON, JSON→pickle, unsigned→signed and signed→unsigned round trips restore identical state; non-empty destinations and failed recovery leave nothing behind.
 
-- [ ] **F28 — Rotate integrity secrets.** F14 has no key rotation: changing the secret makes existing signed storage unreadable. Support reading with a list of accepted secrets while writing with the newest, and provide an explicit re-sign path (through F27) after which old secrets can be retired. Acceptance: a directory signed with key A opens with `[B, A]`, new records are signed with B, re-signing removes the dependence on A, and wrong or retired keys still fail before decoding.
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | New `coopy/convert.py`: `coopy.convert(src, dst, *, serializer, secret, new_serializer, new_secret, snapshot_compression, schemas, state_schemas)` returns the source `RecoveryReport`. Holds the src writer lock, recovers strictly, writes manifest, identity (if signed) and one synced checkpoint to a missing/empty dst, re-recovers dst with the target settings, and deletes everything it created on any failure. Ambiguity resolved: the spec lists only `serializer`; it means the source codec (as in `coopy.open`) and a new `new_serializer` sets the target; `new_*` default to the source settings. Docs: modern API, usage, API reference, changelog. ~8 files. |
+  | Commit | `473ab32c48296fd491ed9dce6c489525a817cd96` — implements F27. |
+  | Validation | `tests/functional/test_convert.py`: pickle→JSON, JSON→pickle, unsigned→signed, signed→unsigned, signed key change and zstd targets restore identical state and stay writable; src storage bytes unchanged; non-empty dst, wrong secret, wrong source codec, unencodable target and a locked src leave nothing behind. ruff, mypy, typing check, 410 passed/31 skipped, Sphinx -W clean. |
+  | Limitation | The source `coopy.lock` file is created or rewritten while converting; only storage files are guaranteed untouched. |
+  | Limitation | The destination starts a new history: journals, old checkpoints and per-action outcome records are not copied. |
+  | Limitation | The whole state is held in memory and written as one checkpoint; there is no streaming conversion. |
+  | Next step | Add a `python -m coopy convert` command-line wrapper for operators who cannot import the domain code into a script. |
+
+- [x] **F28 — Rotate integrity secrets.** F14 has no key rotation: changing the secret makes existing signed storage unreadable. Support reading with a list of accepted secrets while writing with the newest, and provide an explicit re-sign path (through F27) after which old secrets can be retired. Acceptance: a directory signed with key A opens with `[B, A]`, new records are signed with B, re-signing removes the dependence on A, and wrong or retired keys still fail before decoding.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | `secret=` on `coopy.open`, `recover`, `restore` and `convert` accepts bytes or a nonempty list/tuple of keys, newest first (`coopy.integrity.Secret`). The identity and every record verify with any listed key; new identities, snapshots and journal records are signed with the first. Re-signing is `coopy.convert(src, dst, secret=[B, A], new_secret=B)` (F27). Usage docs gain a key-rotation procedure; changelog updated. Spec clear; ~8 files. |
+  | Commit | `f5575355abb235c3946c57ab69ad3c4103be1c7e` — implements F28. |
+  | Validation | `tests/functional/test_key_rotation.py`: an A-signed directory opens with `[B, A]`; new journal records and snapshots verify with B only; until re-sign, B alone fails at the identity and `[A]` fails at the first B record; after convert, dst verifies with B only and A alone fails; wrong keys `C`, `[C]`, `[C, B]` stop as `verification` without constructing an unpickler; invalid key lists raise `ConfigurationError`. ruff, mypy, typing check, 424 passed/31 skipped, coverage 93.57%, Sphinx -W clean. |
+  | Limitation | Rotation in place is not possible: retiring a key requires converting to a new directory and swapping it in manually. |
+  | Limitation | Every listed key can verify (and therefore forge) records; nothing records which keys were retired, so a retired key left in the list is still accepted. |
+  | Next step | Add a `control(system).storage_keys()`-style report of which accepted keys the identity and records still depend on, so operators can confirm a key is safe to retire. |
 
 - [ ] **F29 — Prune old snapshots and journals.** Every snapshot and journal is kept forever, so disk use only grows. Add `coopy.control(system).prune(keep=N)` (and an optional `keep_for=timedelta`) that deletes checkpoints older than the newest N together with journals no longer needed to replay from the oldest kept checkpoint. Never delete the files needed to recover the current state; take the F22 lock. Acceptance: recovery after pruning matches live state; pruning during concurrent writes and snapshot publication is safe; signed directories stay verifiable.
 
