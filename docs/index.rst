@@ -15,8 +15,9 @@ The object graph stays in memory, so it must fit in memory. Reopening loads
 the latest snapshot and replays subsequent journaled calls.
 
 Request snapshots manually or schedule them through the proxy. Snapshots
-reduce recovery work; old snapshots and journals are retained without
-automatic pruning.
+reduce recovery work; old snapshots and journals are retained until you prune
+them with ``coopy.control(system).prune(keep=N)`` or ``python -m coopy prune``
+(see :doc:`cli`).
 
 Using
 -----
@@ -64,6 +65,7 @@ Contents
    installation
    tutorial
    usage
+   cli
    basics
    use_clock
    method_decorators

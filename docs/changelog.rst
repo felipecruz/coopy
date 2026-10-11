@@ -6,6 +6,9 @@ Changelog
 Unreleased
 ----------
 
+* ``python -m coopy`` command-line tool: ``inspect``, ``verify``, ``log``,
+  ``snapshot``, ``prune`` and ``convert`` for data directories. Every command
+  holds the writer lock and exits non-zero on errors. See :doc:`cli`.
 * ``coopy.control(system).prune(keep=N, keep_for=None)`` and
   ``coopy.prune(directory, keep=N)`` delete checkpoints older than the newest
   ``N`` (and outside ``keep_for``) together with the journals only they need.
