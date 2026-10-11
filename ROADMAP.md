@@ -510,13 +510,25 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Timestamp | 2026-10-11 |
   | Complexity | M |
   | Details | New `coopy.ClockDivergenceError(CoopyError, RuntimeError)` with `action`, `index` (zero-based clock call), `expected`, `actual`. `RestoreClock` gets real `now`/`utcnow`/`today` methods: `today()` rejects a `datetime`, `now()`/`utcnow()` reject dates and foreign values, running out of values raises, `check_complete()` flags unused values; the first divergence sticks even if the domain swallows it. Recovery stops with kind `clock` (divergence wins over an expected failure; leftover values are checked after the outcome); replicas raise it and become unsynchronized. Docs: changelog, usage, use_clock, API. Spec clear; ~8 files. |
-  | Commit | `772c357c9d39f7c18fa84bb4b9eb63e3b8d7fca9` — implements F34. |
+  | Commit | `772c357c9d39f7c18fa84bb4b9eb63e3b8d7fca9` — implements F34.; `903232e1f07a4d66772fa6ae8d72f1b2af2fdd58` |
   | Validation | `tests/functional/test_clock_divergence.py`: wrong method, wrong type, foreign value, too many, too few and swallowed-divergence fixtures fail strict with `RecoveryError` caused by `ClockDivergenceError` and report file/offset/record/action in salvage; replicas get the same message; correct journals replay unchanged and reopen identically. ruff, mypy, typing check, 485 passed/31 skipped, coverage 94.29%, Sphinx -W clean. |
   | Limitation | Journals store bare values, so `now()` replayed as `utcnow()` (or the reverse) is not detected; F38 adds recorded call names. |
   | Limitation | The `expected` text infers the recorded call from the value type (`now() or utcnow()` vs `today()`), not from the original call. |
   | Next step | Report the recorded call name in `ClockDivergenceError.expected` once F38 stores `(method, value)` pairs. |
 
-- [ ] **F35 — Publish a typed `Clock` protocol.** The documentation tells users to annotate `_clock: RecordClock`, but during recovery and on replicas the object is a `RestoreClock`, which is unrelated, and `RestoreClock` implements `now`, `utcnow` and `today` only through `__getattr__`, so type checkers cannot see them. Add `coopy.Clock`, a `typing.Protocol` with explicitly typed `now()`, `utcnow()` and `today()`; give `RecordClock` and `RestoreClock` real methods and remove the unreachable `__getattr__` fallbacks. Update the README, `docs/modern-api.rst`, `docs/use_clock.rst` and IDEAS.md to `_clock: coopy.Clock`. Acceptance: installed-wheel typing checks accept a domain annotated with `coopy.Clock` under `mypy --strict`, reveal the correct return types, reject unknown clock methods, and existing `RecordClock` annotations keep type-checking.
+- [x] **F35 — Publish a typed `Clock` protocol.** The documentation tells users to annotate `_clock: RecordClock`, but during recovery and on replicas the object is a `RestoreClock`, which is unrelated, and `RestoreClock` implements `now`, `utcnow` and `today` only through `__getattr__`, so type checkers cannot see them. Add `coopy.Clock`, a `typing.Protocol` with explicitly typed `now()`, `utcnow()` and `today()`; give `RecordClock` and `RestoreClock` real methods and remove the unreachable `__getattr__` fallbacks. Update the README, `docs/modern-api.rst`, `docs/use_clock.rst` and IDEAS.md to `_clock: coopy.Clock`. Acceptance: installed-wheel typing checks accept a domain annotated with `coopy.Clock` under `mypy --strict`, reveal the correct return types, reject unknown clock methods, and existing `RecordClock` annotations keep type-checking.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | S |
+  | Details | New `coopy.Clock` (`typing.Protocol` in `coopy.foundation`, exported from `coopy`) with `now()`/`utcnow()` -> `datetime` and `today()` -> `date`. `RestoreClock` already had real methods from F34; `RecordClock`'s unreachable `__getattr__` fallback is removed, so unknown clock attributes raise and type checkers reject them. README, `docs/modern-api.rst`, `docs/use_clock.rst` (new Type hints section), IDEAS.md use `_clock: coopy.Clock`; API reference lists `Clock` and `RestoreClock`; changelog entry. Spec clear; 11 files. |
+  | Commit | `b0607818f81e7fb58d2740bb7d9eb5473f69d1bc` — implements F35. |
+  | Validation | `scripts/check_typing.py` (installed wheel, `mypy --strict`): `coopy.Clock` domain accepted, `assert_type` on all three methods, unknown methods rejected on `Clock`/`RecordClock`/`RestoreClock`, `RecordClock` annotation still checks. README example passes `mypy --strict`. ruff, mypy, 487 passed/31 skipped, coverage 94.40%, Sphinx -W clean. |
+  | Limitation | `RestoreClock` is still not exported from `coopy`; users referencing it import from `coopy.foundation`. |
+  | Limitation | The protocol is not `runtime_checkable`, so `isinstance(x, coopy.Clock)` is unsupported. |
+  | Next step | Make the F36 test clocks implement `coopy.Clock` and add them to the typing check. |
 
 - [ ] **F36 — Ship public test clocks.** Tests currently rely on the untyped `TestClock` and `TestSystemMixin` in `coopy/tests/utils.py`, which return one fixed value. Add `coopy.testing.FrozenClock(dt)` and `ManualClock(start)` with `advance(timedelta)` and `set(dt)`, both implementing `coopy.Clock`, plus a helper to install a clock on an opened system for tests. Keep the old helpers as deprecated aliases. Acceptance: an expiry example ("a token expires after one hour") is tested without sleeping; the clocks pass the F35 typing checks; deprecated helpers warn but work.
 
