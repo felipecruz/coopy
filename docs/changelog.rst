@@ -6,6 +6,12 @@ Changelog
 Unreleased
 ----------
 
+* ``coopy.Clock``: a typed protocol for the injected ``self._clock`` with
+  ``now()``/``utcnow()`` returning ``datetime`` and ``today()`` returning
+  ``date``. Both ``RecordClock`` and the replaying ``RestoreClock`` implement
+  it; annotate domains with ``_clock: coopy.Clock``. ``RecordClock`` no longer
+  has a ``__getattr__`` fallback, so type checkers reject unknown clock
+  methods. ``_clock: RecordClock`` annotations keep type-checking.
 * Replay detects clock divergence: a replayed method that calls ``today()``
   where ``now()``/``utcnow()`` was recorded (or the reverse), receives a value
   of the wrong type, or makes more or fewer clock calls than were recorded now

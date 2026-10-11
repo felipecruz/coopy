@@ -67,8 +67,8 @@ researcher: runs, parameters, metrics, tags, artifacts by reference.
 from dataclasses import dataclass, field
 from datetime import datetime
 
+import coopy
 from coopy.decorators import readonly
-from coopy.foundation import RecordClock
 
 
 @dataclass
@@ -79,7 +79,7 @@ class Run:
 
 
 class Lab:
-    _clock: RecordClock
+    _clock: coopy.Clock
 
     def __init__(self) -> None:
         self.runs: dict[str, Run] = {}

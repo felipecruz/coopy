@@ -8,6 +8,7 @@ from .base import logging_config as logging_config
 from .convert import convert as convert
 from .error import ClockDivergenceError as ClockDivergenceError
 from .error import CoopyError as CoopyError
+from .foundation import Clock as Clock
 from .prune import prune as prune
 from .serialization import ActionSchemas as ActionSchemas
 from .serialization import JsonSerializer as JsonSerializer
@@ -25,6 +26,7 @@ __all__ = [
     "convert",
     "prune",
     "CoopyError",
+    "Clock",
     "ClockDivergenceError",
     "Serializer",
     "PickleSerializer",

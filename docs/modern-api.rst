@@ -38,8 +38,8 @@ typed as that class, so type checkers verify arguments and return values::
     from datetime import datetime
     from typing import TypedDict
 
+    import coopy
     from coopy.decorators import readonly
-    from coopy.foundation import RecordClock
 
 
     class Item(TypedDict):
@@ -49,7 +49,7 @@ typed as that class, so type checkers verify arguments and return values::
 
 
     class TodoList:
-        _clock: RecordClock  # injected by coopy
+        _clock: coopy.Clock  # injected by coopy
 
         def __init__(self) -> None:
             self.items: list[Item] = []
@@ -76,8 +76,11 @@ typed as that class, so type checkers verify arguments and return values::
         print(todo.pending())            # list[str]
         todo.add(42)                     # mypy: expected "str"
 
-Declare ``_clock: RecordClock`` without a value: coopy injects the clock when
-the system opens and replaces it with a replaying clock during recovery.
+Declare ``_clock: coopy.Clock`` without a value: coopy injects a recording
+clock when the system opens and a replaying clock during recovery and on
+replicas; both implement the ``coopy.Clock`` protocol. Existing
+``RecordClock`` annotations keep type-checking but do not describe the
+replaying clock.
 Keep the domain class in an importable module (not ``__main__``) so snapshots
 can be loaded by a later process. The example passes ``mypy --strict``.
 

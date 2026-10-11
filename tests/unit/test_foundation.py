@@ -83,5 +83,22 @@ class TestRestoreClock(unittest.TestCase):
         self.assertEqual(dt3, clock.utcnow())
 
 
+class TestClockProtocol(unittest.TestCase):
+    def test_public_clock_protocol(self):
+        import coopy
+        from coopy.foundation import Clock
+
+        self.assertIs(coopy.Clock, Clock)
+        self.assertIn("Clock", coopy.__all__)
+
+    def test_clocks_have_no_attribute_fallback(self):
+        from coopy.foundation import RecordClock, RestoreClock
+
+        for clock in (RecordClock(), RestoreClock([])):
+            self.assertNotIn("__getattr__", type(clock).__dict__)
+            with self.assertRaises(AttributeError):
+                clock.fromtimestamp  # noqa: B018
+
+
 if __name__ == "__main__":
     unittest.main()

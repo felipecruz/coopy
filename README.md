@@ -151,8 +151,8 @@ through `coopy.control()` so they don't clash with your own method names:
 from datetime import datetime
 from typing import TypedDict
 
+import coopy
 from coopy.decorators import readonly
-from coopy.foundation import RecordClock
 
 
 class Item(TypedDict):
@@ -162,7 +162,7 @@ class Item(TypedDict):
 
 
 class TodoList:
-    _clock: RecordClock  # injected by coopy
+    _clock: coopy.Clock  # injected by coopy
 
     def __init__(self) -> None:
         self.items: list[Item] = []

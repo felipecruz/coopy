@@ -1,20 +1,36 @@
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Any, Protocol
 
 from .error import ClockDivergenceError
-from .validation import DATE_FUNCS, DATETIME_FUNCS
+from .validation import DATETIME_FUNCS
+
+
+class Clock(Protocol):
+    """The ``self._clock`` interface injected into domain objects.
+
+    Annotate domains with ``_clock: coopy.Clock``: coopy injects a
+    ``RecordClock`` for live calls and a ``RestoreClock`` during recovery and
+    on replicas, and both implement this protocol.
+    """
+
+    def now(self) -> datetime:
+        """Naive local ``datetime``."""
+        ...
+
+    def utcnow(self) -> datetime:
+        """Naive UTC ``datetime`` (no timezone attached)."""
+        ...
+
+    def today(self) -> date:
+        """Local ``date``."""
+        ...
 
 
 class RecordClock(object):
+    """Records each clock value so journal replay can return it again."""
+
     def __init__(self) -> None:
         self.results: list[date] = []
-
-    def __getattr__(self, name: str) -> Any:
-        if name in DATETIME_FUNCS:
-            return getattr(datetime, name)
-        elif name in DATE_FUNCS:
-            return getattr(date, name)
-        return object.__getattribute__(self, name)
 
     def now(self) -> datetime:
         dt = datetime.now()

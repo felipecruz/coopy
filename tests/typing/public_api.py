@@ -1,9 +1,11 @@
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from typing_extensions import assert_type
 
 import coopy
 from coopy.decorators import abort_exception, readonly, unlocked
+from coopy.foundation import RecordClock, RestoreClock
 from coopy.restore import RecoveryReport, RecoveryResult
 
 
@@ -15,7 +17,39 @@ class Todo:
         return priority
 
 
+class Journal:
+    _clock: coopy.Clock
+
+    def __init__(self) -> None:
+        self.entries: list[tuple[datetime, datetime, date]] = []
+
+    def record(self) -> datetime:
+        entry = (self._clock.now(), self._clock.utcnow(), self._clock.today())
+        self.entries.append(entry)
+        return entry[0]
+
+
+class LegacyJournal:
+    _clock: RecordClock
+
+    def stamp(self) -> date:
+        return self._clock.today()
+
+
 if TYPE_CHECKING:
+    clock: coopy.Clock = RecordClock()
+    clock = RestoreClock([])
+    assert_type(clock.now(), datetime)
+    assert_type(clock.utcnow(), datetime)
+    assert_type(clock.today(), date)
+    clock.yesterday()  # type: ignore[attr-defined]
+    RecordClock().yesterday()  # type: ignore[attr-defined]
+    RestoreClock([]).yesterday()  # type: ignore[attr-defined]
+    assert_type(RecordClock().now(), datetime)
+    assert_type(RestoreClock([]).today(), date)
+    journal = coopy.open(Journal)
+    assert_type(journal.record(), datetime)
+    assert_type(coopy.open(LegacyJournal).stamp(), date)
 
     async def async_api() -> None:
         async with coopy.AsyncPersistent(Todo, "async-data") as todo:

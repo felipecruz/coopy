@@ -35,7 +35,9 @@ Decorators and recorded clocks
    coopy.decorators.readonly
    coopy.decorators.unlocked
    coopy.decorators.abort_exception
+   coopy.Clock
    coopy.foundation.RecordClock
+   coopy.foundation.RestoreClock
 
 Serialization and migrations
 ----------------------------

@@ -40,6 +40,33 @@ Journals store bare values, so ``now()`` and ``utcnow()`` replayed in each
 other's place are not detected. Randomness and external I/O are not captured
 by this clock; see :doc:`usage`.
 
+Type hints
+----------
+
+Annotate the injected clock with the ``coopy.Clock`` protocol::
+
+    from datetime import datetime
+
+    import coopy
+
+
+    class Journal:
+        _clock: coopy.Clock  # injected by coopy
+
+        def __init__(self) -> None:
+            self.entries: list[datetime] = []
+
+        def record(self) -> datetime:
+            stamp = self._clock.now()
+            self.entries.append(stamp)
+            return stamp
+
+Live calls receive a recording ``RecordClock``; recovery and replicas inject a
+replaying ``RestoreClock``. Both implement ``coopy.Clock``, so type checkers
+see ``now()`` and ``utcnow()`` returning ``datetime``, ``today()`` returning
+``date``, and reject any other clock method. ``_clock: RecordClock``
+annotations still type-check, but only describe the live clock.
+
 Clock-aware validation
 ----------------------
 
