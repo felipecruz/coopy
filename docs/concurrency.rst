@@ -125,7 +125,8 @@ aliases into domain state. Direct mutation is never automatically journaled.
 Static serializer/schema configuration must not be mutated while open.
 
 ``@unlocked`` skips the proxy lock, including for readonly methods. Such calls
-can race with writers, shared clock recording and snapshots. They require
+can race with writers and snapshots (each call still records its own clock and
+environment values, see :doc:`method_decorators`). They require
 application-provided synchronization and are outside these guarantees. Grouped
 synchronous writes happen to acquire the lock even if marked unlocked; do not
 rely on that as a general contract. The async queue serializes its own calls,

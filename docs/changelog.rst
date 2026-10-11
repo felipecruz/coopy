@@ -6,6 +6,15 @@ Changelog
 Unreleased
 ----------
 
+* ``@unlocked`` methods can use ``self._clock`` and ``self._env``: each proxy
+  call now records into its own clock held in a context variable, so
+  overlapping unlocked calls no longer append to each other's recording (or
+  remove each other's ``_env``) and replay returns every action its own
+  values. The domain object keeps a shared ``_clock`` that dispatches to the
+  running call; outside a call it reads the system clock without recording.
+  Snapshots still store a plain ``RecordClock``, so their format is unchanged.
+  Reading ``obj._clock.results`` after a call no longer works; use the
+  journaled action's ``results``.
 * Validation resolves the method module's imports, so aliased
   (``from datetime import datetime as dt; dt.now()``) and module-qualified
   (``datetime.datetime.now()``) calls are recognised, and it now also covers

@@ -12,7 +12,7 @@ from io import BytesIO
 from typing import Any, BinaryIO, Callable, Mapping, Protocol
 
 from coopy.error import CoopyError
-from coopy.foundation import Action, RecordClock, VersionedState
+from coopy.foundation import Action, CallClock, RecordClock, VersionedState
 
 
 class SerializationError(CoopyError, ValueError):
@@ -155,6 +155,10 @@ class JsonSerializer:
                 return {"t": cls.__name__, "v": [encode(item) for item in value]}
             if cls is dict:
                 return {"t": "dict", "v": [[encode(k), encode(v)] for k, v in value.items()]}
+            if cls is CallClock:
+                # stored like pickle stores it: a fresh RecordClock
+                value = RecordClock()
+                cls = RecordClock
             if cls in _BUILTIN_OBJECTS:
                 name = _BUILTIN_OBJECTS[cls]
                 state = vars(value)

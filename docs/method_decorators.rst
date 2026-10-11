@@ -20,9 +20,22 @@ immutability: return detached copies or immutable values, as in the tutorial.
 
 ``from coopy.decorators import unlocked`` skips the proxy's reentrant lock.
 It does not suppress journaling. The application must coordinate concurrent
-calls, shared clock recording, and snapshots itself. Unlocked mutations are
-outside the checkpoint consistency guarantee; avoid them in persistent domains
-unless you provide equivalent synchronization.
+calls and snapshots itself. Unlocked mutations are outside the checkpoint
+consistency guarantee; avoid them in persistent domains unless you provide
+equivalent synchronization.
+
+Unlocked methods may use ``self._clock`` and ``self._env``. Every proxy call
+records into its own clock, kept in a context variable rather than on the
+domain object, so overlapping unlocked calls never record into each other's
+action and each one replays exactly the values it read. Values are recorded
+only in the thread (or task) that made the proxy call: a thread the method
+starts itself reads live, unrecorded values unless it runs in a copy of the
+caller's context (``contextvars.copy_context().run``). Recording does not order
+the calls themselves: replay runs journaled actions one at a time in journal
+order, so overlapping unlocked writers must change independent state (or
+synchronize) for replay to rebuild the same state, and two unlocked writers
+must not publish at the same moment, because journal writes are not
+serialized for them.
 
 These limits also apply on free-threaded Python: the GIL is not a substitute
 for locking compound reads. See :doc:`concurrency` for reader guarantees,

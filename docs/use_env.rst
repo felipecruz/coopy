@@ -41,6 +41,8 @@ and ``sample`` record positions rather than elements, so replay returns the
 domain's own objects, and mutating the chosen object (``choice(players).score
 += 1``) replays correctly. ``self._env`` only exists while a proxied method
 runs: it is not available in ``__init__`` and is never stored in snapshots.
+Like the clock, each call records into its own context, so concurrent
+``@unlocked`` calls keep their values apart (:doc:`method_decorators`).
 
 Replay
 ------

@@ -17,6 +17,7 @@ from coopy.restore import RecoveryError
 from coopy.testing import FrozenClock, SeededEnv, install_clock, install_env
 from coopy.validation import validate_date_datetime_calls
 from tests.functional.test_clock_records import journal_actions
+from tests.functional.test_clock_sources import ActionRecorder
 from tests.unit.test_network_select import fake_master as fake_master
 from tests.unit.test_network_select import wait_for
 
@@ -168,10 +169,11 @@ def test_install_env_on_plain_domain():
 
 def test_replica_replays_env_values(fake_master):  # noqa: F811
     proxy, slave, peer = fake_master
-    source = CoopyProxy(Game(), [])
+    recorder = ActionRecorder()
+    source = CoopyProxy(Game(), [recorder])
     source.play()
     action = Action(1, "play", datetime(2020, 1, 1), (), {})
-    action.results = list(source.obj._clock.results)
+    action.results = list(recorder.actions[-1].results)
     action.raised = False
     for value in (Game(), action):
         header, payload = prepare_data(value)

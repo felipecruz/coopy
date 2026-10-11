@@ -1,5 +1,6 @@
 import time as _time
 from collections.abc import Callable
+from contextvars import ContextVar
 from datetime import date, datetime, timezone, tzinfo
 from typing import Any, Protocol
 
@@ -89,6 +90,46 @@ class RecordClock(object):
         value = _time.monotonic() if self.source is None else self.source.monotonic()
         self.results.append(("monotonic", value))
         return value
+
+
+# the RecordClock of the proxy call running in this thread or task (F41)
+current_clock: ContextVar[RecordClock | None] = ContextVar("coopy_clock", default=None)
+
+
+class CallClock(object):
+    """The ``_clock`` a proxy injects: each call records into its own clock.
+
+    ``@unlocked`` methods can run concurrently on one object, so the
+    ``RecordClock`` of a call lives in a context variable instead of on the
+    object. Outside a proxy call values are read but not recorded. Copies and
+    snapshots store a plain ``RecordClock``, keeping the snapshot format.
+    """
+
+    def _current(self) -> RecordClock:
+        clock = current_clock.get()
+        return clock if clock is not None else RecordClock()
+
+    def now(self, tz: tzinfo | None = None) -> datetime:
+        return self._current().now(tz)
+
+    def utcnow(self) -> datetime:
+        return self._current().utcnow()
+
+    def today(self) -> date:
+        return self._current().today()
+
+    def time(self) -> float:
+        return self._current().time()
+
+    def monotonic(self) -> float:
+        return self._current().monotonic()
+
+    def __reduce__(self) -> tuple[type[RecordClock], tuple[()]]:
+        return (RecordClock, ())
+
+
+# shared by every proxy; holds no state of its own
+CALL_CLOCK = CallClock()
 
 
 class RestoreClock(object):

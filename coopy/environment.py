@@ -5,6 +5,7 @@ import random as _random
 import secrets
 import uuid
 from collections.abc import Callable, MutableSequence, Sequence
+from contextvars import ContextVar
 from typing import Any, Protocol, TypeVar, cast
 
 from .foundation import RecordClock, RestoreClock
@@ -185,6 +186,58 @@ class RecordEnv:
         value = self._source.token_urlsafe(nbytes)
         self._record("token_urlsafe", value)
         return value
+
+
+# the RecordEnv of the proxy call running in this thread or task (F41)
+current_env: ContextVar[RecordEnv | None] = ContextVar("coopy_env", default=None)
+
+
+class CallEnv:
+    """The ``_env`` a proxy injects: each call records into its own clock.
+
+    Like ``CallClock``, the ``RecordEnv`` of a call lives in a context
+    variable, so concurrent ``@unlocked`` calls never record into each
+    other's action. Outside a proxy call values come from OS entropy and are
+    not recorded.
+    """
+
+    def _current(self) -> Env:
+        env = current_env.get()
+        return env if env is not None else SYSTEM_ENV
+
+    def random(self) -> float:
+        return self._current().random()
+
+    def uniform(self, a: float, b: float) -> float:
+        return self._current().uniform(a, b)
+
+    def randint(self, a: int, b: int) -> int:
+        return self._current().randint(a, b)
+
+    def choice(self, seq: Sequence[T]) -> T:
+        return self._current().choice(seq)
+
+    def shuffle(self, items: MutableSequence[Any]) -> None:
+        self._current().shuffle(items)
+
+    def sample(self, population: Sequence[T], k: int) -> list[T]:
+        return self._current().sample(population, k)
+
+    def uuid4(self) -> uuid.UUID:
+        return self._current().uuid4()
+
+    def token_bytes(self, nbytes: int | None = None) -> bytes:
+        return self._current().token_bytes(nbytes)
+
+    def token_hex(self, nbytes: int | None = None) -> str:
+        return self._current().token_hex(nbytes)
+
+    def token_urlsafe(self, nbytes: int | None = None) -> str:
+        return self._current().token_urlsafe(nbytes)
+
+
+# shared by every proxy; holds no state of its own
+CALL_ENV = CallEnv()
 
 
 def _is_int(value: Any) -> bool:

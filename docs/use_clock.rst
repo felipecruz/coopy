@@ -7,7 +7,10 @@ Each method invocation through the proxy gets a fresh ``self._clock``. Use it
 inside domain methods; it is not a package-level import or a clock to use in
 ``__init__``. The journal stores the ordered results of clock calls, not just
 the action's timestamp. Recovery returns those results in order, so multiple
-calls in one action retain their individual values.
+calls in one action retain their individual values. The clock of a call is
+held in a context variable, so concurrent ``@unlocked`` calls each record their
+own values (:doc:`method_decorators`); outside a proxy call ``self._clock``
+reads the system clock without recording.
 
 The tutorial's domain uses the three date methods:
 

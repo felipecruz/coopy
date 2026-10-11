@@ -15,6 +15,7 @@ import os
 import threading
 import time
 import warnings
+from contextvars import Token
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -23,9 +24,9 @@ from typing import Any, Generic, Literal, TypeVar, cast, overload
 
 from coopy import __version__ as __version__
 from coopy import fileutils, manifest
-from coopy.environment import Env, RecordEnv
+from coopy.environment import CALL_ENV, Env, RecordEnv, current_env
 from coopy.error import ConfigurationError, LifecycleError, ReplicationError
-from coopy.foundation import Action, Clock, Publisher, RecordClock
+from coopy.foundation import CALL_CLOCK, Action, Clock, Publisher, RecordClock, current_clock
 from coopy.integrity import IDENTITY_FILE, Integrity, Secret, validate_secret
 from coopy.journal import DiskJournal
 from coopy.locking import DirectoryLock
@@ -395,6 +396,9 @@ class CoopyProxy:
         self._clock_source: Clock | None = None
         # values for self._env; None reads OS entropy
         self._env_source: Env | None = None
+        # domain method bodies running now; _env is injected only while any is
+        self._calls = 0
+        self._calls_lock = threading.Lock()
 
     def start_snapshot_manager(self, snapshot_time: float) -> None:
         # the timer waits snapshot_time before the first snapshot, so this
@@ -507,7 +511,7 @@ class CoopyProxy:
 
         def method(*args: Any, **kwargs: Any) -> Any:
             exception = None
-            env = None
+            tokens: tuple[Token[RecordClock | None], Token[RecordEnv | None]] | None = None
             try:
                 if locked:
                     self.lock.acquire(True)
@@ -518,12 +522,12 @@ class CoopyProxy:
                 if self.slave and not readonly:
                     raise ReplicationError("This is a slave/read-only instance.")
 
-                # record all calls to clock.now()
+                # each call records into its own clock, even when @unlocked
+                # calls overlap, so _clock and _env read it from the context
                 clock = RecordClock(self._clock_source)
-                self.obj._clock = clock
-                # self._env exists only during the call, so snapshots never hold it
                 env = RecordEnv(clock, self._env_source)
-                inject(self.obj, "_env", env)
+                tokens = (current_clock.set(clock), current_env.set(env))
+                self._enter_call()
 
                 thread_ident = threading.get_ident()
                 action = Action(thread_ident, name, datetime.now(), args, kwargs)
@@ -542,13 +546,10 @@ class CoopyProxy:
                         self.publisher.publish_exception(action)
                     exception = e
 
-                # restore clock
                 action.results = clock.results
-                # keep a test clock out of snapshots of the domain
-                vars(clock).pop("source", None)
                 # group commit releases the lock while waiting, so drop _env now
-                if vars(self.obj).get("_env") is env:
-                    del vars(self.obj)["_env"]
+                self._leave_call(tokens)
+                tokens = None
                 # lets restore tell expected failures from divergences
                 action.raised = exception is not None
 
@@ -561,8 +562,8 @@ class CoopyProxy:
                                 journal.wait_sync()
 
             finally:
-                if env is not None and vars(self.obj).get("_env") is env:
-                    del vars(self.obj)["_env"]
+                if tokens is not None:
+                    self._leave_call(tokens)
                 if locked:
                     self.lock.release()
 
@@ -572,6 +573,25 @@ class CoopyProxy:
             return system
 
         return method
+
+    def _enter_call(self) -> None:
+        with self._calls_lock:
+            self._calls += 1
+            # recovery and replicas replace _clock, so check on every call
+            if vars(self.obj).get("_clock") is not CALL_CLOCK:
+                inject(self.obj, "_clock", CALL_CLOCK)
+            # self._env exists only during calls, so snapshots never hold it
+            inject(self.obj, "_env", CALL_ENV)
+
+    def _leave_call(
+        self, tokens: tuple[Token[RecordClock | None], Token[RecordEnv | None]]
+    ) -> None:
+        current_env.reset(tokens[1])
+        current_clock.reset(tokens[0])
+        with self._calls_lock:
+            self._calls -= 1
+            if not self._calls and vars(self.obj).get("_env") is CALL_ENV:
+                del vars(self.obj)["_env"]
 
     def basedir_abspath(self) -> list[str]:
         disk_journals = (

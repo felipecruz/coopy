@@ -86,12 +86,32 @@ def test_test_clock_values_replay_exactly(tmp_path):
         assert jobs.runs == live
 
 
+class ActionRecorder:
+    """A subscriber keeping the actions a proxy publishes."""
+
+    def __init__(self):
+        self.actions = []
+
+    def receive_before(self, action):
+        pass
+
+    def receive(self, action):
+        self.actions.append(action)
+
+    def receive_exception(self, action):
+        pass
+
+    def close(self):
+        pass
+
+
 def test_replica_replays_aware_values_with_offset(fake_master):  # noqa: F811
     proxy, slave, peer = fake_master
-    source = CoopyProxy(Jobs(), [])
+    recorder = ActionRecorder()
+    source = CoopyProxy(Jobs(), [recorder])
     source.run("a")
     action = Action(1, "run", datetime(2020, 1, 1), ("a",), {})
-    action.results = list(source.obj._clock.results)
+    action.results = list(recorder.actions[-1].results)
     action.raised = False
     for value in (Jobs(), action):
         header, payload = prepare_data(value)
