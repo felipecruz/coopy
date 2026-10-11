@@ -7,6 +7,7 @@ from .base import init_persistent_system as open
 from .base import logging_config as logging_config
 from .convert import convert as convert
 from .error import CoopyError as CoopyError
+from .prune import prune as prune
 from .serialization import ActionSchemas as ActionSchemas
 from .serialization import JsonSerializer as JsonSerializer
 from .serialization import PickleSerializer as PickleSerializer
@@ -21,6 +22,7 @@ __all__ = [
     "control",
     "logging_config",
     "convert",
+    "prune",
     "CoopyError",
     "Serializer",
     "PickleSerializer",

@@ -15,7 +15,7 @@ import os
 import threading
 import time
 import warnings
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
@@ -29,6 +29,7 @@ from coopy.integrity import IDENTITY_FILE, Integrity, Secret, validate_secret
 from coopy.journal import DiskJournal
 from coopy.locking import DirectoryLock
 from coopy.network.default_select import CopyNet, CopyNetSlave
+from coopy.prune import PruneReport, prune_files, validate_prune
 from coopy.restore import RecoveryReport, RecoveryResult, recover
 from coopy.serialization import ActionSchemas, Serializer, StateSchemas
 from coopy.snapshot import SnapshotJob, SnapshotManager, SnapshotTimer, fork_supported
@@ -710,6 +711,22 @@ class PersistenceControl(Generic[T]):
 
     def close(self) -> None:
         CoopyProxy.close(self._proxy)
+
+    def prune(self, *, keep: int, keep_for: timedelta | None = None) -> PruneReport:
+        """Delete checkpoints older than the newest ``keep`` and unneeded journals.
+
+        Checkpoints published within ``keep_for`` are also kept. Journals are
+        removed only when they precede the oldest kept checkpoint, so the
+        current state and every kept checkpoint stay recoverable. Runs under the
+        domain lock: writes and blocking snapshots wait until it returns.
+        """
+        validate_prune(keep, keep_for)
+        proxy = self._proxy
+        with proxy.lock:
+            proxy._check_open()
+            if proxy.snapshot_manager is None:
+                raise LifecycleError("prune() requires a system with a data directory")
+            return prune_files(proxy.snapshot_manager.basedir, keep=keep, keep_for=keep_for)
 
     def shutdown(self) -> None:
         CoopyProxy.shutdown(self._proxy)

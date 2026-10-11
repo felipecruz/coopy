@@ -18,6 +18,8 @@ Persistence and async controls
    coopy.init_persistent_system
    coopy.control
    coopy.convert
+   coopy.prune
+   coopy.prune.PruneReport
    coopy.logging_config
    coopy.base.PersistenceControl
    coopy.AsyncPersistent

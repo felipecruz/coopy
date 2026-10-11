@@ -53,6 +53,8 @@ if TYPE_CHECKING:
         coopy.convert("data", "json-data", new_serializer=coopy.JsonSerializer(), new_secret=None),
         RecoveryReport,
     )
+    assert_type(coopy.control(managed).prune(keep=2).removed, list[str])
+    assert_type(coopy.prune("data", keep=1, keep_for=None).snapshots, list[str])
     assert_type(coopy.open(Todo(), recovery="salvage"), RecoveryResult[Todo])
     mode: str = "strict"
     assert_type(coopy.open(Todo, recovery=mode), Todo | RecoveryResult[Todo])

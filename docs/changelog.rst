@@ -6,6 +6,11 @@ Changelog
 Unreleased
 ----------
 
+* ``coopy.control(system).prune(keep=N, keep_for=None)`` and
+  ``coopy.prune(directory, keep=N)`` delete checkpoints older than the newest
+  ``N`` (and outside ``keep_for``) together with the journals only they need.
+  The current checkpoint and its journals are never removed; pruning holds the
+  domain lock or, for a closed directory, the writer lock. See :doc:`snapshots`.
 * Integrity key rotation: ``secret`` may be a list of accepted keys, newest
   first. Signed storage verifies with any listed key and new records are
   signed with the first; ``coopy.convert(..., new_secret=new_key)`` re-signs a

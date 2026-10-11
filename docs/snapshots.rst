@@ -70,6 +70,31 @@ See :doc:`usage` for synchronous acknowledgments, strict recovery, and salvage.
 Mutations that bypass the proxy lock (including ``@unlocked`` methods) remain
 outside this checkpoint guarantee.
 
+Pruning old checkpoints
+-----------------------
+
+Every checkpoint and journal is kept until you prune. Recovery reads only the
+newest checkpoint and the journals numbered after it; older files are history
+for manual fallback. ``coopy.control(system).prune(keep=N)`` deletes all but the
+newest ``N`` checkpoints together with the journals numbered before the oldest
+kept one, so every kept checkpoint can still replay to the current state::
+
+    report = coopy.control(proxy).prune(keep=3, keep_for=timedelta(days=7))
+    print(report.snapshots, report.journals)
+
+``keep_for`` additionally keeps every checkpoint published (file modification
+time) within that period; a checkpoint is deleted only when it is outside both.
+``keep`` must be at least 1, so the current checkpoint and its journals are
+never removed. Pruning runs under the domain lock: writes and blocking
+snapshots wait for it, and a fork snapshot publishing concurrently only adds a
+newer checkpoint. Files are deleted oldest first and the directory is synced,
+so an interruption leaves a shorter but contiguous history. Signed directories
+stay verifiable because remaining records are never rewritten.
+
+``coopy.prune(directory, keep=N)`` prunes a closed directory while holding its
+writer lock (``LockError`` while a writer has it open). Hidden
+``.coopy-snapshot-*`` temporary files are not touched.
+
 Optional compression
 --------------------
 
