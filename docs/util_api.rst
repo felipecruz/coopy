@@ -31,11 +31,14 @@ are tested without sleeping:
 
 ``FrozenClock(dt)``
     ``now()`` and ``utcnow()`` always return ``dt``; ``today()`` returns
-    ``dt.date()``.
+    ``dt.date()``. ``now(tz)`` converts an aware ``dt`` to ``tz`` and attaches
+    ``tz`` to a naive one. ``time()`` returns ``dt.timestamp()`` (naive ``dt``
+    counts as local time) and ``monotonic()`` stays at ``0.0``.
 
 ``ManualClock(start)``
     Like ``FrozenClock`` but movable: ``advance(timedelta)`` moves forward
     (negative deltas raise ``ValueError``) and ``set(dt)`` jumps anywhere.
+    ``monotonic()`` adds up the ``advance()`` deltas and ignores ``set()``.
 
 ``install_clock(system, clock)``
     On a system returned by ``coopy.open``, later method calls read

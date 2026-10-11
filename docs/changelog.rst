@@ -6,6 +6,17 @@ Changelog
 Unreleased
 ----------
 
+* Clock sources: ``self._clock.now(tz=None)`` mirrors ``datetime.now(tz)``, so
+  ``now(timezone.utc)`` records an aware value, and the new ``time()`` (epoch
+  seconds) and ``monotonic()`` (durations inside a method) are recorded and
+  replayed like the other clock calls. Aware values keep their offset through
+  pickle and JSON storage and replication; existing naive journals replay
+  unchanged. Replay raises ``coopy.ClockDivergenceError`` when ``now(tz)``
+  finds a naive value or ``time()``/``monotonic()`` finds no ``float``. The
+  ``coopy.Clock`` protocol and the ``coopy.testing`` clocks gain the new
+  methods; ``RecordClock`` still calls a source's ``now()`` without arguments
+  when no ``tz`` is passed. The clock guide now recommends aware UTC. See
+  :doc:`use_clock`.
 * ``coopy.testing``: ``FrozenClock(dt)`` and ``ManualClock(start)`` (with
   ``advance(timedelta)`` and ``set(dt)``) implement ``coopy.Clock``, and
   ``install_clock(system, clock)`` makes an opened system's ``self._clock``

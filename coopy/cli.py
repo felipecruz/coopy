@@ -11,7 +11,7 @@ import re
 import reprlib
 import sys
 from collections.abc import Callable, Iterator, Sequence
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -230,7 +230,9 @@ def summarize(action: Action) -> str:
         line += "  [legacy: outcome not recorded]"
     results = getattr(action, "results", None) or []
     if results:
-        values = ", ".join(value.isoformat() for value in results[:3])
+        values = ", ".join(
+            value.isoformat() if isinstance(value, date) else repr(value) for value in results[:3]
+        )
         more = f", +{len(results) - 3} more" if len(results) > 3 else ""
         line += f"  clock=[{values}{more}]"
     return line

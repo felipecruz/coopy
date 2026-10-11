@@ -1,4 +1,5 @@
-from datetime import date, datetime, timezone
+import time as _time
+from datetime import date, datetime, timezone, tzinfo
 from typing import Any, Protocol
 
 from .error import ClockDivergenceError
@@ -13,8 +14,8 @@ class Clock(Protocol):
     on replicas, and both implement this protocol.
     """
 
-    def now(self) -> datetime:
-        """Naive local ``datetime``."""
+    def now(self, tz: tzinfo | None = None) -> datetime:
+        """Like ``datetime.now(tz)``: naive local time, or aware in ``tz``."""
         ...
 
     def utcnow(self) -> datetime:
@@ -23,6 +24,14 @@ class Clock(Protocol):
 
     def today(self) -> date:
         """Local ``date``."""
+        ...
+
+    def time(self) -> float:
+        """Seconds since the epoch, like ``time.time()``."""
+        ...
+
+    def monotonic(self) -> float:
+        """Like ``time.monotonic()``; only differences within one call are meaningful."""
         ...
 
 
@@ -37,12 +46,18 @@ class RecordClock(object):
     source: Clock | None = None
 
     def __init__(self, source: Clock | None = None) -> None:
-        self.results: list[date] = []
+        self.results: list[date | float] = []
         if source is not None:
             self.source = source
 
-    def now(self) -> datetime:
-        dt = datetime.now() if self.source is None else self.source.now()
+    def now(self, tz: tzinfo | None = None) -> datetime:
+        if self.source is None:
+            dt = datetime.now(tz)
+        elif tz is None:
+            # sources written before tz support take no argument
+            dt = self.source.now()
+        else:
+            dt = self.source.now(tz)
         self.results.append(dt)
         return dt
 
@@ -60,24 +75,38 @@ class RecordClock(object):
         self.results.append(dt)
         return dt
 
+    def time(self) -> float:
+        value = _time.time() if self.source is None else self.source.time()
+        self.results.append(value)
+        return value
+
+    def monotonic(self) -> float:
+        value = _time.monotonic() if self.source is None else self.source.monotonic()
+        self.results.append(value)
+        return value
+
 
 class RestoreClock(object):
     """Replays recorded clock values and detects divergent clock calls.
 
     Journals store bare values, so ``now()`` and ``utcnow()`` (both
-    ``datetime``) cannot be told apart; ``today()`` records a plain ``date``.
+    ``datetime``) cannot be told apart, nor ``time()`` and ``monotonic()``
+    (both ``float``); ``today()`` records a plain ``date``. ``now(tz)`` with a
+    timezone requires an aware recorded value.
     The first divergence is kept so a domain method that swallows it still
     fails replay through ``check_calls``/``check_complete``.
     """
 
-    def __init__(self, results: list[date], action: str | None = None) -> None:
+    def __init__(self, results: list[date | float], action: str | None = None) -> None:
         self.results = list(results)
         self.action = action
         self.index = 0
         self.divergence: ClockDivergenceError | None = None
 
-    def now(self) -> datetime:
-        return self._replay("now")
+    def now(self, tz: tzinfo | None = None) -> datetime:
+        if tz is None:
+            return self._replay("now")
+        return self._replay("now", f"now({tz!r})", aware=True)
 
     def utcnow(self) -> datetime:
         return self._replay("utcnow")
@@ -85,15 +114,23 @@ class RestoreClock(object):
     def today(self) -> date:
         return self._replay("today")
 
-    def _replay(self, method_name: str) -> Any:
+    def time(self) -> float:
+        return self._replay("time")
+
+    def monotonic(self) -> float:
+        return self._replay("monotonic")
+
+    def _replay(self, method_name: str, actual: str | None = None, aware: bool = False) -> Any:
         if self.divergence is not None:
             raise self.divergence
-        actual = f"{method_name}()"
+        actual = actual or f"{method_name}()"
         if self.index >= len(self.results):
             self._diverge(f"no call ({len(self.results)} recorded)", actual)
         value = self.results[self.index]
         if method_name in DATETIME_FUNCS:
-            matches = isinstance(value, datetime)
+            matches = isinstance(value, datetime) and (not aware or value.tzinfo is not None)
+        elif method_name in FLOAT_FUNCS:
+            matches = type(value) is float
         else:
             matches = isinstance(value, date) and not isinstance(value, datetime)
         if not matches:
@@ -123,9 +160,16 @@ class RestoreClock(object):
             raise self.divergence
 
 
+FLOAT_FUNCS = ("time", "monotonic")
+
+
 def _recorded_call(value: Any) -> str:
     if isinstance(value, datetime):
-        return f"now() or utcnow() returning {value!r}"
+        if value.tzinfo is None:
+            return f"now() or utcnow() returning naive {value!r}"
+        return f"now(tz) returning {value!r}"
+    if type(value) is float:
+        return f"time() or monotonic() returning {value!r}"
     if isinstance(value, date):
         return f"today() returning {value!r}"
     return f"a clock value, found {type(value).__name__} {value!r}"
@@ -157,7 +201,7 @@ class Action(object):
         self.action = action
         self.args = args
         self.kwargs = kwargs
-        self.results: list[date] | None = None
+        self.results: list[date | float] | None = None
         self.raised: bool | None = None
 
         # TODO do we need it?

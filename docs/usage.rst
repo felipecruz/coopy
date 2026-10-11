@@ -91,8 +91,9 @@ Deterministic replay and external effects
 ---------------------------------------------
 
 Recovery runs domain methods again; it does not just assign their old results.
-Use ``self._clock.now()``, ``utcnow()``, and ``today()`` inside domain methods to
-replay the original time values. Capture randomness, environment-dependent
+Use ``self._clock.now(timezone.utc)``, ``now()``, ``utcnow()``, ``today()``,
+``time()`` and ``monotonic()`` inside domain methods to replay the original time
+values. Capture randomness, environment-dependent
 values, and external inputs before calling the proxy and pass immutable values
 as arguments. Do not rely on network responses or current file contents during
 replay. The clock validator is a limited source check, not a determinism proof.

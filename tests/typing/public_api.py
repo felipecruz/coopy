@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from typing_extensions import assert_type
@@ -43,6 +43,11 @@ if TYPE_CHECKING:
     assert_type(clock.now(), datetime)
     assert_type(clock.utcnow(), datetime)
     assert_type(clock.today(), date)
+    assert_type(clock.now(timezone.utc), datetime)
+    assert_type(clock.now(tz=None), datetime)
+    assert_type(clock.time(), float)
+    assert_type(clock.monotonic(), float)
+    clock.now("UTC")  # type: ignore[arg-type]
     clock.yesterday()  # type: ignore[attr-defined]
     RecordClock().yesterday()  # type: ignore[attr-defined]
     RestoreClock([]).yesterday()  # type: ignore[attr-defined]
@@ -55,6 +60,8 @@ if TYPE_CHECKING:
     assert_type(manual.set(datetime(2026, 1, 2)), None)
     assert_type(manual.today(), date)
     manual.advance(3600)  # type: ignore[arg-type]
+    assert_type(manual.now(timezone.utc), datetime)
+    assert_type(manual.monotonic(), float)
     FrozenClock(datetime(2026, 1, 1)).yesterday()  # type: ignore[attr-defined]
     RecordClock(manual).now()
     journal = coopy.open(Journal)
