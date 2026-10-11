@@ -135,9 +135,12 @@ That means:
   `today()` instead of `datetime.now()`. coopy records the value and hands
   back the same one on replay. Source validation catches some direct clock
   calls, but cannot prove that your methods are deterministic.
-- **No other outside input inside methods** - no random numbers, network
-  calls or file reads. Do those outside and pass the results in as
-  arguments.
+- **Use `self._env` for random values.** `self._env.random()`, `randint()`,
+  `choice()`, `shuffle()`, `uuid4()`, `token_hex()` and friends are recorded
+  and replayed like the clock (annotate `_env: coopy.Env`). Recorded tokens
+  are stored in the journal, so keep real secrets out of it.
+- **No other outside input inside methods** - no network calls or file reads.
+  Do those outside and pass the results in as arguments.
 - **Arguments and state must be picklable.**
 
 ## Type hints

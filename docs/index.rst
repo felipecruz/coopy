@@ -33,8 +33,9 @@ Restrictions
 ------------
 
 Mutate state through proxy methods and keep their behavior deterministic.
-Use the :doc:`recorded clock <use_clock>` for time, pass other external inputs
-as arguments, and keep external effects outside replayed methods. Direct
+Use the :doc:`recorded clock <use_clock>` for time and the
+:doc:`recorded environment <use_env>` for random numbers, UUIDs and tokens,
+pass other external inputs as arguments, and keep external effects outside replayed methods. Direct
 changes to exposed mutable objects are not journaled.
 
 Use one process and one persistent proxy per data directory; a second writable
@@ -68,6 +69,7 @@ Contents
    cli
    basics
    use_clock
+   use_env
    method_decorators
    snapshots
    migrations

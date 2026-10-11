@@ -12,6 +12,7 @@ import zlib
 from collections import deque
 from select import select
 
+from coopy.environment import RestoreEnv
 from coopy.foundation import RestoreClock
 from coopy.network.network import COPYNET_HEADER, COPYNET_SOCK, prepare_data
 
@@ -332,6 +333,7 @@ class CopyNetSlave(threading.Thread):
                             raise ValueError("Action received before snapshot")
                         clock = RestoreClock.for_action(value)
                         obj._clock = clock
+                        vars(obj)["_env"] = RestoreEnv(clock)
                         try:
                             value.execute_action(obj)
                         except Exception:
@@ -344,6 +346,8 @@ class CopyNetSlave(threading.Thread):
                             if getattr(value, "raised", False):
                                 self.ready.clear()
                                 raise ValueError("Action outcome differs from master")
+                        finally:
+                            vars(obj).pop("_env", None)
                         clock.check_complete()
         except Exception as exc:
             if not self.stopped.is_set():

@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
@@ -5,9 +6,10 @@ from typing_extensions import assert_type
 
 import coopy
 from coopy.decorators import abort_exception, readonly, unlocked
+from coopy.environment import RecordEnv, RestoreEnv
 from coopy.foundation import RecordClock, RestoreClock
 from coopy.restore import RecoveryReport, RecoveryResult
-from coopy.testing import FrozenClock, ManualClock, install_clock
+from coopy.testing import FrozenClock, ManualClock, SeededEnv, install_clock, install_env
 
 
 class Todo:
@@ -28,6 +30,16 @@ class Journal:
         entry = (self._clock.now(), self._clock.utcnow(), self._clock.today())
         self.entries.append(entry)
         return entry[0]
+
+
+class Raffle:
+    _env: coopy.Env
+
+    def __init__(self) -> None:
+        self.names = ["ana", "bo"]
+
+    def draw(self) -> tuple[str, uuid.UUID, str]:
+        return self._env.choice(self.names), self._env.uuid4(), self._env.token_hex(8)
 
 
 class LegacyJournal:
@@ -69,6 +81,26 @@ if TYPE_CHECKING:
     install_clock(journal, manual)
     install_clock(Journal(), None)
     assert_type(coopy.open(LegacyJournal).stamp(), date)
+    env: coopy.Env = RecordEnv(RecordClock())
+    env = RestoreEnv(RestoreClock([]))
+    env = SeededEnv(42)
+    assert_type(env.random(), float)
+    assert_type(env.uniform(0.0, 1.0), float)
+    assert_type(env.randint(1, 6), int)
+    assert_type(env.choice(["a", "b"]), str)
+    assert_type(env.shuffle([1, 2]), None)
+    assert_type(env.sample(range(10), 2), list[int])
+    assert_type(env.uuid4(), uuid.UUID)
+    assert_type(env.token_bytes(), bytes)
+    assert_type(env.token_hex(16), str)
+    assert_type(env.token_urlsafe(None), str)
+    env.randint(1.5, 6)  # type: ignore[arg-type]
+    env.gauss()  # type: ignore[attr-defined]
+    RecordEnv(RecordClock(), SeededEnv(1)).random()
+    raffle = coopy.open(Raffle)
+    assert_type(raffle.draw(), tuple[str, uuid.UUID, str])
+    install_env(raffle, SeededEnv("seed"))
+    install_env(Raffle(), None)
 
     async def async_api() -> None:
         async with coopy.AsyncPersistent(Todo, "async-data") as todo:

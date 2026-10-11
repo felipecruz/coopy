@@ -79,8 +79,9 @@ the recorded call, for example ``now() returning datetime(...)``, and
 ``actual`` the replayed one. Actions written by earlier releases store bare
 values and keep the older checks: same-typed calls swapped, or ``now(tz)``
 with a different timezone, are not detected there. Replay returns the
-recorded value unconverted. Randomness and external I/O are not captured
-by this clock; see :doc:`usage`.
+recorded value unconverted. Random numbers, UUIDs and tokens are recorded
+by ``self._env`` (:doc:`use_env`); external I/O is not captured, see
+:doc:`usage`.
 
 Type hints
 ----------

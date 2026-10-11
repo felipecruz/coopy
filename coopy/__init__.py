@@ -6,6 +6,7 @@ from .base import init_persistent_system as init_persistent_system
 from .base import init_persistent_system as open
 from .base import logging_config as logging_config
 from .convert import convert as convert
+from .environment import Env as Env
 from .error import ClockDivergenceError as ClockDivergenceError
 from .error import CoopyError as CoopyError
 from .foundation import Clock as Clock
@@ -27,6 +28,7 @@ __all__ = [
     "prune",
     "CoopyError",
     "Clock",
+    "Env",
     "ClockDivergenceError",
     "Serializer",
     "PickleSerializer",

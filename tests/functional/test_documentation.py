@@ -32,6 +32,7 @@ def run_example(tmp_path, *arguments):
         "decorator_semantics.py",
         "replication.py",
         "state_migration.py",
+        "raffle.py",
     ],
 )
 def test_documented_example(tmp_path, example):

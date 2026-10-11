@@ -31,9 +31,9 @@ class NodeVisitor(ast.NodeVisitor):
                 In this case we can't be sure if it's a call from a date or
                 datetime instance
             """
-            if node.func.value.attr == "_clock":
+            if node.func.value.attr in ("_clock", "_env"):
                 """
-                    A call to self._clock.method() wich is ok.
+                    A call to self._clock.method() or self._env.method() wich is ok.
                 """
                 return
             elif node.func.attr in FORBIDDEN_FUNCS:

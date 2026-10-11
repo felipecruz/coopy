@@ -20,7 +20,7 @@ import coopy
 from coopy import fileutils, manifest
 from coopy.convert import _Recovering
 from coopy.error import ConfigurationError
-from coopy.foundation import Action, RecordClock, split_clock_record
+from coopy.foundation import SECRET_FUNCS, Action, RecordClock, redacted, split_clock_record
 from coopy.integrity import HEADER, IDENTITY_FILE, MAGIC, TAG_SIZE, Integrity
 from coopy.locking import DirectoryLock
 from coopy.restore import recover
@@ -238,7 +238,12 @@ def summarize(action: Action) -> str:
 
 def _clock_entry(entry: object) -> str:
     method, value = split_clock_record(entry)
-    text = value.isoformat() if isinstance(value, date) else repr(value)
+    if method in SECRET_FUNCS:
+        text = redacted(value)
+    elif isinstance(value, date):
+        text = value.isoformat()
+    else:
+        text = repr(value)
     return text if method is None else f"{method}={text}"
 
 

@@ -1,12 +1,13 @@
 import time as _time
+from collections.abc import Callable
 from datetime import date, datetime, timezone, tzinfo
 from typing import Any, Protocol
 
 from .error import ClockDivergenceError, FormatError
 from .validation import DATETIME_FUNCS
 
-# A recorded clock call: the ``Clock`` method name and the value it returned.
-ClockRecord = tuple[str, date | float]
+# A recorded call: the ``Clock`` or ``Env`` method name and the value it returned.
+ClockRecord = tuple[str, Any]
 
 
 class Clock(Protocol):
@@ -161,6 +162,27 @@ class RestoreClock(object):
         self.index += 1
         return value
 
+    def replay_recorded(self, method_name: str, actual: str, valid: Callable[[Any], bool]) -> Any:
+        """The next value if ``method_name`` recorded it and ``valid`` accepts it.
+
+        Used by ``RestoreEnv``, whose values share this clock's record; bare
+        values from before record version 2 never match.
+        """
+        if self.divergence is not None:
+            raise self.divergence
+        if self.index >= len(self.results):
+            self._diverge(f"no call ({len(self.results)} recorded)", actual)
+        entry = self.results[self.index]
+        recorded, value = split_clock_record(entry)
+        try:
+            matches = recorded == method_name and bool(valid(value))
+        except Exception:
+            matches = False
+        if not matches:
+            self._diverge(_recorded_call(entry), actual)
+        self.index += 1
+        return value
+
     def _diverge(self, expected: str, actual: str) -> None:
         self.divergence = ClockDivergenceError(self.action, self.index, expected, actual)
         raise self.divergence
@@ -185,6 +207,9 @@ class RestoreClock(object):
 
 FLOAT_FUNCS = ("time", "monotonic")
 
+# ``Env`` calls whose recorded values are secrets; messages show only their size.
+SECRET_FUNCS = ("token_bytes", "token_hex", "token_urlsafe")
+
 # Version 2 records clock results as ``(method, value)`` pairs; 1 as bare values.
 RECORD_VERSION = 2
 
@@ -197,9 +222,19 @@ def split_clock_record(entry: Any) -> tuple[str | None, Any]:
     return None, entry
 
 
+def redacted(value: Any) -> str:
+    """A placeholder for a recorded secret that gives away only its size."""
+    if isinstance(value, (bytes, str)):
+        unit = "bytes" if isinstance(value, bytes) else "chars"
+        return f"<redacted {len(value)} {unit}>"
+    return f"<redacted {type(value).__name__}>"
+
+
 def _recorded_call(entry: Any) -> str:
     method, value = split_clock_record(entry)
     if method is not None:
+        if method in SECRET_FUNCS:
+            return f"{method}() returning {redacted(value)}"
         if method == "now" and isinstance(value, datetime) and value.tzinfo is not None:
             return f"now(tz) returning {value!r}"
         return f"{method}() returning {value!r}"

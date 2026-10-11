@@ -23,6 +23,7 @@ from typing import Any, Generic, Literal, TypeVar, cast, overload
 
 from coopy import __version__ as __version__
 from coopy import fileutils, manifest
+from coopy.environment import Env, RecordEnv
 from coopy.error import ConfigurationError, LifecycleError, ReplicationError
 from coopy.foundation import Action, Clock, Publisher, RecordClock
 from coopy.integrity import IDENTITY_FILE, Integrity, Secret, validate_secret
@@ -384,6 +385,8 @@ class CoopyProxy:
         self._directory_lock: DirectoryLock | None = None
         # values for self._clock; None reads the system clock
         self._clock_source: Clock | None = None
+        # values for self._env; None reads OS entropy
+        self._env_source: Env | None = None
 
     def start_snapshot_manager(self, snapshot_time: float) -> None:
         # the timer waits snapshot_time before the first snapshot, so this
@@ -496,6 +499,7 @@ class CoopyProxy:
 
         def method(*args: Any, **kwargs: Any) -> Any:
             exception = None
+            env = None
             try:
                 if locked:
                     self.lock.acquire(True)
@@ -509,6 +513,9 @@ class CoopyProxy:
                 # record all calls to clock.now()
                 clock = RecordClock(self._clock_source)
                 self.obj._clock = clock
+                # self._env exists only during the call, so snapshots never hold it
+                env = RecordEnv(clock, self._env_source)
+                inject(self.obj, "_env", env)
 
                 thread_ident = threading.get_ident()
                 action = Action(thread_ident, name, datetime.now(), args, kwargs)
@@ -531,6 +538,9 @@ class CoopyProxy:
                 action.results = clock.results
                 # keep a test clock out of snapshots of the domain
                 vars(clock).pop("source", None)
+                # group commit releases the lock while waiting, so drop _env now
+                if vars(self.obj).get("_env") is env:
+                    del vars(self.obj)["_env"]
                 # lets restore tell expected failures from divergences
                 action.raised = exception is not None
 
@@ -543,6 +553,8 @@ class CoopyProxy:
                                 journal.wait_sync()
 
             finally:
+                if env is not None and vars(self.obj).get("_env") is env:
+                    del vars(self.obj)["_env"]
                 if locked:
                     self.lock.release()
 

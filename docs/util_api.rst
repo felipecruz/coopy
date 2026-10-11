@@ -81,6 +81,38 @@ A token that expires after one hour::
             clock.advance(timedelta(minutes=1))
             assert not tokens.is_valid("abc")
 
+Test environments
+~~~~~~~~~~~~~~~~~
+
+Domains using :doc:`use_env` are tested with a seeded environment:
+
+``SeededEnv(seed=0)``
+    Implements ``coopy.Env`` with every value drawn from
+    ``random.Random(seed)``: the same seed gives the same numbers, UUIDs and
+    tokens. Its tokens are predictable; use it only in tests.
+
+``install_env(system, env)``
+    Like ``install_clock``: later calls on a system returned by
+    ``coopy.open`` record the values ``env`` returns, so they replay after a
+    restart and on replicas; ``env`` itself is never stored. On a plain
+    domain object ``env`` is injected as ``_env`` directly.
+    ``install_env(system, None)`` restores OS entropy.
+
+::
+
+    from coopy.testing import SeededEnv, install_env
+
+
+    def draw(directory, seed):
+        with coopy.control(coopy.open(Raffle, basedir=directory)) as raffle:
+            install_env(raffle, SeededEnv(seed))
+            tickets = [raffle.enter(name) for name in ("ana", "bo", "cy")]
+            return tickets, raffle.draw()
+
+
+    def test_draw_is_reproducible(tmp_path):
+        assert draw(str(tmp_path / "a"), 7) == draw(str(tmp_path / "b"), 7)
+
 Deprecated helpers
 ~~~~~~~~~~~~~~~~~~
 

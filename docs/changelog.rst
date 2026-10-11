@@ -6,6 +6,16 @@ Changelog
 Unreleased
 ----------
 
+* Recorded environment: domain methods get ``self._env`` (typed by the new
+  ``coopy.Env`` protocol) with ``random()``, ``uniform()``, ``randint()``,
+  ``choice()``, ``shuffle()``, ``sample()``, ``uuid4()``, ``token_bytes()``,
+  ``token_hex()`` and ``token_urlsafe()``. Values are journaled in the clock's
+  ``(method, value)`` record and replay after restarts and on replicas;
+  divergent calls raise ``coopy.ClockDivergenceError``. ``choice``,
+  ``shuffle`` and ``sample`` record positions, so replay returns the domain's
+  own objects. Recorded tokens are stored in the journal; messages and
+  ``python -m coopy log`` redact them. ``coopy.testing.SeededEnv`` and
+  ``install_env`` make values reproducible in tests. See :doc:`use_env`.
 * Journals record which clock call produced each value: actions are stored
   with ``record_version`` 2 and ``results`` as ``(method, value)`` pairs, and
   the on-disk format (``coopy.json``) moves to version 2. Replay now detects

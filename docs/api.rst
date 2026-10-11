@@ -41,6 +41,11 @@ Decorators and recorded clocks
    coopy.testing.FrozenClock
    coopy.testing.ManualClock
    coopy.testing.install_clock
+   coopy.Env
+   coopy.environment.RecordEnv
+   coopy.environment.RestoreEnv
+   coopy.testing.SeededEnv
+   coopy.testing.install_env
 
 Serialization and migrations
 ----------------------------

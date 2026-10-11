@@ -9,6 +9,7 @@ from pickle import Unpickler
 from typing import Generic, TypeVar
 
 from coopy import fileutils, manifest
+from coopy.environment import RestoreEnv
 from coopy.error import ClockDivergenceError, ConfigurationError, CoopyError
 from coopy.foundation import Action, RestoreClock
 from coopy.integrity import IDENTITY_FILE, Integrity, IntegrityError, validate_secret
@@ -221,6 +222,7 @@ def recover(
                                 raise TypeError("Action method is not callable")
                             clock = RestoreClock.for_action(action)
                             recovered._clock = clock
+                            vars(recovered)["_env"] = RestoreEnv(clock)
                         except Exception as error:
                             return stop(position, "method", error)
                         failure = None
@@ -256,6 +258,8 @@ def recover(
         return RecoveryResult(recovered, report)
     finally:
         recovered._clock = current_clock
+        if recovered is not None:
+            vars(recovered).pop("_env", None)
 
 
 def restore(system, basedir, *, secret=None, serializer=None, schemas=None, state_schemas=None):
