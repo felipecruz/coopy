@@ -462,9 +462,37 @@ Planned. Goal: users can evolve their data, manage disk usage and inspect storag
   | Limitation | Every listed key can verify (and therefore forge) records; nothing records which keys were retired, so a retired key left in the list is still accepted. |
   | Next step | Add a `control(system).storage_keys()`-style report of which accepted keys the identity and records still depend on, so operators can confirm a key is safe to retire. |
 
-- [ ] **F29 — Prune old snapshots and journals.** Every snapshot and journal is kept forever, so disk use only grows. Add `coopy.control(system).prune(keep=N)` (and an optional `keep_for=timedelta`) that deletes checkpoints older than the newest N together with journals no longer needed to replay from the oldest kept checkpoint. Never delete the files needed to recover the current state; take the F22 lock. Acceptance: recovery after pruning matches live state; pruning during concurrent writes and snapshot publication is safe; signed directories stay verifiable.
+- [x] **F29 — Prune old snapshots and journals.** Every snapshot and journal is kept forever, so disk use only grows. Add `coopy.control(system).prune(keep=N)` (and an optional `keep_for=timedelta`) that deletes checkpoints older than the newest N together with journals no longer needed to replay from the oldest kept checkpoint. Never delete the files needed to recover the current state; take the F22 lock. Acceptance: recovery after pruning matches live state; pruning during concurrent writes and snapshot publication is safe; signed directories stay verifiable.
 
-- [ ] **F30 — Add a command-line tool.** Inspecting or maintaining a directory currently requires Python code. Add `python -m coopy` with `inspect DIR` (files, checkpoint, action counts, format manifest), `verify DIR` (strict recovery without writing; non-zero exit on failure), `log DIR` (list journaled actions with method names, arguments summary and recorded times), `snapshot DIR CLASS`, `prune DIR --keep N` and `convert SRC DST`. Commands that load data must state that they unpickle trusted data and require the domain module on `PYTHONPATH`. Acceptance: each command is tested against fixtures, honors F22 locking, and exits non-zero on errors.
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | New `coopy/prune.py`: `coopy.control(system).prune(keep=N, keep_for=None)` runs under the domain lock; `coopy.prune(dir, keep=N, keep_for=None)` prunes a closed directory under the F22 writer lock. Both return `PruneReport` (removed `snapshots`/`journals`, `kept_snapshots`). Deletes checkpoints outside the newest N and published (mtime) before `keep_for`, plus journals numbered below the oldest kept checkpoint; oldest first, then syncs the directory. `keep >= 1`, so the current checkpoint and its journals are never removed. Ambiguity resolved: a checkpoint is deleted only when outside both `keep` and `keep_for`. Docs: snapshots, API reference, changelog, index. ~8 files. |
+  | Commit | `192f5885e8f7f7d408eeeda33879b0c071b16872` — implements F29. |
+  | Validation | `tests/functional/test_prune.py` (15 cases): keep=2 removes exactly the old checkpoints/journals and reopen matches live state (unsigned and signed); the oldest kept checkpoint alone replays to current state; `keep_for` via backdated mtimes; invalid args; closed proxy; signed strict recovery after `coopy.prune`; `LockError` while another process or this process holds the directory; concurrent writers + snapshots + prune threads (buffered and sync) recover the live value. ruff, mypy, typing check, 439 passed/31 skipped, Sphinx -W clean. |
+  | Limitation | The fork-snapshot publication race is covered by reasoning (prune only deletes files it listed, publication is an atomic rename of a newer number) but not by a test: fork snapshots are unavailable on macOS. |
+  | Limitation | `keep_for` uses file modification times, so copying a directory without preserving mtimes makes every checkpoint look new. |
+  | Limitation | Hidden `.coopy-snapshot-*` temporary files left by interrupted snapshots are not removed. |
+  | Next step | Add `prune` to `AsyncPersistent` so async applications can prune through the writer thread. |
+  | Next step | Run the concurrent prune test with native Linux fork snapshots in CI. |
+
+- [x] **F30 — Add a command-line tool.** Inspecting or maintaining a directory currently requires Python code. Add `python -m coopy` with `inspect DIR` (files, checkpoint, action counts, format manifest), `verify DIR` (strict recovery without writing; non-zero exit on failure), `log DIR` (list journaled actions with method names, arguments summary and recorded times), `snapshot DIR CLASS`, `prune DIR --keep N` and `convert SRC DST`. Commands that load data must state that they unpickle trusted data and require the domain module on `PYTHONPATH`. Acceptance: each command is tested against fixtures, honors F22 locking, and exits non-zero on errors.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | New `coopy/cli.py` and `coopy/__main__.py`: `python -m coopy inspect\|verify\|log\|snapshot\|prune\|convert`. `inspect` prints manifest, checkpoint, files with sizes and per-journal action counts from pickle opcodes, JSON lines or signed envelopes without decoding (truncation reported as DAMAGED, exit 1). `verify` runs strict recovery in memory; `log` prints record number, call time, method, shortened args, `[raised]` and clock values, verifying signed records first; `snapshot DIR module:Class`; `prune DIR --keep N [--keep-for 7d]`; `convert SRC DST` with `--to-serializer`, `--to-secret-env`/`--unsigned`. Loading commands accept `--serializer pickle\|json\|module:name`, `--secret-env VAR` (repeatable, newest first), `--schemas`, `--state-schemas`, and print a trust notice (also in their help). All commands hold the writer lock; errors exit 1, usage errors 2. Ambiguity resolved: secrets come only from environment variables. Docs: new `docs/cli.rst`, changelog. ~7 files. |
+  | Commit | `d41f60fbfcca8916abed914936dc97d926fed709` — implements F30. |
+  | Validation | `tests/functional/test_cli.py` (34 cases) against copies of the `legacy/v0_5` and `state/todo_v1` fixtures plus generated pickle, JSON and signed directories: every command succeeds, writes nothing it should not, fails with exit 1 on corruption, wrong/missing secrets, bad imports, missing or foreign directories and while the directory is open (lock test per command); a `python -m coopy` subprocess test checks exit codes and the trust notice in output and help. ruff, mypy (cli added), typing check, 473 passed/31 skipped, coverage 94.06%, Sphinx -W clean. |
+  | Limitation | Read-only commands (`inspect`, `verify`, `log`) also take the writer lock, so they cannot inspect a directory while an application has it open, and they create or rewrite `coopy.lock`. |
+  | Limitation | `--serializer json` only handles built-in types; directories with registered JSON types need a `module:name` serializer factory. |
+  | Limitation | Output is human-readable text only; there is no machine-readable format. |
+  | Next step | Add `--json` output to `inspect`, `verify` and `log` for scripting. |
+  | Next step | Add a `[project.scripts]` `coopy` entry point so the tool runs without `python -m`. |
 
 - [ ] **F31 — Restore to a point in time.** The journal already holds everything needed to rebuild past states. Add read-only recovery up to a bound: `coopy.open(..., recovery="salvage", until=ActionRef | datetime)` or a dedicated `coopy.replay(..., until=...)`, using recorded clock values for time bounds. Acceptance: state at action N or time T matches a live capture taken at that point; bounds before the oldest kept checkpoint fail clearly; nothing is written.
 
