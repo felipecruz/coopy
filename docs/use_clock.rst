@@ -73,5 +73,5 @@ Clock-aware validation
 Initialization checks available method source for obvious direct uses such as
 ``datetime.now()`` and ``date.today()``. Some patterns only warn, and aliases,
 helpers, or missing source can escape detection. Passing validation does not
-prove deterministic behavior. For isolated domain tests, inject a test clock;
+prove deterministic behavior. For tests, install a ``coopy.testing`` clock;
 see :doc:`util_api`.

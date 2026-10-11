@@ -24,7 +24,7 @@ from typing import Any, Generic, Literal, TypeVar, cast, overload
 from coopy import __version__ as __version__
 from coopy import fileutils, manifest
 from coopy.error import ConfigurationError, LifecycleError, ReplicationError
-from coopy.foundation import Action, Publisher, RecordClock
+from coopy.foundation import Action, Clock, Publisher, RecordClock
 from coopy.integrity import IDENTITY_FILE, Integrity, Secret, validate_secret
 from coopy.journal import DiskJournal
 from coopy.locking import DirectoryLock
@@ -382,6 +382,8 @@ class CoopyProxy:
         self.snapshot_timer: SnapshotTimer | None = None
         self._snapshot_job: SnapshotJob | None = None
         self._directory_lock: DirectoryLock | None = None
+        # values for self._clock; None reads the system clock
+        self._clock_source: Clock | None = None
 
     def start_snapshot_manager(self, snapshot_time: float) -> None:
         # the timer waits snapshot_time before the first snapshot, so this
@@ -505,7 +507,8 @@ class CoopyProxy:
                     raise ReplicationError("This is a slave/read-only instance.")
 
                 # record all calls to clock.now()
-                self.obj._clock = RecordClock()
+                clock = RecordClock(self._clock_source)
+                self.obj._clock = clock
 
                 thread_ident = threading.get_ident()
                 action = Action(thread_ident, name, datetime.now(), args, kwargs)
@@ -525,7 +528,9 @@ class CoopyProxy:
                     exception = e
 
                 # restore clock
-                action.results = self.obj._clock.results
+                action.results = clock.results
+                # keep a test clock out of snapshots of the domain
+                vars(clock).pop("source", None)
                 # lets restore tell expected failures from divergences
                 action.raised = exception is not None
 

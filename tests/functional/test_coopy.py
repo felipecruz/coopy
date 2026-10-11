@@ -2,6 +2,8 @@ import os
 import shutil
 import unittest
 
+import pytest
+
 TEST_DIR = "coopy_test/"
 TEST_DIR_AUX = "coopynet_test/"
 
@@ -95,7 +97,8 @@ class TestCoopy(unittest.TestCase):
 
         dummy_wiki = DummyWiky()
         assert not hasattr(dummy_wiki, "_clock")
-        TestSystemMixin().enable_clock(dummy_wiki)
+        with pytest.warns(DeprecationWarning):
+            TestSystemMixin().enable_clock(dummy_wiki)
         assert hasattr(dummy_wiki, "_clock")
 
     def test_mock_clock(self):
@@ -110,6 +113,7 @@ class TestCoopy(unittest.TestCase):
         dt = datetime.datetime.now()
         dummy_wiki = DummyWiky()
         assert not hasattr(dummy_wiki, "_clock")
-        TestSystemMixin().mock_clock(dummy_wiki, dt)
+        with pytest.warns(DeprecationWarning):
+            TestSystemMixin().mock_clock(dummy_wiki, dt)
         assert hasattr(dummy_wiki, "_clock")
         assert dt == dummy_wiki._clock.now()

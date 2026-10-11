@@ -38,6 +38,9 @@ Decorators and recorded clocks
    coopy.Clock
    coopy.foundation.RecordClock
    coopy.foundation.RestoreClock
+   coopy.testing.FrozenClock
+   coopy.testing.ManualClock
+   coopy.testing.install_clock
 
 Serialization and migrations
 ----------------------------

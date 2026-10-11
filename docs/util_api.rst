@@ -22,22 +22,72 @@ Given::
     Return a list with all basedirs absolute paths
 
 
-Tests utils
+Test clocks
 -----------
 
-If your domain uses the :doc:`use_clock` feature, you'll likely to face errors while
-testing your pure domain since the `_clock` is injected by coopy.
+If your domain uses the :doc:`use_clock` feature, ``coopy.testing`` provides
+deterministic clocks that implement ``coopy.Clock``, so time-dependent rules
+are tested without sleeping:
 
-There are 2 ways of handle this: Enable a regular clock on your domain, for testing
-or mock your clock to return the same date.
+``FrozenClock(dt)``
+    ``now()`` and ``utcnow()`` always return ``dt``; ``today()`` returns
+    ``dt.date()``.
 
-.. function:: TestSystemMixin.mock_clock(domain, mocked_date)
+``ManualClock(start)``
+    Like ``FrozenClock`` but movable: ``advance(timedelta)`` moves forward
+    (negative deltas raise ``ValueError``) and ``set(dt)`` jumps anywhere.
 
-    This method will inject a clock that always return `mocked_date`
+``install_clock(system, clock)``
+    On a system returned by ``coopy.open``, later method calls read
+    ``self._clock`` from ``clock``. The values are journaled like real clock
+    values, so they replay after a restart and on replicas; the test clock
+    itself is never stored in snapshots. On a plain domain object ``clock`` is
+    injected as ``_clock`` directly. ``install_clock(system, None)`` restores
+    the real clock.
 
-.. function:: TestSystemMixin.enable_clock(domain)
+A token that expires after one hour::
 
-    This method will inject a regular coopy clock on your domain instance
+    from datetime import datetime, timedelta
+
+    import coopy
+    from coopy.decorators import readonly
+    from coopy.testing import ManualClock, install_clock
+
+
+    class Tokens:
+        _clock: coopy.Clock
+
+        def __init__(self) -> None:
+            self.issued: dict[str, datetime] = {}
+
+        def issue(self, name: str) -> None:
+            self.issued[name] = self._clock.now()
+
+        @readonly
+        def is_valid(self, name: str) -> bool:
+            return self._clock.now() - self.issued[name] < timedelta(hours=1)
+
+
+    def test_token_expires_after_one_hour(tmp_path):
+        clock = ManualClock(datetime(2026, 1, 1, 12))
+        with coopy.control(coopy.open(Tokens, basedir=str(tmp_path))) as tokens:
+            install_clock(tokens, clock)
+            tokens.issue("abc")
+            clock.advance(timedelta(minutes=59))
+            assert tokens.is_valid("abc")
+            clock.advance(timedelta(minutes=1))
+            assert not tokens.is_valid("abc")
+
+Deprecated helpers
+~~~~~~~~~~~~~~~~~~
+
+``coopy.tests.utils.TestClock(date)`` and ``TestSystemMixin`` still work but
+emit ``DeprecationWarning`` and will be removed in v0.9.
+``TestSystemMixin.mock_clock(system, date)`` now calls ``install_clock`` with a
+clock returning ``date`` from every method (as before, ``today()`` returns the
+value unchanged) and ``enable_clock(system)`` calls
+``install_clock(system, None)``. Replace them with ``FrozenClock`` and
+``install_clock``.
 
 .. toctree::
    :maxdepth: 1

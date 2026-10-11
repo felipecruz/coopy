@@ -27,24 +27,36 @@ class Clock(Protocol):
 
 
 class RecordClock(object):
-    """Records each clock value so journal replay can return it again."""
+    """Records each clock value so journal replay can return it again.
 
-    def __init__(self) -> None:
+    ``source`` (for example a ``coopy.testing`` clock) supplies the values
+    instead of the system clock.
+    """
+
+    # a class default keeps ``source`` out of the serialized state
+    source: Clock | None = None
+
+    def __init__(self, source: Clock | None = None) -> None:
         self.results: list[date] = []
+        if source is not None:
+            self.source = source
 
     def now(self) -> datetime:
-        dt = datetime.now()
+        dt = datetime.now() if self.source is None else self.source.now()
         self.results.append(dt)
         return dt
 
     def utcnow(self) -> datetime:
-        # naive UTC datetime, same as the deprecated datetime.utcnow()
-        dt = datetime.now(timezone.utc).replace(tzinfo=None)
+        if self.source is None:
+            # naive UTC datetime, same as the deprecated datetime.utcnow()
+            dt = datetime.now(timezone.utc).replace(tzinfo=None)
+        else:
+            dt = self.source.utcnow()
         self.results.append(dt)
         return dt
 
     def today(self) -> date:
-        dt = date.today()
+        dt = date.today() if self.source is None else self.source.today()
         self.results.append(dt)
         return dt
 

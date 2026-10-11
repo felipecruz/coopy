@@ -6,6 +6,13 @@ Changelog
 Unreleased
 ----------
 
+* ``coopy.testing``: ``FrozenClock(dt)`` and ``ManualClock(start)`` (with
+  ``advance(timedelta)`` and ``set(dt)``) implement ``coopy.Clock``, and
+  ``install_clock(system, clock)`` makes an opened system's ``self._clock``
+  read from a test clock while still journaling the values. ``RecordClock``
+  accepts an optional ``source`` clock. ``coopy.tests.utils.TestClock`` and
+  ``TestSystemMixin`` are deprecated (removal: v0.9); ``mock_clock`` and
+  ``enable_clock`` now also work on opened systems. See :doc:`util_api`.
 * ``coopy.Clock``: a typed protocol for the injected ``self._clock`` with
   ``now()``/``utcnow()`` returning ``datetime`` and ``today()`` returning
   ``date``. Both ``RecordClock`` and the replaying ``RestoreClock`` implement

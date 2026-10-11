@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from typing_extensions import assert_type
@@ -7,6 +7,7 @@ import coopy
 from coopy.decorators import abort_exception, readonly, unlocked
 from coopy.foundation import RecordClock, RestoreClock
 from coopy.restore import RecoveryReport, RecoveryResult
+from coopy.testing import FrozenClock, ManualClock, install_clock
 
 
 class Todo:
@@ -47,8 +48,19 @@ if TYPE_CHECKING:
     RestoreClock([]).yesterday()  # type: ignore[attr-defined]
     assert_type(RecordClock().now(), datetime)
     assert_type(RestoreClock([]).today(), date)
+    clock = FrozenClock(datetime(2026, 1, 1))
+    manual = ManualClock(datetime(2026, 1, 1))
+    clock = manual
+    assert_type(manual.advance(timedelta(hours=1)), datetime)
+    assert_type(manual.set(datetime(2026, 1, 2)), None)
+    assert_type(manual.today(), date)
+    manual.advance(3600)  # type: ignore[arg-type]
+    FrozenClock(datetime(2026, 1, 1)).yesterday()  # type: ignore[attr-defined]
+    RecordClock(manual).now()
     journal = coopy.open(Journal)
     assert_type(journal.record(), datetime)
+    install_clock(journal, manual)
+    install_clock(Journal(), None)
     assert_type(coopy.open(LegacyJournal).stamp(), date)
 
     async def async_api() -> None:
