@@ -1,8 +1,9 @@
 # Applying coopy in 2026
 
 Where coopy fits today, where it could fit once the plans in
-[FUTURE.md](FUTURE.md) land, and how it connects to data science,
-experimentation and machine learning.
+[FUTURE.md](FUTURE.md) land. Section 2 covers data science, experimentation
+and machine learning; section 3 covers everything else: games, ledgers,
+bookings, bots, edge devices, developer tooling and more.
 
 Ideas are labelled by what they depend on:
 
@@ -217,23 +218,148 @@ A 2026-shaped use: the long-lived memory and task state of an agent.
 
 ---
 
-## 3. Other applications that fit well
+## 3. Beyond data science
+
+The same rule applies everywhere: **compute outside, journal the decision**.
+An HTTP call, a payment provider response or a sensor reading happens
+outside the domain object; the result is passed in as an argument.
+
+### 3.1 Internal tools and back offices (Today)
+
+Admin panels, CRMs for a small team, onboarding checklists, asset inventories.
+The data is small, the rules are the complicated part, and nobody wants to
+run a database for them. Domain classes hold the rules; every change is a
+named command (`assign_laptop(employee, serial)`) with a timestamp, which
+answers "who changed this and when?" without extra audit tables.
+
+### 3.2 Games (Today)
+
+- **Turn-based and casual game servers**: lobbies, matches, inventories,
+  leaderboards live in memory; a crash or deploy loses nothing.
+- **Replays for free**: the journal of a match *is* its replay file. Restore
+  the snapshot from the start of the match and replay moves at any speed.
+- **Disputes and anti-cheat**: every move is recorded in order with its
+  recorded time, so contested results can be re-run exactly.
+- **MUDs and persistent worlds**: the classic object-prevalence use case;
+  the world is one object graph that never has to be mapped to tables.
+
+Keep random rolls outside the domain (or pass a seed in) so replay produces
+the same dice.
+
+### 3.3 Feature flags and configuration services (Today)
+
+Tiny, read-heavy state with a strong need for history. Reads are attribute
+access, so a flag check costs microseconds. The journal records every
+change with who made it; point-in-time restore (ROADMAP F31) will answer
+"what was the configuration during last night's incident?". Replicas (4.6)
+can bring flags next to every service.
+
+### 3.4 Workflows, approvals and case management (Today)
+
+Purchase approvals, support tickets, document review, hiring pipelines,
+insurance claims. Each is a state machine where transitions are commands
+(`approve(request_id, by=...)`) and the rules ("two approvals above 10k")
+are plain Python in the domain class. The journal is the audit trail that
+compliance usually asks for separately.
+
+### 3.5 Ledgers, wallets and quotas (Today)
+
+Loyalty points, in-game currencies, prepaid credits, API quotas, the books
+of a small association. Methods check invariants under coopy's lock (no
+negative balances, no double spending) and `durability="sync"` acknowledges
+a transfer only after it is on disk. HMAC integrity (`secret=`) detects
+tampering with the files.
+
+Not a fit for regulated banking: there is no replicated durability yet, and
+real money needs audited infrastructure.
+
+### 3.6 Bookings, reservations and inventory (Today)
+
+Event tickets, meeting rooms, restaurant tables, stock for a small shop.
+Overselling is a race condition; in coopy every reservation runs one at a
+time through the proxy lock, so the check "seats left > 0" and the booking
+happen atomically without database transactions or row locks. Payment and
+email happen outside; the domain records `confirm(booking_id, payment_ref)`.
+
+### 3.7 Backends for collaborative apps (Today)
+
+Kanban boards, wikis (the docs use a wiki as the tutorial example), small
+CMSs, comment threads, polls. With `AsyncPersistent`, an async web framework
+(FastAPI, Starlette, aiohttp) can await domain calls from WebSocket handlers
+while one writer keeps them ordered. Live updates to browsers can be sent
+after each successful call.
+
+### 3.8 Edge, IoT and embedded Linux (Today)
+
+Raspberry Pi gateways, home-automation hubs, kiosks, point-of-sale terminals,
+lab instruments. They need durable local state but shouldn't run a database
+server. coopy is pure Python, keeps reads in memory, and `durability="sync"`
+survives power cuts within the limits of the storage device. Sensor readings
+are passed in as arguments; aggregates and device state live in the domain.
+
+Mind SD-card wear on very high write rates: buffer readings and journal
+summaries rather than every sample.
+
+### 3.9 Desktop and command-line apps (Today)
+
+Personal finance trackers, note-taking tools, todo apps, reading lists,
+local-first utilities. State is a Python object instead of a hand-rolled
+JSON file, and saves are automatic and crash-safe. The journal also makes
+**undo history** natural: rebuild the state without the last N actions.
+That needs point-in-time restore (ROADMAP F31); until then, take a snapshot
+before risky operations.
+
+### 3.10 Bots and automations (Today)
+
+Discord, Slack and Telegram bots, home-server automations, CI helpers,
+scheduled scrapers. Bots restart often (deploys, crashes, host reboots);
+with coopy their subscriptions, reminders, counters and conversation state
+come back exactly. The journal shows what the bot did and why.
+
+### 3.11 Developer and platform tooling (Today)
+
+- **Job schedulers and cron state**: last run, next run, retries, leases.
+- **Service catalogs and deployment registries**: what version runs where,
+  who deployed it, rollbacks as commands.
+- **Rate limiters and lease managers**: counters and expiries checked in
+  memory under one lock.
+- **Mock servers and test doubles** that keep state across restarts during
+  long integration test runs.
+
+### 3.12 Record–replay debugging and teaching (Today)
+
+- **Bug reports with a journal attached**: a user ships the data directory,
+  you replay it locally and step through the exact sequence of calls that
+  led to the bug (trusted data only: journals contain pickles unless you use
+  the JSON serializer).
+- **Deterministic fixtures**: build a test state once, snapshot it, and
+  start every test from it.
+- **Teaching event sourcing and CQRS**: coopy shows command journaling,
+  snapshots, replay, determinism and upcasting in a few hundred lines of
+  Python, without Kafka or a database.
+
+### 3.13 Summary
 
 | Application | Why coopy fits |
 | --- | --- |
 | Internal tools and admin back offices | Small data, complex rules, no DBA |
-| Game servers (turn-based, lobbies, leaderboards) | In-memory state, event replay, deterministic rules |
+| Game servers, replays, persistent worlds | In-memory state, event replay, deterministic rules |
 | Feature flags and configuration services | Tiny state, read-heavy, full change history |
 | Workflow and approval engines | State machines with an audit requirement |
-| Rate limiters and quota ledgers | Counters updated by commands, fast reads |
-| IoT edge gateways | Local durable state without a database server |
-| Bots (chat, trading paper-portfolios) | Long-lived state, restart safety |
+| Ledgers, wallets, quotas | Invariants under one lock, sync durability, tamper detection |
+| Bookings and inventory | No overselling without database transactions |
+| Collaborative app backends | Async writer, in-memory reads for live views |
+| IoT edge gateways and kiosks | Local durable state without a database server |
+| Desktop and CLI apps | Crash-safe saves, undo from the journal |
+| Bots and automations | Long-lived state, restart safety |
+| Developer and platform tooling | Leases, schedules and registries with history |
+| Record–replay debugging, teaching | The journal reproduces the exact sequence |
 | Prototypes that may become products | Start without a schema; journal keeps history |
 
 Poor fits: data larger than memory, many independent writer processes on
-one directory, ad-hoc SQL analytics by other teams, and anything that needs
-cross-language access to the storage format (the JSON serializer helps, but
-the journal is still a coopy format).
+one directory, ad-hoc SQL analytics by other teams, full-text search over
+large corpora, and anything that needs cross-language access to the storage
+format (the JSON serializer helps, but the journal is still a coopy format).
 
 ---
 
@@ -287,7 +413,30 @@ commutative operations or rollback, and pickle is not safe between parties
 who don't trust each other, so these ideas depend on a safe serializer
 (the JSON serializer is the first step).
 
-### 4.5 Reproducibility as a feature
+### 4.5 Configuration and flags at the edge (Next)
+
+A primary owns feature flags, pricing tables or routing rules; replicas run
+inside every service or region and answer reads from local memory. The
+pyzmq Clone pattern (FUTURE.md 2.2) is designed exactly for this:
+a snapshot on join, then a stream of numbered updates.
+
+### 4.6 Sharded game worlds and tenants (Ambitious)
+
+Game zones, chat rooms, or customers of a multi-tenant SaaS are naturally
+independent. Sharding (FUTURE.md 2.4) gives each its own coopy system and
+leader; a router sends calls to the right shard, and moving a tenant is a
+snapshot transfer.
+
+### 4.7 Local-first and offline apps (Ambitious)
+
+Field-service apps, note-taking across laptops, point-of-sale terminals that
+keep selling when the network is down. The decentralized log in FUTURE.md
+Part 3 (signed actions in a Merkle DAG, peers discovered with Zyre) lets
+devices work offline and sync later. This works when operations commute
+(adding notes, recording sales); conflicting edits need deterministic
+ordering with rollback or CRDT-style operations.
+
+### 4.8 Reproducibility as a feature
 
 Across all of these, the journal plus deterministic replay gives something
 the ML community keeps asking for: **exact reconstruction of the state
@@ -298,12 +447,12 @@ by these people".
 
 ---
 
-## 5. Practical checklist for an ML or data project
+## 5. Practical checklist
 
 1. Put domain classes in an importable module and annotate them; the proxy
    keeps their types (see the README's "Type hints" section).
-2. Keep random numbers, I/O, GPU work and LLM calls outside domain methods;
-   pass results in as arguments. Use `self._clock` for time.
+2. Keep random numbers, I/O, network calls, payments, GPU work and LLM
+   calls outside domain methods; pass results in as arguments. Use `self._clock` for time.
 3. Store tensors and files elsewhere; keep URIs and SHA-256 hashes in coopy.
 4. Pick durability per system: `sync` for registries and ledgers, buffered
    plus group commit for high-rate metrics.
@@ -330,3 +479,14 @@ Ranked by value for the effort, using only what exists today:
    framework, with the journal as an audit log.
 4. **Study coordinator** (2.2) once the transport interface lands, as the
    first real user of replication and failover.
+
+Outside data science:
+
+5. **Flag service** (3.3): a tiny feature-flag server with history and an
+   admin page, the clearest demo of read speed plus audit trail.
+6. **No-oversell booking demo** (3.6): concurrent buyers hammering a
+   ticket sale, showing the lock keeps inventory exact without a database.
+7. **Bot template** (3.10): a Discord/Slack bot whose state survives
+   restarts, with the journal as its activity log.
+8. **Bug replay kit** (3.12): a helper that packages a data directory and
+   replays it under a debugger.
