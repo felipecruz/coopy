@@ -524,13 +524,28 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Timestamp | 2026-10-11 |
   | Complexity | S |
   | Details | New `coopy.Clock` (`typing.Protocol` in `coopy.foundation`, exported from `coopy`) with `now()`/`utcnow()` -> `datetime` and `today()` -> `date`. `RestoreClock` already had real methods from F34; `RecordClock`'s unreachable `__getattr__` fallback is removed, so unknown clock attributes raise and type checkers reject them. README, `docs/modern-api.rst`, `docs/use_clock.rst` (new Type hints section), IDEAS.md use `_clock: coopy.Clock`; API reference lists `Clock` and `RestoreClock`; changelog entry. Spec clear; 11 files. |
-  | Commit | `b0607818f81e7fb58d2740bb7d9eb5473f69d1bc` — implements F35. |
+  | Commit | `b0607818f81e7fb58d2740bb7d9eb5473f69d1bc` — implements F35.; `47f208ec3004fd8820f134f584b10d2dfa955cf1` |
   | Validation | `scripts/check_typing.py` (installed wheel, `mypy --strict`): `coopy.Clock` domain accepted, `assert_type` on all three methods, unknown methods rejected on `Clock`/`RecordClock`/`RestoreClock`, `RecordClock` annotation still checks. README example passes `mypy --strict`. ruff, mypy, 487 passed/31 skipped, coverage 94.40%, Sphinx -W clean. |
   | Limitation | `RestoreClock` is still not exported from `coopy`; users referencing it import from `coopy.foundation`. |
   | Limitation | The protocol is not `runtime_checkable`, so `isinstance(x, coopy.Clock)` is unsupported. |
   | Next step | Make the F36 test clocks implement `coopy.Clock` and add them to the typing check. |
 
-- [ ] **F36 — Ship public test clocks.** Tests currently rely on the untyped `TestClock` and `TestSystemMixin` in `coopy/tests/utils.py`, which return one fixed value. Add `coopy.testing.FrozenClock(dt)` and `ManualClock(start)` with `advance(timedelta)` and `set(dt)`, both implementing `coopy.Clock`, plus a helper to install a clock on an opened system for tests. Keep the old helpers as deprecated aliases. Acceptance: an expiry example ("a token expires after one hour") is tested without sleeping; the clocks pass the F35 typing checks; deprecated helpers warn but work.
+- [x] **F36 — Ship public test clocks.** Tests currently rely on the untyped `TestClock` and `TestSystemMixin` in `coopy/tests/utils.py`, which return one fixed value. Add `coopy.testing.FrozenClock(dt)` and `ManualClock(start)` with `advance(timedelta)` and `set(dt)`, both implementing `coopy.Clock`, plus a helper to install a clock on an opened system for tests. Keep the old helpers as deprecated aliases. Acceptance: an expiry example ("a token expires after one hour") is tested without sleeping; the clocks pass the F35 typing checks; deprecated helpers warn but work.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | New `coopy/testing.py`: `FrozenClock(dt)` (`now`/`utcnow` -> `dt`, `today` -> `dt.date()`), `ManualClock(start)` with `advance(timedelta)` (negative raises `ValueError`) and `set(dt)`, and `install_clock(system, clock)`. On an opened system the proxy builds each per-call `RecordClock(source)` from the installed clock, so values are journaled and replay after restart/on replicas; the source is dropped after the call so snapshots never store it. On a plain domain the clock is injected as `_clock`; `None` restores the real clock. `TestClock`/`TestSystemMixin` warn (`DeprecationWarning`, removal v0.9) and now delegate to `install_clock`. Docs: util_api test-clock guide with the token example, API reference, changelog. Spec clear; ~13 files. |
+  | Commit | `e31662349219edac508a257d83eebea6d68ed75b` — implements F36. |
+  | Validation | New `tests/functional/test_testing_clocks.py`: one-hour token expiry without sleeping, journal replay of test-clock values, pickle+JSON snapshots exclude the clock, plain-domain install, deprecated helpers warn but work. `scripts/check_typing.py` (`mypy --strict`, wheel) accepts both clocks as `coopy.Clock`; `coopy/testing.py` added to strict mypy config. ruff, mypy, 494 passed/31 skipped (`-W error::DeprecationWarning`), coverage 94.49%, Sphinx -W clean. |
+  | Limitation | `install_clock` does not accept an `AsyncPersistent`; async users must install on a synchronous system. |
+  | Limitation | `FrozenClock`/`ManualClock` return the same naive value from `now()` and `utcnow()`; no timezone offset is modelled. |
+  | Limitation | `TestSystemMixin.mock_clock` keeps returning the raw value from `today()` (may be a `datetime`) for compatibility. |
+  | Next step | Add `install_clock` support for `AsyncPersistent` systems. |
+  | Next step | Extend the test clocks with `now(tz)`, `time()` and `monotonic()` when F37 adds them. |
+  | Next step | Remove `coopy.tests.utils.TestClock` and `TestSystemMixin` in v0.9. |
 
 - [ ] **F37 — Add timezone-aware and additional time sources.** `now()` records naive local time, so stored values depend on the host's timezone, and `utcnow()` reproduces the deprecated naive-UTC behavior of `datetime.utcnow()`. Add `now(tz=None)` mirroring `datetime.now(tz)` so `now(timezone.utc)` records an aware value, and add recorded `time()` (epoch seconds) and `monotonic()` (for durations inside a method). Recommend aware UTC in the clock guide. Acceptance: aware values round-trip through pickle and JSON storage and through replication with their offset; new sources replay exactly; existing naive journals replay unchanged; the source validator accepts the new clock calls.
 
