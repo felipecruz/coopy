@@ -20,7 +20,7 @@ import coopy
 from coopy import fileutils, manifest
 from coopy.convert import _Recovering
 from coopy.error import ConfigurationError
-from coopy.foundation import Action, RecordClock
+from coopy.foundation import Action, RecordClock, split_clock_record
 from coopy.integrity import HEADER, IDENTITY_FILE, MAGIC, TAG_SIZE, Integrity
 from coopy.locking import DirectoryLock
 from coopy.restore import recover
@@ -230,12 +230,16 @@ def summarize(action: Action) -> str:
         line += "  [legacy: outcome not recorded]"
     results = getattr(action, "results", None) or []
     if results:
-        values = ", ".join(
-            value.isoformat() if isinstance(value, date) else repr(value) for value in results[:3]
-        )
+        values = ", ".join(_clock_entry(entry) for entry in results[:3])
         more = f", +{len(results) - 3} more" if len(results) > 3 else ""
         line += f"  clock=[{values}{more}]"
     return line
+
+
+def _clock_entry(entry: object) -> str:
+    method, value = split_clock_record(entry)
+    text = value.isoformat() if isinstance(value, date) else repr(value)
+    return text if method is None else f"{method}={text}"
 
 
 # -- commands ----------------------------------------------------------------

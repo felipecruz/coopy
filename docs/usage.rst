@@ -44,6 +44,15 @@ unreadable manifest, a different serializer, or a secret given for unsigned
 storage (or missing for signed storage) raises ``coopy.error.FormatError``
 naming the directory and the mismatch. Do not edit the manifest by hand.
 
+Format 2 (coopy after 0.6.0) records each clock value together with the clock
+call that produced it. A format 1 directory still restores, including its
+older journal records, and its manifest moves to format 2 on the next
+successful writable open, because new records use the new layout; from then
+on, a coopy that only reads format 1 refuses the directory through the
+manifest instead of failing while decoding. Keep a copy, or open with
+``recovery="salvage"`` (which never writes), if an older coopy must still
+read the directory.
+
 Stop application callers, then call ``close()`` in
 ``finally`` to stop the snapshot timer and close subscribers. There is no proxy
 context manager. Do not reuse a closed proxy. Reopen with the same data path

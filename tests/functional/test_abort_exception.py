@@ -73,7 +73,7 @@ def test_abort_outcomes_survive_process_restart(tmp_path):
                     break
     assert [action.action for action in actions] == ["add_or_abort", "add", "add_or_abort"]
     assert [action.raised for action in actions] == [False, True, False]
-    assert [action.results for action in actions] == [[entry[1]] for entry in expected]
+    assert [action.results for action in actions] == [[("now", entry[1])] for entry in expected]
 
     expected_path = tmp_path / "expected.pkl"
     expected_path.write_bytes(pickle.dumps(expected))

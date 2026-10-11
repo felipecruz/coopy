@@ -2,8 +2,11 @@ import time as _time
 from datetime import date, datetime, timezone, tzinfo
 from typing import Any, Protocol
 
-from .error import ClockDivergenceError
+from .error import ClockDivergenceError, FormatError
 from .validation import DATETIME_FUNCS
+
+# A recorded clock call: the ``Clock`` method name and the value it returned.
+ClockRecord = tuple[str, date | float]
 
 
 class Clock(Protocol):
@@ -46,7 +49,8 @@ class RecordClock(object):
     source: Clock | None = None
 
     def __init__(self, source: Clock | None = None) -> None:
-        self.results: list[date | float] = []
+        # ``(method, value)`` pairs; journals before record version 2 hold bare values
+        self.results: list[ClockRecord] = []
         if source is not None:
             self.source = source
 
@@ -58,7 +62,7 @@ class RecordClock(object):
             dt = self.source.now()
         else:
             dt = self.source.now(tz)
-        self.results.append(dt)
+        self.results.append(("now", dt))
         return dt
 
     def utcnow(self) -> datetime:
@@ -67,46 +71,59 @@ class RecordClock(object):
             dt = datetime.now(timezone.utc).replace(tzinfo=None)
         else:
             dt = self.source.utcnow()
-        self.results.append(dt)
+        self.results.append(("utcnow", dt))
         return dt
 
     def today(self) -> date:
         dt = date.today() if self.source is None else self.source.today()
-        self.results.append(dt)
+        self.results.append(("today", dt))
         return dt
 
     def time(self) -> float:
         value = _time.time() if self.source is None else self.source.time()
-        self.results.append(value)
+        self.results.append(("time", value))
         return value
 
     def monotonic(self) -> float:
         value = _time.monotonic() if self.source is None else self.source.monotonic()
-        self.results.append(value)
+        self.results.append(("monotonic", value))
         return value
 
 
 class RestoreClock(object):
     """Replays recorded clock values and detects divergent clock calls.
 
-    Journals store bare values, so ``now()`` and ``utcnow()`` (both
+    Each recorded entry is a ``(method, value)`` pair, so replay must call the
+    same method that recorded the value, and ``now(tz)`` must find a value
+    with the offset ``tz`` gives at that instant. Journals written before
+    record version 2 store bare values: there ``now()`` and ``utcnow()`` (both
     ``datetime``) cannot be told apart, nor ``time()`` and ``monotonic()``
-    (both ``float``); ``today()`` records a plain ``date``. ``now(tz)`` with a
-    timezone requires an aware recorded value.
+    (both ``float``), and only the value's type is checked.
     The first divergence is kept so a domain method that swallows it still
     fails replay through ``check_calls``/``check_complete``.
     """
 
-    def __init__(self, results: list[date | float], action: str | None = None) -> None:
+    def __init__(self, results: list[Any], action: str | None = None) -> None:
         self.results = list(results)
         self.action = action
         self.index = 0
         self.divergence: ClockDivergenceError | None = None
 
+    @classmethod
+    def for_action(cls, action: Any) -> "RestoreClock":
+        """A replay clock for a journaled ``Action``, refusing newer record versions."""
+        version = getattr(action, "record_version", 1)
+        if type(version) is not int or not 1 <= version <= RECORD_VERSION:
+            raise FormatError(
+                f"Unsupported action record version {version!r} for {action.action!r}; "
+                f"this coopy reads versions up to {RECORD_VERSION}"
+            )
+        return cls(getattr(action, "results", None) or [], action.action)
+
     def now(self, tz: tzinfo | None = None) -> datetime:
         if tz is None:
             return self._replay("now")
-        return self._replay("now", f"now({tz!r})", aware=True)
+        return self._replay("now", f"now({tz!r})", tz=tz)
 
     def utcnow(self) -> datetime:
         return self._replay("utcnow")
@@ -120,21 +137,27 @@ class RestoreClock(object):
     def monotonic(self) -> float:
         return self._replay("monotonic")
 
-    def _replay(self, method_name: str, actual: str | None = None, aware: bool = False) -> Any:
+    def _replay(self, method_name: str, actual: str | None = None, tz: tzinfo | None = None) -> Any:
         if self.divergence is not None:
             raise self.divergence
         actual = actual or f"{method_name}()"
         if self.index >= len(self.results):
             self._diverge(f"no call ({len(self.results)} recorded)", actual)
-        value = self.results[self.index]
+        entry = self.results[self.index]
+        recorded, value = split_clock_record(entry)
         if method_name in DATETIME_FUNCS:
-            matches = isinstance(value, datetime) and (not aware or value.tzinfo is not None)
+            matches = isinstance(value, datetime) and (tz is None or value.tzinfo is not None)
         elif method_name in FLOAT_FUNCS:
             matches = type(value) is float
         else:
             matches = isinstance(value, date) and not isinstance(value, datetime)
+        if recorded is not None:
+            # legacy bare values cannot tell same-typed calls or zones apart
+            matches = matches and recorded == method_name
+            if matches and tz is not None:
+                matches = value.astimezone(tz).utcoffset() == value.utcoffset()
         if not matches:
-            self._diverge(_recorded_call(value), actual)
+            self._diverge(_recorded_call(entry), actual)
         self.index += 1
         return value
 
@@ -162,8 +185,24 @@ class RestoreClock(object):
 
 FLOAT_FUNCS = ("time", "monotonic")
 
+# Version 2 records clock results as ``(method, value)`` pairs; 1 as bare values.
+RECORD_VERSION = 2
 
-def _recorded_call(value: Any) -> str:
+
+def split_clock_record(entry: Any) -> tuple[str | None, Any]:
+    """``(method, value)`` for a recorded pair, ``(None, value)`` for a bare value."""
+    # bare values are dates or floats, never tuples
+    if type(entry) is tuple and len(entry) == 2 and isinstance(entry[0], str):
+        return entry[0], entry[1]
+    return None, entry
+
+
+def _recorded_call(entry: Any) -> str:
+    method, value = split_clock_record(entry)
+    if method is not None:
+        if method == "now" and isinstance(value, datetime) and value.tzinfo is not None:
+            return f"now(tz) returning {value!r}"
+        return f"{method}() returning {value!r}"
     if isinstance(value, datetime):
         if value.tzinfo is None:
             return f"now() or utcnow() returning naive {value!r}"
@@ -197,11 +236,13 @@ class Action(object):
         kwargs: dict[str, Any],
     ) -> None:
         self.schema_version = 1
+        # the stored action layout; unpickled legacy actions lack it (version 1)
+        self.record_version = RECORD_VERSION
         self.caller_id = caller_id
         self.action = action
         self.args = args
         self.kwargs = kwargs
-        self.results: list[date | float] | None = None
+        self.results: list[ClockRecord] | None = None
         self.raised: bool | None = None
 
         # TODO do we need it?

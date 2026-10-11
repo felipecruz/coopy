@@ -34,7 +34,7 @@ Commands
 ``log DIR [--after-checkpoint]``
     Lists every journaled action in order: record number, call time, method
     name, a shortened argument summary, ``[raised]`` for actions that failed
-    when they ran, and recorded clock values. Signed records are verified
+    when they ran, and recorded clock values (``method=value`` since format 2). Signed records are verified
     before they are decoded.
 
 ``snapshot DIR CLASS``

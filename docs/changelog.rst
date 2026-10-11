@@ -6,6 +6,16 @@ Changelog
 Unreleased
 ----------
 
+* Journals record which clock call produced each value: actions are stored
+  with ``record_version`` 2 and ``results`` as ``(method, value)`` pairs, and
+  the on-disk format (``coopy.json``) moves to version 2. Replay now detects
+  ``now()``/``utcnow()`` or ``time()``/``monotonic()`` swapped and ``now(tz)``
+  with a different offset, and ``ClockDivergenceError.expected`` names the
+  recorded call. Older bare-value journals replay unchanged. A format 1
+  directory gains the format 2 manifest on its next writable open, after which
+  older coopy releases refuse it with ``FormatError`` before decoding.
+  ``python -m coopy log`` prints clock values as ``method=value``. See
+  :doc:`use_clock`.
 * Clock sources: ``self._clock.now(tz=None)`` mirrors ``datetime.now(tz)``, so
   ``now(timezone.utc)`` records an aware value, and the new ``time()`` (epoch
   seconds) and ``monotonic()`` (durations inside a method) are recorded and

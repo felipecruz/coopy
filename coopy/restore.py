@@ -219,9 +219,7 @@ def recover(
                             method = getattr(recovered, action.action)
                             if not callable(method):
                                 raise TypeError("Action method is not callable")
-                            clock = RestoreClock(
-                                getattr(action, "results", None) or [], action.action
-                            )
+                            clock = RestoreClock.for_action(action)
                             recovered._clock = clock
                         except Exception as error:
                             return stop(position, "method", error)

@@ -330,7 +330,7 @@ class CopyNetSlave(threading.Thread):
                         obj = self.parent.obj if self.synchronized else pending
                         if obj is None:
                             raise ValueError("Action received before snapshot")
-                        clock = RestoreClock(value.results or [], value.action)
+                        clock = RestoreClock.for_action(value)
                         obj._clock = clock
                         try:
                             value.execute_action(obj)

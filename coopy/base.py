@@ -318,8 +318,8 @@ def _open_writable(
         state_schemas=state_schemas,
     )
     obj = result.system
-    if existing is None and not empty:
-        # A legacy (format 0) directory restored cleanly with these settings.
+    if not empty and (existing is None or existing["format_version"] < manifest.FORMAT_VERSION):
+        # An older directory restored cleanly; new records use the current format.
         manifest.write(basedir, serializer=serializer, secret=secret, durability=durability)
 
     delta = time.perf_counter() - start

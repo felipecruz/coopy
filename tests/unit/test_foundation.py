@@ -54,16 +54,16 @@ class TestRecordClock(unittest.TestCase):
         self.assertTrue(len(clock.results) == 0)
 
         dt1 = clock.now()
-        self.assertEqual(dt1, clock.results[0])
+        self.assertEqual(("now", dt1), clock.results[0])
 
         dt2 = clock.now()
-        self.assertEqual(dt2, clock.results[1])
+        self.assertEqual(("now", dt2), clock.results[1])
 
         dt = clock.today()
-        self.assertEqual(dt, clock.results[2])
+        self.assertEqual(("today", dt), clock.results[2])
 
         utcnow = clock.utcnow()
-        self.assertEqual(utcnow, clock.results[3])
+        self.assertEqual(("utcnow", utcnow), clock.results[3])
 
 
 class TestRestoreClock(unittest.TestCase):

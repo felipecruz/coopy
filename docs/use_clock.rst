@@ -70,10 +70,16 @@ was recorded, ``now(tz)`` where a naive ``datetime`` was recorded,
 recorded values ran out, or recorded values left unused when the method
 returns. Recovery reports it as a ``clock`` stop (even
 if the domain method caught the exception) and replicas become unsynchronized.
-Journals store bare values, so ``now()`` and ``utcnow()`` replayed in each
-other's place, ``time()`` and ``monotonic()`` swapped, or ``now(tz)`` with a
-different timezone are not detected; replay returns the recorded value
-unconverted. Randomness and external I/O are not captured
+Since on-disk format 2, the journal stores each value with the name of the
+call that produced it, as a ``(method, value)`` pair, so replay also rejects a
+different call with a value of the same type (``utcnow()`` where ``now()`` was
+recorded, ``monotonic()`` where ``time()`` was recorded) and ``now(tz)`` whose
+timezone gives a different offset than the recorded value; ``expected`` names
+the recorded call, for example ``now() returning datetime(...)``, and
+``actual`` the replayed one. Actions written by earlier releases store bare
+values and keep the older checks: same-typed calls swapped, or ``now(tz)``
+with a different timezone, are not detected there. Replay returns the
+recorded value unconverted. Randomness and external I/O are not captured
 by this clock; see :doc:`usage`.
 
 Type hints

@@ -13,8 +13,9 @@ from coopy.integrity import Secret
 
 MANIFEST_FILE = "coopy.json"
 
-# Format 0 is every directory written before manifests existed.
-FORMAT_VERSION = 1
+# Format 0 is every directory written before manifests existed; format 2
+# journals record clock results as (method, value) pairs (action record version 2).
+FORMAT_VERSION = 2
 
 
 CUSTOM_PREFIX = "custom:"
