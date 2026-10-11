@@ -6,6 +6,16 @@ Changelog
 Unreleased
 ----------
 
+* ``@transactional`` (``coopy.decorators``): a failed call leaves the domain
+  as it was before the call, live and after a restart. The proxy deep-copies
+  the domain's attributes before each call and restores them in place when the
+  method raises; the failed call is not journaled or replicated. With
+  ``durability="sync"``, a record that fails before it is complete on disk is
+  truncated off the journal and the call is rolled back too
+  (``PersistenceError.record_discarded``). Each call costs a copy of the whole
+  state; it cannot be combined with ``@readonly`` or ``@unlocked``. Other
+  methods behave as before. See :doc:`method_decorators`.
+
 * ``@unlocked`` methods can use ``self._clock`` and ``self._env``: each proxy
   call now records into its own clock held in a context variable, so
   overlapping unlocked calls no longer append to each other's recording (or

@@ -79,6 +79,8 @@ passing references to existing domain objects.
 
 ``@readonly`` methods skip the journal. ``@abort_exception`` omits failed calls
 but keeps successful ones; it does not roll back memory or external effects.
+``@transactional`` also omits failed calls and restores the domain's state as
+it was before the call, at the cost of copying the state on every call.
 ``@unlocked`` skips the proxy lock and puts concurrency correctness on the
 application. Read :doc:`method_decorators` before combining these decorators.
 
@@ -269,7 +271,9 @@ Choose ``durability="sync"`` when opening each persistent proxy::
 A journaled mutation executes in memory, serializes a complete record, flushes
 it, and calls ``os.fsync`` on the journal before returning its result (or
 re-raising its original domain exception). Readonly calls and omitted failed
-``@abort_exception`` calls do not sync a journal record. The policy is selected
+``@abort_exception`` or ``@transactional`` calls do not sync a journal record.
+A ``@transactional`` call whose record fails before it is complete on disk is
+cut off the journal and rolled back (see :doc:`method_decorators`). The policy is selected
 on each open, not stored in the pickle format; it does not retroactively
 validate earlier buffered acknowledgments.
 

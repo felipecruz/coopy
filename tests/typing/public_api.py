@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import assert_type
 
 import coopy
-from coopy.decorators import abort_exception, readonly, unlocked
+from coopy.decorators import abort_exception, readonly, transactional, unlocked
 from coopy.environment import RecordEnv, RestoreEnv
 from coopy.foundation import RecordClock, RestoreClock
 from coopy.restore import RecoveryReport, RecoveryResult
@@ -18,6 +18,10 @@ class Todo:
     @abort_exception
     def add(self, text: str, *, priority: int = 0) -> int:
         return priority
+
+    @transactional
+    def rename(self, text: str, *, index: int = 0) -> str:
+        return text
 
 
 class Journal:
@@ -115,6 +119,7 @@ if TYPE_CHECKING:
     assert_type(a, Todo)
     assert_type(b, Todo)
     assert_type(a.add("milk", priority=1), int)
+    assert_type(a.rename("eggs", index=1), str)
     a.add(1)  # type: ignore[arg-type]
     a.add("milk", 1)  # type: ignore[misc]
     result = coopy.init_persistent_system(Todo, recovery="salvage")

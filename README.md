@@ -209,6 +209,7 @@ as `RecoveryResult[TodoList]`. See the
 | --- | --- |
 | `@readonly` | Not journaled. Use for queries. |
 | `@abort_exception` | If the method raises, the call is not journaled. No rollback is performed. |
+| `@transactional` | If the method raises, its changes are rolled back and the call is not journaled. Copies the whole state on every call. |
 | `@unlocked` | Skips coopy's lock; you handle thread safety yourself. |
 
 **Snapshots** keep restarts fast:

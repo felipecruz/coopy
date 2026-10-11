@@ -9,6 +9,7 @@ from __future__ import annotations
 __author__ = "Felipe Cruz <felipecruz@gmail.com>"
 __license__ = "BSD"
 
+import copy
 import logging
 import math
 import os
@@ -25,10 +26,10 @@ from typing import Any, Generic, Literal, TypeVar, cast, overload
 from coopy import __version__ as __version__
 from coopy import fileutils, manifest
 from coopy.environment import CALL_ENV, Env, RecordEnv, current_env
-from coopy.error import ConfigurationError, LifecycleError, ReplicationError
+from coopy.error import ConfigurationError, LifecycleError, PersistenceError, ReplicationError
 from coopy.foundation import CALL_CLOCK, Action, Clock, Publisher, RecordClock, current_clock
 from coopy.integrity import IDENTITY_FILE, Integrity, Secret, validate_secret
-from coopy.journal import DiskJournal
+from coopy.journal import DiskJournal, discard_failed_record
 from coopy.locking import DirectoryLock
 from coopy.network.default_select import CopyNet, CopyNetSlave
 from coopy.prune import PruneReport, prune_files, validate_prune
@@ -494,6 +495,13 @@ class CoopyProxy:
             return getattr(self.obj, name)
 
         (readonly, unlocked, abort_exception) = action_check(domain_method)
+        transactional = hasattr(domain_method, "__transactional")
+        if transactional and (readonly or unlocked):
+            raise ConfigurationError(
+                f"{name}: @transactional cannot be combined with @readonly or @unlocked"
+            )
+        # a failed transactional call is rolled back, so it is never journaled
+        omit_failure = abort_exception or transactional
 
         # TODO: re-write
         if not readonly and hasattr(self, "slave") and self.slave:
@@ -533,6 +541,7 @@ class CoopyProxy:
                 action = Action(thread_ident, name, datetime.now(), args, kwargs)
                 action.schema_version = self.schemas.version(name)
                 system = None
+                saved = _capture_state(self.obj, name) if transactional else None
                 if not readonly:
                     self.publisher.publish_before(action)
 
@@ -540,11 +549,18 @@ class CoopyProxy:
                     system = action.execute_action(self.obj)
                 except Exception as e:
                     logger.debug(CORE_LOG_PREFIX + "Error: " + str(e))
-                    if abort_exception:
+                    if saved is not None:
+                        _restore_state(self.obj, saved)
+                        logger.debug(CORE_LOG_PREFIX + "Rolled back action" + str(action))
+                    elif abort_exception:
                         logger.debug(CORE_LOG_PREFIX + "Aborting action" + str(action))
-                    if not abort_exception:
+                    if not omit_failure:
                         self.publisher.publish_exception(action)
                     exception = e
+                except BaseException:
+                    if saved is not None:
+                        _restore_state(self.obj, saved)
+                    raise
 
                 action.results = clock.results
                 # group commit releases the lock while waiting, so drop _env now
@@ -553,9 +569,18 @@ class CoopyProxy:
                 # lets restore tell expected failures from divergences
                 action.raised = exception is not None
 
-                if not readonly and not (abort_exception and action.raised):
+                if not readonly and not (omit_failure and action.raised):
                     try:
-                        self.publisher.publish(action)
+                        discard = discard_failed_record.set(saved is not None)
+                        try:
+                            self.publisher.publish(action)
+                        except PersistenceError as error:
+                            # only a record known to be off the journal can be undone
+                            if saved is not None and getattr(error, "record_discarded", False):
+                                _restore_state(self.obj, saved)
+                            raise
+                        finally:
+                            discard_failed_record.reset(discard)
                     finally:
                         for journal in self.publisher.subscribers:
                             if isinstance(journal, DiskJournal):
@@ -711,6 +736,31 @@ class CoopyProxy:
         if self.slave:
             self.slave.close()
             # Retain the slave role and guard until a fresh bootstrap succeeds.
+
+
+# injected per call or per proxy; rollback keeps the current ones
+_INJECTED = ("_clock", "_env")
+
+
+def _capture_state(obj: Any, name: str) -> dict[str, Any]:
+    """A deep copy of the domain's attributes for a @transactional call."""
+    state = {key: value for key, value in vars(obj).items() if key not in _INJECTED}
+    try:
+        # references back to the root object keep pointing at it
+        return copy.deepcopy(state, {id(obj): obj})
+    except Exception as error:
+        raise ConfigurationError(
+            f"{name}: @transactional could not copy the domain state: {error}"
+        ) from error
+
+
+def _restore_state(obj: Any, saved: dict[str, Any]) -> None:
+    """Put back the attributes captured before a failed @transactional call."""
+    state = vars(obj)
+    kept = {key: state[key] for key in _INJECTED if key in state}
+    state.clear()
+    state.update(saved)
+    state.update(kept)
 
 
 _CONTROL_NAMES = frozenset(

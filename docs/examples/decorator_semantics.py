@@ -3,7 +3,7 @@
 from tempfile import TemporaryDirectory
 
 from coopy.base import init_persistent_system
-from coopy.decorators import abort_exception, readonly
+from coopy.decorators import abort_exception, readonly, transactional
 
 
 class Ledger:
@@ -20,6 +20,11 @@ class Ledger:
         # Deliberately unsafe to demonstrate that abort is not rollback.
         self.add(value, fail=fail)
 
+    @transactional
+    def add_or_roll_back(self, value, fail=False):
+        # The same mutation, undone when the call fails.
+        self.add(value, fail=fail)
+
     @readonly
     def read(self):
         return tuple(self.entries)
@@ -32,6 +37,7 @@ def demonstrate(directory):
         for method, value in (
             (ledger.add, "ordinary failure"),
             (ledger.add_or_abort, "omitted failure"),
+            (ledger.add_or_roll_back, "rolled back failure"),
         ):
             try:
                 method(value, fail=True)

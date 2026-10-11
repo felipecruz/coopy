@@ -1,12 +1,17 @@
 import os
 import pickle
 import threading
+from contextvars import ContextVar
 from pathlib import Path
 from pickle import Pickler
 
 from coopy import fileutils
 from coopy.error import ConfigurationError
 from coopy.error import PersistenceError as PersistenceError
+
+# set while a @transactional call publishes: a record that fails before it is
+# complete on disk is cut off again so the rolled-back call is never replayed
+discard_failed_record: ContextVar[bool] = ContextVar("coopy_discard", default=False)
 
 
 class DiskJournal:
@@ -19,6 +24,8 @@ class DiskJournal:
             raise ConfigurationError("durability must be 'buffered' or 'sync'")
         self.durability = durability
         self.failure = None
+        # offset of a failed record that was cut off the journal again
+        self.discarded_at = None
         self.condition = None
         self.group_commit_delay = 0.0
         self.pending = 0
@@ -112,15 +119,40 @@ class DiskJournal:
                     self.sync_leader = False
                     self.condition.notify_all()
 
-    def _failed(self, error):
+    def _failed(self, error, discarded=False):
         self.failure = error
         if self.condition is not None:
             with self.condition:
                 self.condition.notify_all()
-        raise PersistenceError(
-            "Journal persistence failed; memory may already be changed. "
-            "No rollback was performed. Stop using this proxy and inspect recovery."
-        ) from error
+        if discarded:
+            failure = PersistenceError(
+                "Journal persistence failed; the record was removed from the journal. "
+                "Memory may already be changed unless the method is @transactional. "
+                "Stop using this proxy and inspect recovery."
+            )
+        else:
+            failure = PersistenceError(
+                "Journal persistence failed; memory may already be changed. "
+                "No rollback was performed. Stop using this proxy and inspect recovery."
+            )
+        # lets @transactional calls roll back only records that are not on disk
+        failure.record_discarded = discarded
+        raise failure from error
+
+    def _discard(self, offset):
+        """Cut a failed record off the journal; True once the cut is durable."""
+        if offset is None or not discard_failed_record.get():
+            return False
+        try:
+            fd = self.file.fileno()
+            os.ftruncate(fd, offset)
+            if self.durability == "sync":
+                os.fsync(fd)
+        except Exception:
+            return False
+        # close() may still write the failed record's buffered bytes
+        self.discarded_at = (self.file.name, offset)
+        return True
 
     def check_writable(self):
         if self.failure is not None:
@@ -139,7 +171,10 @@ class DiskJournal:
         receive a message and pickle
         """
         self.check_writable()
+        offset = None
+        written = False
         try:
+            offset = self.file.tell()
             if self.integrity is None:
                 self.pickler.dump(message)
             else:
@@ -155,11 +190,13 @@ class DiskJournal:
             if self.durability == "sync":
                 # Acknowledge only after the entire record is flushed/synced.
                 self.file.flush()
+            written = True
             # Rotate only between records, never during Pickler.dump().
             self.file.rotate_if_needed()
             self.synchronized = self.pending
         except Exception as error:
-            self._failed(error)
+            # a record that reached the file intact stays; it may be replayed
+            self._failed(error, discarded=not written and self._discard(offset))
 
     def receive_exception(self, message):
         pass
@@ -173,3 +210,19 @@ class DiskJournal:
                 self.file.close()
             except Exception as error:
                 self._failed(error)
+            finally:
+                if self.discarded_at is not None:
+                    self._cut_again()
+
+    def _cut_again(self):
+        # Closing flushes buffered bytes of the discarded record, if any.
+        name, offset = self.discarded_at
+        self.discarded_at = None
+        if os.path.getsize(name) > offset:
+            os.truncate(name, offset)
+            if self.durability == "sync":
+                fd = os.open(name, os.O_RDONLY)
+                try:
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
