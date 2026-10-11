@@ -538,7 +538,7 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Timestamp | 2026-10-11 |
   | Complexity | M |
   | Details | New `coopy/testing.py`: `FrozenClock(dt)` (`now`/`utcnow` -> `dt`, `today` -> `dt.date()`), `ManualClock(start)` with `advance(timedelta)` (negative raises `ValueError`) and `set(dt)`, and `install_clock(system, clock)`. On an opened system the proxy builds each per-call `RecordClock(source)` from the installed clock, so values are journaled and replay after restart/on replicas; the source is dropped after the call so snapshots never store it. On a plain domain the clock is injected as `_clock`; `None` restores the real clock. `TestClock`/`TestSystemMixin` warn (`DeprecationWarning`, removal v0.9) and now delegate to `install_clock`. Docs: util_api test-clock guide with the token example, API reference, changelog. Spec clear; ~13 files. |
-  | Commit | `e31662349219edac508a257d83eebea6d68ed75b` — implements F36. |
+  | Commit | `e31662349219edac508a257d83eebea6d68ed75b` — implements F36.; `4c1b6ecc5f83a5994d30aee1bbabd2e9790848c7` |
   | Validation | New `tests/functional/test_testing_clocks.py`: one-hour token expiry without sleeping, journal replay of test-clock values, pickle+JSON snapshots exclude the clock, plain-domain install, deprecated helpers warn but work. `scripts/check_typing.py` (`mypy --strict`, wheel) accepts both clocks as `coopy.Clock`; `coopy/testing.py` added to strict mypy config. ruff, mypy, 494 passed/31 skipped (`-W error::DeprecationWarning`), coverage 94.49%, Sphinx -W clean. |
   | Limitation | `install_clock` does not accept an `AsyncPersistent`; async users must install on a synchronous system. |
   | Limitation | `FrozenClock`/`ManualClock` return the same naive value from `now()` and `utcnow()`; no timezone offset is modelled. |
@@ -547,7 +547,21 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Next step | Extend the test clocks with `now(tz)`, `time()` and `monotonic()` when F37 adds them. |
   | Next step | Remove `coopy.tests.utils.TestClock` and `TestSystemMixin` in v0.9. |
 
-- [ ] **F37 — Add timezone-aware and additional time sources.** `now()` records naive local time, so stored values depend on the host's timezone, and `utcnow()` reproduces the deprecated naive-UTC behavior of `datetime.utcnow()`. Add `now(tz=None)` mirroring `datetime.now(tz)` so `now(timezone.utc)` records an aware value, and add recorded `time()` (epoch seconds) and `monotonic()` (for durations inside a method). Recommend aware UTC in the clock guide. Acceptance: aware values round-trip through pickle and JSON storage and through replication with their offset; new sources replay exactly; existing naive journals replay unchanged; the source validator accepts the new clock calls.
+- [x] **F37 — Add timezone-aware and additional time sources.** `now()` records naive local time, so stored values depend on the host's timezone, and `utcnow()` reproduces the deprecated naive-UTC behavior of `datetime.utcnow()`. Add `now(tz=None)` mirroring `datetime.now(tz)` so `now(timezone.utc)` records an aware value, and add recorded `time()` (epoch seconds) and `monotonic()` (for durations inside a method). Recommend aware UTC in the clock guide. Acceptance: aware values round-trip through pickle and JSON storage and through replication with their offset; new sources replay exactly; existing naive journals replay unchanged; the source validator accepts the new clock calls.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | `coopy.Clock`/`RecordClock`/`RestoreClock` gain `now(tz=None)` (mirrors `datetime.now(tz)`), `time()` and `monotonic()`. `RecordClock` calls a source's `now()` without arguments when no tz is passed, so older custom sources keep working. Replay returns recorded values unconverted and raises `ClockDivergenceError` when `now(tz)` meets a naive value or `time()`/`monotonic()` meets a non-float. `FrozenClock`/`ManualClock` implement the new methods (`ManualClock.monotonic()` sums `advance()` deltas). CLI `log` prints float clock values. Clock guide recommends aware UTC; changelog, usage and util_api updated. Spec clear; ~10 files. |
+  | Commit | `4867cedf82e607a629e649e2b55133988f1f4cec` — implements F37. |
+  | Validation | New `tests/functional/test_clock_sources.py`: aware (UTC and -03:00) and float values round-trip pickle and JSON journals and snapshots with offsets, test-clock values replay exactly, replica replay keeps offsets, divergence cases, validator accepts new calls, legacy sources. Existing naive-journal and legacy fixture tests unchanged. ruff, mypy, `scripts/check_typing.py` (strict, wheel), 512 passed/31 skipped (`-W error::DeprecationWarning`), coverage 94.64%, Sphinx -W clean. |
+  | Limitation | JSON storage keeps the UTC offset but turns a `zoneinfo.ZoneInfo` into a fixed-offset `timezone`; pickle keeps the zone. |
+  | Limitation | Journals still store bare values, so swapped `time()`/`monotonic()` calls or `now(tz)` with a different tz are not detected on replay. |
+  | Limitation | Replay of `now()` without tz accepts an aware recorded value, so switching code from `now(timezone.utc)` back to `now()` is not detected. |
+  | Limitation | Custom `coopy.Clock` implementations must add `time()`/`monotonic()` (and a `tz` parameter) to satisfy the protocol under type checking. |
+  | Next step | Record the call name with each value (F38) so replay can detect swapped `time()`/`monotonic()` and mismatched timezones. |
 
 - [ ] **F38 — Record which clock call produced each value.** Journals store bare values, so replay cannot tell `now()` from `today()` or `time()` apart and divergence reports cannot name the original call. Store `(method, value)` pairs for new actions while still reading bare-value lists from older journals. This changes the stored action format, so bump the F23 format version and the action schema. Acceptance: new journals record call names; legacy fixtures replay; F34 reports name both the recorded and the replayed call; a directory written with the new format is refused by an older reader through the F23 manifest instead of failing during decoding.
 
