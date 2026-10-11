@@ -67,12 +67,12 @@ coopy = ["py.typed"]
 
 [tool.mypy]
 python_version = "3.10"
-files = ["coopy/base.py", "coopy/asyncio.py", "coopy/convert.py", "coopy/prune.py", "coopy/cli.py", "coopy/decorators.py", "coopy/error.py", "coopy/integrity.py", "coopy/serialization.py", "coopy/foundation.py", "coopy/environment.py", "coopy/testing.py"]
+files = ["coopy/base.py", "coopy/asyncio.py", "coopy/convert.py", "coopy/prune.py", "coopy/cli.py", "coopy/decorators.py", "coopy/error.py", "coopy/integrity.py", "coopy/serialization.py", "coopy/foundation.py", "coopy/environment.py", "coopy/testing.py", "coopy/validation.py"]
 follow_imports = "silent"
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["coopy.decorators", "coopy.environment", "coopy.error", "coopy.integrity", "coopy.serialization", "coopy.testing"]
+module = ["coopy.decorators", "coopy.environment", "coopy.error", "coopy.integrity", "coopy.serialization", "coopy.testing", "coopy.validation"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_calls = true

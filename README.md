@@ -133,8 +133,10 @@ That means:
   journaled.
 - **Use `self._clock` for time.** Call `self._clock.now()`, `utcnow()` or
   `today()` instead of `datetime.now()`. coopy records the value and hands
-  back the same one on replay. Source validation catches some direct clock
-  calls, but cannot prove that your methods are deterministic.
+  back the same one on replay. Source validation flags direct clock, `time`,
+  `random`, `uuid`, `os.urandom` and `secrets` calls (pass
+  `validation="strict"` to reject them all at open time), but cannot prove
+  that your methods are deterministic.
 - **Use `self._env` for random values.** `self._env.random()`, `randint()`,
   `choice()`, `shuffle()`, `uuid4()`, `token_hex()` and friends are recorded
   and replayed like the clock (annotate `_env: coopy.Env`). Recorded tokens

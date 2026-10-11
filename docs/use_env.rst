@@ -92,5 +92,7 @@ example above. Live calls receive a recording ``coopy.environment.RecordEnv``;
 recovery and replicas receive a replaying ``RestoreEnv``. For tests,
 ``coopy.testing.SeededEnv(seed)`` returns a reproducible sequence of values
 and ``install_env(system, env)`` makes ``self._env`` read from it; see
-:doc:`util_api`. Source validation accepts ``self._env`` calls, but does not
-yet flag direct ``random`` or ``uuid`` calls.
+:doc:`util_api`. Source validation accepts ``self._env`` calls and flags
+direct ``random.*``, ``uuid.uuid4()``, ``os.urandom()`` and ``secrets.*`` calls
+with the ``self._env`` method to use instead; ``validation="strict"`` rejects
+them at open time (see :doc:`use_clock`).

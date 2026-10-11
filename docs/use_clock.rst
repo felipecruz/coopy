@@ -114,10 +114,31 @@ annotations still type-check, but only describe the live clock.
 Clock-aware validation
 ----------------------
 
-Initialization checks available method source for obvious direct uses such as
-``datetime.now()`` and ``date.today()``; every ``self._clock`` call, including
-``now(timezone.utc)``, ``time()`` and ``monotonic()``, is accepted. Some
-patterns only warn, and aliases, helpers, or missing source can escape
-detection. Passing validation does not
-prove deterministic behavior. For tests, install a ``coopy.testing`` clock;
-see :doc:`util_api`.
+Opening a system checks the source of each domain method for direct calls
+that replay cannot reproduce. Names are resolved through the method module's
+imports, so ``dt.now()`` after ``from datetime import datetime as dt``,
+``datetime.datetime.now()`` and ``epoch()`` after ``from time import time as
+epoch`` are all recognised. The check covers ``datetime``/``date``
+``now()``, ``utcnow()`` and ``today()``; ``time.time()``, ``monotonic()`` and
+``perf_counter()``; ``random.*``; ``uuid.uuid1()``/``uuid4()``;
+``os.urandom()``; and ``secrets.*``. Each finding names the file, line and the
+``self._clock`` or ``self._env`` call to use instead (see :doc:`use_env`).
+Every ``self._clock`` and ``self._env`` call, including ``now(timezone.utc)``,
+``time()`` and ``monotonic()``, is accepted.
+
+Choose what happens with ``validation=`` when opening:
+
+* ``"warn"`` (default): logs a warning for each call, but still raises
+  ``coopy.error.NonDeterministicCallError`` for ``datetime.now()``,
+  ``datetime.utcnow()`` and ``date.today()`` written that way, as earlier
+  releases did.
+* ``"strict"``: raises ``NonDeterministicCallError`` (a ``PrevalentError``)
+  for every call found. Its ``calls`` attribute lists each
+  ``coopy.validation.NonDeterministicCall``.
+* ``"off"``: skips the check.
+
+Methods without available source, such as classes defined in a REPL, are
+skipped with a warning. Calls made through helpers in other functions, values
+stored on the domain (``self.rng.random()``), ``getattr`` or other dynamic
+lookups escape detection, so passing validation does not prove deterministic
+behavior. For tests, install a ``coopy.testing`` clock; see :doc:`util_api`.

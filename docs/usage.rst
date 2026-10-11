@@ -8,7 +8,9 @@ Opening and closing a system
 
 Use ``from coopy.base import init_persistent_system`` and call
 ``init_persistent_system(obj, basedir=None, recovery="strict",
-durability="buffered", secret=None)``. ``obj`` is an instance or a class
+durability="buffered", secret=None)``. ``validation="warn" | "strict" | "off"``
+controls the source check for non-deterministic calls; see
+:doc:`use_clock`. ``obj`` is an instance or a class
 that can be constructed without arguments, even when reopening existing data.
 A new directory gets an initial snapshot. Existing data replaces the supplied
 object with the latest snapshot, then replays later journaled calls. See the

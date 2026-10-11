@@ -1,5 +1,13 @@
 """Library failures; domain exceptions still propagate unchanged."""
 
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .validation import NonDeterministicCall
+
 
 class CoopyError(Exception):
     """Base class for coopy failures."""
@@ -11,6 +19,22 @@ class ConfigurationError(CoopyError, ValueError):
 
 class PrevalentError(CoopyError):
     """The domain violates persistence requirements."""
+
+
+class NonDeterministicCallError(PrevalentError):
+    """A domain method calls a non-deterministic source directly.
+
+    ``cls`` and ``method`` name the method; ``calls`` lists each
+    ``coopy.validation.NonDeterministicCall`` found, with its line and the
+    ``self._clock``/``self._env`` replacement to use.
+    """
+
+    def __init__(self, cls: str, method: str, calls: Sequence[NonDeterministicCall]) -> None:
+        self.cls = cls
+        self.method = method
+        self.calls = tuple(calls)
+        found = "\n".join(f"  {call.describe()}" for call in self.calls)
+        super().__init__(f"{cls}.{method} makes calls that replay cannot reproduce:\n{found}")
 
 
 class PersistenceError(CoopyError, RuntimeError):

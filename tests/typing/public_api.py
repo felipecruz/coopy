@@ -133,6 +133,8 @@ if TYPE_CHECKING:
         coopy.open(Todo, serializer=coopy.JsonSerializer(), schemas=coopy.ActionSchemas()), Todo
     )
     assert_type(coopy.open(Todo, state_schemas=coopy.StateSchemas()), Todo)
+    assert_type(coopy.open(Todo, validation="strict"), Todo)
+    coopy.open(Todo, validation="loud")  # type: ignore[call-overload]
     assert_type(coopy.open(Todo, secret=[b"new-key", b"old-key"]), Todo)
     assert_type(
         coopy.convert("data", "json-data", new_serializer=coopy.JsonSerializer(), new_secret=None),

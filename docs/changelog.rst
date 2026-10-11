@@ -6,6 +6,18 @@ Changelog
 Unreleased
 ----------
 
+* Validation resolves the method module's imports, so aliased
+  (``from datetime import datetime as dt; dt.now()``) and module-qualified
+  (``datetime.datetime.now()``) calls are recognised, and it now also covers
+  ``time.time()``/``monotonic()``/``perf_counter()``, ``random.*``,
+  ``uuid.uuid1()``/``uuid4()``, ``os.urandom()`` and ``secrets.*``, naming the
+  ``self._clock``/``self._env`` replacement and the file and line. Open with
+  ``validation="strict"`` to reject every such call, ``"off"`` to skip the
+  check, or the default ``"warn"``, which logs them and, as before, rejects
+  only ``datetime.now()``/``date.today()`` written that way. Rejections raise
+  ``coopy.error.NonDeterministicCallError``, a ``PrevalentError``; the
+  validator no longer raises a plain ``Exception`` internally. The old
+  warning for any ``x.y.now()`` call is replaced by the resolved check.
 * Recorded environment: domain methods get ``self._env`` (typed by the new
   ``coopy.Env`` protocol) with ``random()``, ``uniform()``, ``randint()``,
   ``choice()``, ``shuffle()``, ``sample()``, ``uuid4()``, ``token_bytes()``,

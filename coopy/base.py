@@ -35,7 +35,7 @@ from coopy.restore import RecoveryReport, RecoveryResult, recover
 from coopy.serialization import ActionSchemas, Serializer, StateSchemas
 from coopy.snapshot import SnapshotJob, SnapshotManager, SnapshotTimer, fork_supported
 from coopy.utils import action_check, inject, method_or_none
-from coopy.validation import validate_system
+from coopy.validation import check_policy, validate_system
 
 CORE_LOG_PREFIX = "[CORE] "
 DEFAULT_PASSWORD = b"copynet"
@@ -87,6 +87,7 @@ def init_persistent_system(
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,
+    validation: Literal["warn", "strict", "off"] = "warn",
 ) -> T: ...
 
 
@@ -103,6 +104,7 @@ def init_persistent_system(
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,
+    validation: Literal["warn", "strict", "off"] = "warn",
 ) -> T: ...
 
 
@@ -119,6 +121,7 @@ def init_persistent_system(
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,
+    validation: Literal["warn", "strict", "off"] = "warn",
 ) -> RecoveryResult[T]: ...
 
 
@@ -135,6 +138,7 @@ def init_persistent_system(
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,
+    validation: Literal["warn", "strict", "off"] = "warn",
 ) -> RecoveryResult[T]: ...
 
 
@@ -151,6 +155,7 @@ def init_persistent_system(
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,
+    validation: str = "warn",
 ) -> T | RecoveryResult[T]: ...
 @overload
 def init_persistent_system(
@@ -165,6 +170,7 @@ def init_persistent_system(
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,
+    validation: str = "warn",
 ) -> T | RecoveryResult[T]: ...
 
 
@@ -180,6 +186,7 @@ def init_persistent_system(
     serializer: Serializer | None = None,
     schemas: ActionSchemas | None = None,
     state_schemas: StateSchemas | None = None,
+    validation: str = "warn",
 ) -> Any:
     validate_secret(secret)
     if not math.isfinite(group_commit_delay) or group_commit_delay < 0:
@@ -191,6 +198,7 @@ def init_persistent_system(
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
     if durability not in ("buffered", "sync"):
         raise ConfigurationError("durability must be 'buffered' or 'sync'")
+    check_policy(validation)
 
     # a system object is needed in order to coopy work
     if obj is None:
@@ -202,7 +210,7 @@ def init_persistent_system(
     if isinstance(obj, type):
         obj = obj()
 
-    validate_system(obj)
+    validate_system(obj, validation)
 
     # first step is to check basedir argument. if isn't defined
     # coopy will create a directory name based on system class

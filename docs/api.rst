@@ -79,6 +79,8 @@ Recovery and errors
    coopy.ClockDivergenceError
    coopy.error.ConfigurationError
    coopy.error.PrevalentError
+   coopy.error.NonDeterministicCallError
+   coopy.validation.NonDeterministicCall
    coopy.error.PersistenceError
    coopy.error.LifecycleError
    coopy.error.LockError
