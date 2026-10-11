@@ -611,7 +611,20 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Limitation | The old warning for any `x.y.now()` call was replaced by the resolved check, so unresolvable calls such as `self.timer.now()` are no longer warned about; unseeded `random.Random()` is not flagged. |
   | Next step | Consider making `validation="strict"` the default in a future major release once domains have migrated to `self._clock`/`self._env`. |
 
-- [ ] **F41 — Define clock behavior for `@unlocked` methods.** Each journaled call gets a new `RecordClock`, but `@unlocked` methods run outside the proxy lock, so concurrent calls can append to the same recording and replay values in the wrong order. Give each call its own clock (for example through a context variable) or document that unlocked methods must not use the clock, whichever the investigation shows to be sound. Acceptance: a concurrent test with unlocked methods using the clock replays identical state, or such use is rejected with a clear error and documented in `docs/method_decorators.rst`.
+- [x] **F41 — Define clock behavior for `@unlocked` methods.** Each journaled call gets a new `RecordClock`, but `@unlocked` methods run outside the proxy lock, so concurrent calls can append to the same recording and replay values in the wrong order. Give each call its own clock (for example through a context variable) or document that unlocked methods must not use the clock, whichever the investigation shows to be sound. Acceptance: a concurrent test with unlocked methods using the clock replays identical state, or such use is rejected with a clear error and documented in `docs/method_decorators.rst`.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | Investigation showed per-call clocks are sound (old code: a concurrent unlocked test diverges on replay). Each proxy call now keeps its `RecordClock`/`RecordEnv` in context variables (`current_clock`, `current_env`); the domain holds stateless `CallClock`/`CallEnv` dispatchers. `_env` is injected while any call body runs (call counter under a small lock) and removed after the last one. `CallClock` pickles/deep-copies as a fresh `RecordClock` and the JSON serializer encodes it as `coopy.clock`, so the snapshot format is unchanged. Outside a call `_clock` reads the system clock unrecorded. Docs: method_decorators (@unlocked section), concurrency, use_clock, use_env, changelog. Spec clear; ambiguity was journal ordering, which per-call clocks cannot fix (documented). 12 files. |
+  | Commit | `06e2a6aebc2da8f09248984dd4700e19ca5b7f30` — implements F41. |
+  | Validation | New `tests/functional/test_unlocked_clock.py`: two unlocked calls forced to interleave clock/env reads via a barrier; each journaled action holds exactly its own values and reopening replays identical state (fails on the previous code); snapshots under pickle and JSON store a plain `RecordClock`; reads outside a call are not journaled. Two replica tests now read results from the published action. 597 passed/31 skipped (`-W error::DeprecationWarning`), coverage 95.13%, ruff, mypy, `scripts/check_typing.py`, Sphinx -W clean. |
+  | Limitation | Values are recorded only in the calling thread/task; threads a domain method starts read unrecorded values unless run in a copied context (`contextvars.copy_context().run`). |
+  | Limitation | Per-call clocks do not order unlocked calls: replay runs actions sequentially in journal order, so overlapping unlocked writers must touch independent state, and their journal writes are still not serialized (the test makes the second call publish after the first). |
+  | Limitation | Reading `obj._clock.results` after a call no longer returns that call's values; tools must use the journaled `Action.results`. |
+  | Next step | Serialize journal publication for mutating `@unlocked` calls (lock only around publish) so concurrent unlocked writers cannot interleave journal records. |
 
 ## v0.8.0 — Transactions
 
