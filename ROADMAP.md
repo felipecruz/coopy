@@ -555,7 +555,7 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Timestamp | 2026-10-11 |
   | Complexity | M |
   | Details | `coopy.Clock`/`RecordClock`/`RestoreClock` gain `now(tz=None)` (mirrors `datetime.now(tz)`), `time()` and `monotonic()`. `RecordClock` calls a source's `now()` without arguments when no tz is passed, so older custom sources keep working. Replay returns recorded values unconverted and raises `ClockDivergenceError` when `now(tz)` meets a naive value or `time()`/`monotonic()` meets a non-float. `FrozenClock`/`ManualClock` implement the new methods (`ManualClock.monotonic()` sums `advance()` deltas). CLI `log` prints float clock values. Clock guide recommends aware UTC; changelog, usage and util_api updated. Spec clear; ~10 files. |
-  | Commit | `4867cedf82e607a629e649e2b55133988f1f4cec` — implements F37. |
+  | Commit | `4867cedf82e607a629e649e2b55133988f1f4cec` — implements F37.; `447f5d5c9f41e92a19a19c8b14fdada74b2c5545` |
   | Validation | New `tests/functional/test_clock_sources.py`: aware (UTC and -03:00) and float values round-trip pickle and JSON journals and snapshots with offsets, test-clock values replay exactly, replica replay keeps offsets, divergence cases, validator accepts new calls, legacy sources. Existing naive-journal and legacy fixture tests unchanged. ruff, mypy, `scripts/check_typing.py` (strict, wheel), 512 passed/31 skipped (`-W error::DeprecationWarning`), coverage 94.64%, Sphinx -W clean. |
   | Limitation | JSON storage keeps the UTC offset but turns a `zoneinfo.ZoneInfo` into a fixed-offset `timezone`; pickle keeps the zone. |
   | Limitation | Journals still store bare values, so swapped `time()`/`monotonic()` calls or `now(tz)` with a different tz are not detected on replay. |
@@ -563,7 +563,21 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Limitation | Custom `coopy.Clock` implementations must add `time()`/`monotonic()` (and a `tz` parameter) to satisfy the protocol under type checking. |
   | Next step | Record the call name with each value (F38) so replay can detect swapped `time()`/`monotonic()` and mismatched timezones. |
 
-- [ ] **F38 — Record which clock call produced each value.** Journals store bare values, so replay cannot tell `now()` from `today()` or `time()` apart and divergence reports cannot name the original call. Store `(method, value)` pairs for new actions while still reading bare-value lists from older journals. This changes the stored action format, so bump the F23 format version and the action schema. Acceptance: new journals record call names; legacy fixtures replay; F34 reports name both the recorded and the replayed call; a directory written with the new format is refused by an older reader through the F23 manifest instead of failing during decoding.
+- [x] **F38 — Record which clock call produced each value.** Journals store bare values, so replay cannot tell `now()` from `today()` or `time()` apart and divergence reports cannot name the original call. Store `(method, value)` pairs for new actions while still reading bare-value lists from older journals. This changes the stored action format, so bump the F23 format version and the action schema. Acceptance: new journals record call names; legacy fixtures replay; F34 reports name both the recorded and the replayed call; a directory written with the new format is refused by an older reader through the F23 manifest instead of failing during decoding.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-11 |
+  | Complexity | M |
+  | Details | `RecordClock` stores `(method, value)` pairs; `Action.record_version` = 2 marks the new layout (separate from F17's per-method `schema_version`, which apps own). `RestoreClock.for_action` refuses newer record versions with `FormatError`; pairs must match the replayed method and `now(tz)` must match the recorded offset, while bare values keep the F34/F37 type checks. `ClockDivergenceError.expected` names the recorded call (e.g. `utcnow() returning …`). F23 `FORMAT_VERSION` = 2; format 0/1 dirs get the v2 manifest after a clean writable open. CLI `log` prints `method=value`. Docs and changelog updated. Spec clear except "action schema" (read as a new record version); ~12 files. |
+  | Commit | `94db543aab397446f7f6f73dfb4ea07f6c89428a` — implements F38. |
+  | Validation | New `tests/functional/test_clock_records.py` (13 tests): pickle/JSON journals record call names; a format 1 fixture written by the F37 commit (`tests/fixtures/legacy/v0_6_clock`) replays in salvage and strict, upgrades its manifest and replays a mixed journal; swapped calls and tz mismatch name both calls; strict recovery reports both; newer record version refused; a format 1 reader (patched `FORMAT_VERSION`) refuses a new dir before decoding. ruff, mypy, `scripts/check_typing.py`, 525 passed/31 skipped (`-W error::DeprecationWarning`), coverage 94.73%, Sphinx -W clean. |
+  | Limitation | Replication has no manifest or version handshake, so an older replica receiving v2 actions fails with a clock divergence instead of a format error. |
+  | Limitation | After the first writable open, a format 1 directory can no longer be read by older coopy releases; there is no downgrade path. |
+  | Limitation | Recorded `now(tz)` keeps only the offset, so two zones with the same offset at that instant are not told apart. |
+  | Next step | Add a protocol version to the replication handshake so replicas refuse newer action records up front. |
+  | Next step | Reuse the `(method, value)` record format for the F39 recorded environment. |
 
 - [ ] **F39 — Record other non-deterministic inputs.** The clock covers time only. Random numbers, UUIDs and tokens break replay the same way, and passing them in as arguments is awkward for games, samplers and ID generation. Add a recorded environment injected next to the clock (for example `self._env.random()`, `randint()`, `choice()`, `uuid4()`, `token_hex()`), reusing the F38 record format, with a typed protocol and test implementations seeded like F36. Acceptance: a domain using each source replays identically after restart and on replicas; replay mismatches raise the F34 divergence error; documentation explains when to pass values as arguments instead and that recorded secrets end up in the journal.
 
