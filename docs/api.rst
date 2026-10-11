@@ -66,6 +66,7 @@ Recovery and errors
    coopy.restore.RecoveryPosition
    coopy.restore.RecoveryError
    coopy.CoopyError
+   coopy.ClockDivergenceError
    coopy.error.ConfigurationError
    coopy.error.PrevalentError
    coopy.error.PersistenceError

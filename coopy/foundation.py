@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
-from typing import Any, Callable
+from typing import Any
 
+from .error import ClockDivergenceError
 from .validation import DATE_FUNCS, DATETIME_FUNCS
 
 
@@ -33,26 +34,73 @@ class RecordClock(object):
 
 
 class RestoreClock(object):
-    def __init__(self, results: list[date]) -> None:
-        # reverse order!
-        self.results = results[::-1]
+    """Replays recorded clock values and detects divergent clock calls.
 
-    def __getattr__(self, name: str) -> Any:
-        if name in DATETIME_FUNCS or name in DATE_FUNCS:
-            return self.pop_and_check(name)
-        return object.__getattribute__(self, name)
+    Journals store bare values, so ``now()`` and ``utcnow()`` (both
+    ``datetime``) cannot be told apart; ``today()`` records a plain ``date``.
+    The first divergence is kept so a domain method that swallows it still
+    fails replay through ``check_calls``/``check_complete``.
+    """
 
-    def pop_and_check(self, method_name: str) -> Callable[[], date] | None:
-        last_element = self.results[-1]
+    def __init__(self, results: list[date], action: str | None = None) -> None:
+        self.results = list(results)
+        self.action = action
+        self.index = 0
+        self.divergence: ClockDivergenceError | None = None
+
+    def now(self) -> datetime:
+        return self._replay("now")
+
+    def utcnow(self) -> datetime:
+        return self._replay("utcnow")
+
+    def today(self) -> date:
+        return self._replay("today")
+
+    def _replay(self, method_name: str) -> Any:
+        if self.divergence is not None:
+            raise self.divergence
+        actual = f"{method_name}()"
+        if self.index >= len(self.results):
+            self._diverge(f"no call ({len(self.results)} recorded)", actual)
+        value = self.results[self.index]
         if method_name in DATETIME_FUNCS:
-            if not isinstance(last_element, datetime):
-                raise TypeError("This call returns a %s" % (datetime.__class__))
-            return lambda: self.results.pop()
-        elif method_name in DATE_FUNCS:
-            if not isinstance(last_element, date):
-                raise TypeError("This call returns a %s" % (date.__class__))
-            return lambda: self.results.pop()
-        return None
+            matches = isinstance(value, datetime)
+        else:
+            matches = isinstance(value, date) and not isinstance(value, datetime)
+        if not matches:
+            self._diverge(_recorded_call(value), actual)
+        self.index += 1
+        return value
+
+    def _diverge(self, expected: str, actual: str) -> None:
+        self.divergence = ClockDivergenceError(self.action, self.index, expected, actual)
+        raise self.divergence
+
+    def check_calls(self) -> None:
+        """Raise the first divergence a clock call detected, if any."""
+        if self.divergence is not None:
+            raise self.divergence
+
+    def check_complete(self) -> None:
+        """Also fail when replay left recorded clock values unused."""
+        self.check_calls()
+        if self.index < len(self.results):
+            self.divergence = ClockDivergenceError(
+                self.action,
+                self.index,
+                _recorded_call(self.results[self.index]),
+                f"no call ({self.index} replayed)",
+            )
+            raise self.divergence
+
+
+def _recorded_call(value: Any) -> str:
+    if isinstance(value, datetime):
+        return f"now() or utcnow() returning {value!r}"
+    if isinstance(value, date):
+        return f"today() returning {value!r}"
+    return f"a clock value, found {type(value).__name__} {value!r}"
 
 
 class VersionedState(object):

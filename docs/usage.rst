@@ -120,7 +120,8 @@ For a controlled restart:
    the highest numbered snapshot and journals with strictly higher numbers.
    Keep their names and ordering intact; never concatenate pickle streams.
 #. Open with ``recovery="strict"`` (the default). A detected decoding error,
-   truncated record, missing method, or changed success/failure outcome raises
+   truncated record, missing method, changed success/failure outcome, or
+   clock divergence (``coopy.ClockDivergenceError``, see :doc:`use_clock`) raises
    ``coopy.restore.RecoveryError`` before a proxy or new journal is created.
    Inspect ``error.report`` for the checkpoint, replay count, and stopping
    position (file, byte offset, one-based record number, and method name).

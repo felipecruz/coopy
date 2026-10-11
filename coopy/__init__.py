@@ -6,6 +6,7 @@ from .base import init_persistent_system as init_persistent_system
 from .base import init_persistent_system as open
 from .base import logging_config as logging_config
 from .convert import convert as convert
+from .error import ClockDivergenceError as ClockDivergenceError
 from .error import CoopyError as CoopyError
 from .prune import prune as prune
 from .serialization import ActionSchemas as ActionSchemas
@@ -24,6 +25,7 @@ __all__ = [
     "convert",
     "prune",
     "CoopyError",
+    "ClockDivergenceError",
     "Serializer",
     "PickleSerializer",
     "JsonSerializer",

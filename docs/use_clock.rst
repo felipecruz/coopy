@@ -29,8 +29,15 @@ The tutorial's domain uses all three supported methods:
 
 The executable :doc:`tutorial` verifies that all three values from a call after
 the checkpoint survive journal replay unchanged. Replay must make the same
-clock calls in the same order. Changing domain code or branches can consume
-the recorded results incorrectly. Randomness and external I/O are not captured
+clock calls in the same order. When it does not, replay raises
+``coopy.ClockDivergenceError`` with the action name, the zero-based clock call
+``index`` and the ``expected`` and ``actual`` call: ``today()`` where a
+``datetime`` was recorded, ``now()``/``utcnow()`` where a ``date`` was
+recorded, a call after the recorded values ran out, or recorded values left
+unused when the method returns. Recovery reports it as a ``clock`` stop (even
+if the domain method caught the exception) and replicas become unsynchronized.
+Journals store bare values, so ``now()`` and ``utcnow()`` replayed in each
+other's place are not detected. Randomness and external I/O are not captured
 by this clock; see :doc:`usage`.
 
 Clock-aware validation

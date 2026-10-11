@@ -6,6 +6,15 @@ Changelog
 Unreleased
 ----------
 
+* Replay detects clock divergence: a replayed method that calls ``today()``
+  where ``now()``/``utcnow()`` was recorded (or the reverse), receives a value
+  of the wrong type, or makes more or fewer clock calls than were recorded now
+  raises ``coopy.ClockDivergenceError`` naming the action, the zero-based clock
+  call index and the expected and actual call. Strict recovery reports it as a
+  ``clock`` stop, salvage stops at that record, and replicas become
+  unsynchronized with the same message. Previously ``today()`` silently
+  received a ``datetime``, extra calls raised a bare ``IndexError`` and unused
+  values were ignored.
 * ``python -m coopy`` command-line tool: ``inspect``, ``verify``, ``log``,
   ``snapshot``, ``prune`` and ``convert`` for data directories. Every command
   holds the writer lock and exits non-zero on errors. See :doc:`cli`.

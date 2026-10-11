@@ -35,3 +35,22 @@ class LockError(LifecycleError):
 
 class FormatError(CoopyError, ValueError):
     """The data directory's on-disk format or settings do not match this open."""
+
+
+class ClockDivergenceError(CoopyError, RuntimeError):
+    """Replay made different clock calls than the journal recorded.
+
+    ``index`` is the zero-based clock call within ``action``; ``expected`` and
+    ``actual`` describe the recorded and the replayed call.
+    """
+
+    def __init__(self, action: str | None, index: int, expected: str, actual: str) -> None:
+        self.action = action
+        self.index = index
+        self.expected = expected
+        self.actual = actual
+        where = f"action {action!r}" if action is not None else "replayed action"
+        super().__init__(
+            f"Clock replay diverged in {where} at clock call {index}: "
+            f"expected {expected}, got {actual}"
+        )

@@ -330,17 +330,21 @@ class CopyNetSlave(threading.Thread):
                         obj = self.parent.obj if self.synchronized else pending
                         if obj is None:
                             raise ValueError("Action received before snapshot")
-                        obj._clock = RestoreClock(value.results or [])
+                        clock = RestoreClock(value.results or [], value.action)
+                        obj._clock = clock
                         try:
                             value.execute_action(obj)
                         except Exception:
+                            clock.check_calls()
                             if not getattr(value, "raised", False):
                                 self.ready.clear()
                                 raise
                         else:
+                            clock.check_calls()
                             if getattr(value, "raised", False):
                                 self.ready.clear()
                                 raise ValueError("Action outcome differs from master")
+                        clock.check_complete()
         except Exception as exc:
             if not self.stopped.is_set():
                 self.error = str(exc)

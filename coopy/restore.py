@@ -9,7 +9,7 @@ from pickle import Unpickler
 from typing import Generic, TypeVar
 
 from coopy import fileutils, manifest
-from coopy.error import ConfigurationError, CoopyError
+from coopy.error import ClockDivergenceError, ConfigurationError, CoopyError
 from coopy.foundation import Action, RestoreClock
 from coopy.integrity import IDENTITY_FILE, Integrity, IntegrityError, validate_secret
 from coopy.snapshot import SnapshotManager
@@ -219,23 +219,37 @@ def recover(
                             method = getattr(recovered, action.action)
                             if not callable(method):
                                 raise TypeError("Action method is not callable")
-                            recovered._clock = RestoreClock(getattr(action, "results", None) or [])
+                            clock = RestoreClock(
+                                getattr(action, "results", None) or [], action.action
+                            )
+                            recovered._clock = clock
                         except Exception as error:
                             return stop(position, "method", error)
+                        failure = None
                         try:
                             method(*action.args, **action.kwargs)
                         except Exception as error:
+                            failure = error
+                        # A clock divergence wins even if the method swallowed it.
+                        try:
+                            clock.check_calls()
+                        except ClockDivergenceError as error:
+                            return stop(position, "clock", error, changed=True)
+                        if failure is not None:
                             if raised is not True:
-                                return stop(position, "outcome", error, changed=True)
+                                return stop(position, "outcome", failure, changed=True)
                             report.expected_failures += 1
-                        else:
-                            if raised is True:
-                                return stop(
-                                    position,
-                                    "outcome",
-                                    ValueError("Originally failing action now succeeded"),
-                                    changed=True,
-                                )
+                        elif raised is True:
+                            return stop(
+                                position,
+                                "outcome",
+                                ValueError("Originally failing action now succeeded"),
+                                changed=True,
+                            )
+                        try:
+                            clock.check_complete()
+                        except ClockDivergenceError as error:
+                            return stop(position, "clock", error, changed=True)
                         report.replayed += 1
             except RecoveryError:
                 raise
