@@ -18,6 +18,20 @@ update both pins together. Lint covers Python sources, tests, scripts and docs
 examples, using Pyflakes, import sorting, and Ruff's default pycodestyle rules.
 See the `Ruff integration documentation`_.
 
+Type checks
+-----------
+
+The installed public-API check disables build isolation, so install its build
+prerequisites first. Then run both checks, as in CI::
+
+    python -m pip install "setuptools>=77" wheel
+    python -m mypy
+    python scripts/check_typing.py
+
+The script builds and installs the checkout into a temporary directory
+and runs strict mypy against ``tests/typing/public_api.py`` outside the source
+tree. It checks that the installed package includes ``py.typed``.
+
 Generated persistence histories
 -------------------------------
 

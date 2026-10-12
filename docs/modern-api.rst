@@ -74,7 +74,7 @@ typed as that class, so type checkers verify arguments and return values::
     with coopy.control(coopy.open(TodoList, "data")) as todo:
         todo.done(todo.add("buy milk"))  # todo is TodoList
         print(todo.pending())            # list[str]
-        todo.add(42)                     # mypy: expected "str"
+        # todo.add(42)                   # mypy would reject int; add() expects str
 
 Declare ``_clock: coopy.Clock`` without a value: coopy injects a recording
 clock when the system opens and a replaying clock during recovery and on

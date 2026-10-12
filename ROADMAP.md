@@ -674,7 +674,7 @@ Planned. Goal: domain methods that fail can leave state unchanged instead of par
   | Timestamp | 2026-10-12 |
   | Complexity | M |
   | Details | Interactive CLI demo in docs/examples/todo_demo.py with colored prompt, todo CRUD (add, done, undone, delete, edit, search), snapshot, inspect, journal, and reopen commands. Uses a TodoList domain class with coopy persistence. |
-  | Commit | `c0763b56a5ce1def465d707d27286c342b1f1293` — implements F42. |
+  | Commit | `c0763b56a5ce1def465d707d27286c342b1f1293` — implements F42.; `7f87cce337f516642227df89ed05af5e715906fa` |
   | Validation | Ruff lint clean. Manual functional test (add, done, edit, delete, snapshot, reopen recovery). Full test suite: 640 passed, 31 skipped. |
   | Limitation | The reopen command can only be used once per session due to the linear prompt-loop design. |
   | Next step | Add a non-interactive scripted demo mode (e.g. --demo flag) that runs a preset sequence for CI or documentation screenshots. |

@@ -74,9 +74,11 @@ task when its outcome is needed. Cancelling before submission performs no call.
 
 Domain and persistence exceptions propagate to an active waiter unchanged;
 domain exceptions do not stop later queued calls. Normal ``@abort_exception``
-semantics still apply. Persistence failure can leave memory changed and causes
+and ``@transactional`` semantics still apply (see :doc:`method_decorators`).
+Persistence failure can leave memory changed and causes
 subsequent mutations/checkpoints to be refused by the underlying journal.
-There is no rollback. Closing does not re-raise errors from previous writes.
+The async facade adds no rollback of its own. Closing does not re-raise errors
+from previous writes.
 
 ``aclose`` rejects new calls once its coroutine executes, drains all accepted
 work, closes storage, and joins the writer without blocking the event loop.

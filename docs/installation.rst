@@ -15,6 +15,18 @@ Install into a virtual environment::
 The activation command above is for a POSIX shell. Start with the
 :doc:`tutorial` after installation.
 
+Optional snapshot compression
+-----------------------------
+
+Install the matching extra before using ``snapshot_compression="zstd"`` or
+``snapshot_compression="lz4"``::
+
+    python -m pip install "coopy[zstd,lz4]"
+
+Install the corresponding codec in every environment that restores compressed
+snapshots too. Pickle and registered JSON need no compression extra when
+snapshots are uncompressed. See :doc:`snapshots` for the format and limits.
+
 Installing from source
 ----------------------
 
@@ -30,3 +42,5 @@ the test and documentation dependencies::
 Use ``python -m pip install .`` for a non-editable source installation without
 the optional test and documentation tools. See :doc:`tests` for test commands
 and the local HTML documentation build.
+For linting, type checks, pre-commit hooks and tests of both optional codecs,
+follow :doc:`development`.

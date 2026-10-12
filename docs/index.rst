@@ -9,7 +9,8 @@ coopy
 **coopy** persists plain Python objects using snapshots and method-call
 journals. It is released under the `BSD License`_.
 
-Wrap your domain object with ``coopy.base.init_persistent_system`` and call
+Wrap your domain object with ``coopy.open`` (also available as
+``coopy.base.init_persistent_system``) and call
 methods on the returned proxy. No domain base class or ORM mapping is required.
 The object graph stays in memory, so it must fit in memory. Reopening loads
 the latest snapshot and replays subsequent journaled calls.
@@ -28,6 +29,10 @@ mutations and clock values, take a checkpoint, close, and reopen it. Read
 for the storage model. Domain classes can be fully type-annotated; see
 :doc:`modern-api` for how the proxy keeps their types.
 
+Use :doc:`concurrency` for asyncio callers and thread-safety guarantees,
+:doc:`migrations` for evolving stored state, and :doc:`cli` for inspecting,
+verifying and converting closed data directories. The :doc:`api` lists current
+signatures and available controls.
 
 Restrictions
 ------------
@@ -40,7 +45,9 @@ changes to exposed mutable objects are not journaled.
 
 Use one process and one persistent proxy per data directory; a second writable
 open raises ``LockError``. Only load trusted
-snapshots and journals: they contain pickles that can execute code. The
+snapshots and journals: the default pickle serializer can execute code while
+loading them. Opt-in JSON storage requires registered domain types
+(see :doc:`modern-api`); replication always uses pickle. The
 :doc:`persistence guide <usage>` describes strict recovery, salvage inspection,
 and buffered versus synchronous durability.
 
@@ -55,7 +62,8 @@ Contribute
 
 Source and issue tracking: https://github.com/felipecruz/coopy
 
-See :doc:`installation` and :doc:`tests` to set up a checkout and validate changes.
+See :doc:`installation`, :doc:`tests` and :doc:`development` to set up a checkout
+and validate changes.
 
 Contents
 --------

@@ -9,10 +9,10 @@
 **Persistence for plain Python objects. No database, no ORM, no schema - one line of code.**
 
 ```python
-from coopy.base import init_persistent_system
+import coopy
 
-todo = init_persistent_system(TodoList)   # that's the whole integration
-todo.add("write the README")              # journal this change
+with coopy.control(coopy.open(TodoList)) as todo:  # your domain class
+    todo.add("write the README")                  # journal this change
 ```
 
 Reopen the same data directory to restore your `TodoList` from its snapshot
@@ -93,35 +93,32 @@ class TodoList:
 From the same directory, run this once to create and reopen a persistent list:
 
 ```python
-from coopy.base import init_persistent_system
+import coopy
 from todo_domain import TodoList
 
-todo = init_persistent_system(TodoList)
-try:
+with coopy.control(coopy.open(TodoList)) as todo:
     todo.add("buy milk")
     todo.add("write the README")
     todo.done(0)
     print(todo.pending())   # ['write the README'] on the first run
-finally:
-    todo.close()
 
-todo = init_persistent_system(TodoList)
-try:
+with coopy.control(coopy.open(TodoList)) as todo:
     print(todo.pending())   # the same list, recovered from disk
-finally:
-    todo.close()
 ```
 
 Data is stored in a directory named after your class (`todolist/` here).
-Pass `basedir="some/dir"` to choose another location; its parent must exist.
+Pass `basedir="some/dir"` or a `pathlib.Path` to choose another location;
+coopy creates missing parent directories.
 Use one process and one persistent proxy per data directory: a writable open
 locks the directory, and a second one raises `LockError` until the first is
 closed (network filesystems may not honor the lock). The directory's
 `coopy.json` manifest records its format version, serializer and signing, and
 reopening with different settings or with an older coopy than the format needs
 raises `FormatError` before anything is decoded. Stop writers
-before closing. Closing does not take a snapshot. Running the writes above
-again adds more items to the existing list.
+before leaving the context, which closes the proxy without taking a snapshot.
+Running the writes above again adds more items to the existing list.
+
+Logging is application-controlled; opening a system does not create a log file.
 
 ## The rules
 
@@ -132,7 +129,8 @@ That means:
   modify an object returned by a method directly, that change is not
   journaled.
 - **Use `self._clock` for time.** Call `self._clock.now()`, `utcnow()` or
-  `today()` instead of `datetime.now()`. coopy records the value and hands
+  `today()` instead of `datetime.now()`. Timezone-aware `now(tz)`, `time()`
+  and `monotonic()` are also supported. coopy records the value and hands
   back the same one on replay. Source validation flags direct clock, `time`,
   `random`, `uuid`, `os.urandom` and `secrets` calls (pass
   `validation="strict"` to reject them all at open time), but cannot prove
@@ -143,7 +141,9 @@ That means:
   are stored in the journal, so keep real secrets out of it.
 - **No other outside input inside methods** - no network calls or file reads.
   Do those outside and pass the results in as arguments.
-- **Arguments and state must be picklable.**
+- **Arguments and state must be serializable.** Pickle is the default;
+  opt-in JSON requires a type registry for domain objects. See the
+  [serialization guide](docs/modern-api.rst#serialization-and-schema-migration).
 
 ## Type hints
 
@@ -192,7 +192,7 @@ from todo_domain import TodoList
 with coopy.control(coopy.open(TodoList, "data")) as todo:  # todo: TodoList
     todo.done(todo.add("buy milk"))
     print(todo.pending())                                    # list[str]
-    todo.add(42)  # mypy: incompatible type "int"; expected "str"
+    # todo.add(42)  # mypy would reject int; add() expects str
 ```
 
 `coopy.open` is an alias of `init_persistent_system`. `coopy.control(todo)`
@@ -215,14 +215,17 @@ as `RecoveryResult[TodoList]`. See the
 **Snapshots** keep restarts fast:
 
 ```python
-todo = init_persistent_system(TodoList)
-try:
-    todo.take_snapshot()               # take one now
-    todo.start_snapshot_manager(3600)  # first background snapshot after an hour
+with coopy.control(coopy.open(TodoList)) as todo:
+    persistence = coopy.control(todo)
+    persistence.take_snapshot()               # take one now
+    persistence.start_snapshot_manager(3600)  # first snapshot after an hour
     # Run your application here.
-finally:
-    todo.close()                       # stops the snapshot timer
+# Context exit closes storage and stops the snapshot timer.
 ```
+
+Old snapshots and journals remain until explicitly pruned. See the
+[checkpoint and retention guide](docs/snapshots.rst) before using
+`coopy.control(todo).prune(keep=3)` on an open system.
 
 **Replication** is experimental. A new replica receives the primary's state
 and queued actions before becoming readable. From a source checkout, run the
@@ -248,14 +251,17 @@ Buffered writes flush to the operating system, but do not sync every action to
 disk. For per-action `os.fsync` before acknowledgment, open with:
 
 ```python
-todo = init_persistent_system(TodoList, durability="sync")
+with coopy.control(coopy.open(TodoList, durability="sync")) as todo:
+    todo.add("persist before acknowledging")
 ```
 
 Choose the policy on each open and close the proxy as above. Synchronous mode
 requires POSIX directory-sync support and remains subject to filesystem and
 device guarantees. A `coopy.journal.PersistenceError` can occur after memory
-has changed or a record has persisted; there is no rollback. Stop writers and
-inspect recovery before retrying a failed mutation.
+has changed or a record has persisted. Rollback is limited to
+`@transactional` calls whose failed record is confirmed discarded; see
+[decorator semantics](docs/method_decorators.rst). Stop writers and inspect
+recovery before retrying a failed mutation.
 
 For explicit inspection of damaged, trusted storage, `recovery="salvage"`
 returns a `RecoveryResult` containing `system` and `report`, rather than a
@@ -265,9 +271,11 @@ files. Preserve a backup first; salvage is not a repair operation. Read the
 
 ## Good to know
 
-- **Security:** journals, snapshots and replication use `pickle`, which can
-  run arbitrary code when loaded. Only restore data directories you trust,
-  and only replicate between trusted hosts on a trusted network.
+- **Security:** the default disk serializer and all replication use `pickle`,
+  which can run arbitrary code when loaded. Only restore data directories
+  you trust. JSON storage does not change the replication protocol; use
+  trusted hosts on a trusted network. Optional HMAC signing authenticates
+  storage but does not encrypt it or make untrusted pickle safe.
 - **Replay:** keep external effects outside journaled methods; recovery can
   execute those methods again. Use compatible, importable domain classes.
 - **Python:** 3.10 or newer. Python 2 support ended with coopy 0.4.x.
@@ -280,21 +288,30 @@ The checkout includes an [executable tutorial](docs/tutorial.rst),
 [decorator semantics](docs/method_decorators.rst), and
 [checkpoint guarantees](docs/snapshots.rst).
 
+For other workflows, see the [typed API and serializers](docs/modern-api.rst),
+[async callers and concurrency](docs/concurrency.rst),
+[schema migrations](docs/migrations.rst), and
+[command-line inspection, verification and conversion](docs/cli.rst).
+
 ## Development
 
 ```sh
 git clone https://github.com/felipecruz/coopy.git
 cd coopy
-python -m pip install -e ".[test,docs]"
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[dev,test,docs,zstd,lz4]"
 python -m pytest --verbose -W error::DeprecationWarning
 python -m pytest --cov-report html --cov coopy  # report in htmlcov/
-python -m sphinx -W --keep-going -b html docs build/docs
+python -m sphinx -W --keep-going -E -a -b html docs build/docs
 ```
 
 Open `build/docs/index.html` for the local guide. See
 [testing documentation](docs/tests.rst) for focused example checks. `make test`
 also runs the tests, but first removes build outputs, coverage reports, and
 coopy logs through `make clean`.
+The [development guide](docs/development.rst) covers linting, type checking,
+pre-commit hooks, and the CI coverage gate.
 
 Contributions are welcome - fork the repo and open a pull request.
 

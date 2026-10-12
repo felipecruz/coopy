@@ -16,11 +16,13 @@ A new directory gets an initial snapshot. Existing data replaces the supplied
 object with the latest snapshot, then replays later journaled calls. See the
 complete, runnable :doc:`tutorial`.
 
-Pass ``basedir`` as a string. Its parent directory must exist; coopy creates
-only the final directory. Without it, the lowercased class name is used relative
-to the current working directory. Prefer an absolute path and keep the working
-directory stable while a proxy is open. ``coopy.log`` is written in the current
-working directory, separately from persistence files.
+Pass ``basedir`` as a string or ``os.PathLike[str]`` (including ``pathlib.Path``).
+Coopy creates missing parent directories. Without it, the lowercased class name
+is used relative to the current working directory. Prefer an absolute path and
+keep the working directory stable while a proxy is open. Opening a system does not configure
+logging or create a log file. Applications own their logging configuration;
+``coopy.logging_config(directory)`` explicitly enables a rotating ``coopy.log``
+in an existing directory (see :doc:`modern-api`).
 
 Use one owning process and one persistent proxy per data directory. A writable
 open takes an exclusive lock on ``coopy.lock`` in the data directory
@@ -55,10 +57,22 @@ manifest instead of failing while decoding. Keep a copy, or open with
 ``recovery="salvage"`` (which never writes), if an older coopy must still
 read the directory.
 
-Stop application callers, then call ``close()`` in
-``finally`` to stop the snapshot timer and close subscribers. There is no proxy
-context manager. Do not reuse a closed proxy. Reopen with the same data path
-and compatible, importable domain classes. ``close()`` does not take a snapshot.
+Use a context manager to close storage and stop the snapshot timer::
+
+    import coopy
+    from todo_domain import TodoList  # your importable domain class
+
+    with coopy.control(coopy.open(TodoList, "data")) as todo:
+        todo.add("buy milk")
+
+``coopy.open`` aliases ``init_persistent_system``. Direct ``with coopy.open(...)``
+also works; the ``coopy.control`` form preserves the domain type for type
+checkers. For explicit cleanup, call ``coopy.control(system).close()`` in
+``finally``. Controls accessed this way cannot collide with a domain method
+named ``close`` or ``take_snapshot``. Stop application callers before closing
+or leaving the context. Close is idempotent and does not take a snapshot;
+subsequent domain calls raise ``LifecycleError``. Reopen with the same data
+path and compatible, importable domain classes.
 
 ``init_system(obj, subscribers)`` is a low-level proxy constructor in
 ``coopy.base``; it does not configure disk persistence. The old ``master``,
@@ -73,8 +87,9 @@ What gets recorded
 An ordinary method call through the proxy runs under a reentrant lock, then
 records its method name, arguments, recorded clock results, and failure outcome.
 Calls on ``self`` inside the domain are part of that outer action; they do not
-create separate proxy actions. The domain must be pickleable, and arguments
-must be pickleable when journaled. Prefer immutable values and stable IDs over
+create separate proxy actions. State and arguments must be supported by the
+configured serializer: pickle is the default, and registered JSON is opt-in
+(see :doc:`modern-api`). Prefer immutable values and stable IDs over
 passing references to existing domain objects.
 
 ``@readonly`` methods skip the journal. ``@abort_exception`` omits failed calls
@@ -106,10 +121,11 @@ Deterministic replay and external effects
 Recovery runs domain methods again; it does not just assign their old results.
 Use ``self._clock.now(timezone.utc)``, ``now()``, ``utcnow()``, ``today()``,
 ``time()`` and ``monotonic()`` inside domain methods to replay the original time
-values. Capture randomness, environment-dependent
-values, and external inputs before calling the proxy and pass immutable values
-as arguments. Do not rely on network responses or current file contents during
-replay. The clock validator is a limited source check, not a determinism proof.
+values. Use ``self._env`` for recorded random values, UUIDs and tokens
+(see :doc:`use_env`), or capture them before calling the proxy and pass them
+as arguments. Pass other external inputs as immutable arguments too. Do not
+rely on network responses or current file contents during replay. The source
+validator is a limited check, not a determinism proof.
 
 Sending email, charging an account, or writing a file inside a journaled method
 can happen again during recovery or replication. Keep external effects outside
@@ -121,7 +137,9 @@ back up data and test recovery against compatible application versions.
 Trusted storage and recovery procedure
 ------------------------------------------
 
-Snapshots and journals contain Python pickles. Loading them can execute code.
+With the default serializer, snapshots and journals contain Python pickles.
+Loading them can execute code. Opt-in JSON uses trusted registered decoders
+and still replays application methods; see :doc:`modern-api` for its limits.
 Open only storage from trusted sources and protect write access to the data
 directory and backups. Do not load a downloaded or user-supplied database to
 inspect it. Replication also requires trusted peers and networks.
@@ -308,9 +326,12 @@ loss. Keep backups and use a durable existing parent directory.
 
 A serialization, short write, write, flush, sync, or action-triggered rotation
 failure raises ``coopy.journal.PersistenceError`` with the underlying cause in
-``__cause__``. **Memory may already be changed; there is no rollback.** A record
-may be absent, partial, or fully persisted despite the exception. A persistence
-error takes precedence over a simultaneous domain exception. The journal
+``__cause__``. **Memory may already be changed.** Non-transactional calls do
+not roll back. A ``@transactional`` call rolls back only when its failed record
+is confirmed discarded; complete records and shared batch-sync failures are
+not rolled back (see :doc:`method_decorators`). A record may be absent, partial,
+or fully persisted despite the exception. A persistence error takes precedence
+over a simultaneous domain exception. The journal
 refuses subsequent mutations and checkpoints through that proxy; readonly
 inspection remains available. Stop callers, close the proxy (handling close
 errors), preserve storage, and inspect strict recovery or explicit salvage.
