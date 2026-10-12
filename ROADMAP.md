@@ -502,7 +502,7 @@ Planned. Goal: users can evolve their data, manage disk usage and inspect storag
   | Timestamp | 2026-10-12 |
   | Complexity | M |
   | Details | Added `until` parameter (int action count or datetime) to `recover()` and `init_persistent_system(..., recovery="salvage")`. Added `coopy.replay()` convenience function for read-only point-in-time recovery. `RecoveryReport.bounded` flag indicates when replay stopped at a bound. Nothing is written to storage. |
-  | Commit | `2dcb772fd030622309b3fb0cf1b2d50fec9ce406` — implements F31. |
+  | Commit | `2dcb772fd030622309b3fb0cf1b2d50fec9ce406` — implements F31.; `02103669e6584dd3ba5c3518fee8920334d0d6e5` |
   | Validation | 20 dedicated tests in `tests/functional/test_point_in_time.py` covering action count bounds, datetime bounds, `replay()` function, validation errors, post-snapshot replay, and nothing-written checks. Full suite: 640 passed, 31 skipped. |
   | Limitation | Datetime bounds use the action's recording timestamp (`Action.timestamp`), not domain clock values; actions recorded within the same wall-clock instant may all be included or excluded together. |
   | Next step | Support `ActionRef` as a named reference type beyond raw int for clearer API ergonomics. |
@@ -515,7 +515,7 @@ Planned. Goal: users can evolve their data, manage disk usage and inspect storag
   | Timestamp | 2026-10-12 |
   | Complexity | S |
   | Details | Added `close(snapshot=True)` to `CoopyProxy` and `PersistenceControl`. Added `snapshot_on_close` property on `PersistenceControl` for the context-manager path. Snapshot failures during close are reported and leave the previous checkpoint usable. Default remains `snapshot=False`. |
-  | Commit | `f0a4b7e2b50ed3e427865757b07397eaef25e58e` — implements F32. |
+  | Commit | `f0a4b7e2b50ed3e427865757b07397eaef25e58e` — implements F32.; `02103669e6584dd3ba5c3518fee8920334d0d6e5` |
   | Validation | 9 dedicated tests in `tests/functional/test_snapshot_on_close.py` covering default no-snapshot, close with snapshot, snapshot failure recovery, idempotent double close, context-manager path, and PersistenceControl. Full suite: 640 passed, 31 skipped. |
 
 ## v0.7.1 — Clock improvements
@@ -665,6 +665,19 @@ Planned. Goal: domain methods that fail can leave state unchanged instead of par
   | Limitation | If truncating the failed record or syncing the truncation fails, the call is not rolled back (`record_discarded` is False) and the record may replay. |
   | Next step | Add an optional per-system policy (for example `open(..., rollback="all")`) if users want every write transactional despite the cost. |
   | Next step | Evaluate a cheaper rollback (domain-supplied `__coopy_copy__` hook or undo log) for large domains. |
+
+- [x] **F42 — Create a demo that showcases coopy.** Create a nice command line “prompt style” interface that manipulates our todo list. it creates, deletes, searches, take snapshopts, inspect journal/snapshotc etc
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-12 |
+  | Complexity | M |
+  | Details | Interactive CLI demo in docs/examples/todo_demo.py with colored prompt, todo CRUD (add, done, undone, delete, edit, search), snapshot, inspect, journal, and reopen commands. Uses a TodoList domain class with coopy persistence. |
+  | Commit | `c0763b56a5ce1def465d707d27286c342b1f1293` — implements F42. |
+  | Validation | Ruff lint clean. Manual functional test (add, done, edit, delete, snapshot, reopen recovery). Full test suite: 640 passed, 31 skipped. |
+  | Limitation | The reopen command can only be used once per session due to the linear prompt-loop design. |
+  | Next step | Add a non-interactive scripted demo mode (e.g. --demo flag) that runs a preset sequence for CI or documentation screenshots. |
 
 ## Validation record
 
