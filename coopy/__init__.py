@@ -11,6 +11,7 @@ from .error import ClockDivergenceError as ClockDivergenceError
 from .error import CoopyError as CoopyError
 from .foundation import Clock as Clock
 from .prune import prune as prune
+from .restore import replay as replay
 from .serialization import ActionSchemas as ActionSchemas
 from .serialization import JsonSerializer as JsonSerializer
 from .serialization import PickleSerializer as PickleSerializer
@@ -26,6 +27,7 @@ __all__ = [
     "logging_config",
     "convert",
     "prune",
+    "replay",
     "CoopyError",
     "Clock",
     "Env",

@@ -33,7 +33,7 @@ from coopy.journal import DiskJournal, discard_failed_record
 from coopy.locking import DirectoryLock
 from coopy.network.default_select import CopyNet, CopyNetSlave
 from coopy.prune import PruneReport, prune_files, validate_prune
-from coopy.restore import RecoveryReport, RecoveryResult, recover
+from coopy.restore import RecoveryReport, RecoveryResult, recover, replay
 from coopy.serialization import ActionSchemas, Serializer, StateSchemas
 from coopy.snapshot import SnapshotJob, SnapshotManager, SnapshotTimer, fork_supported
 from coopy.utils import action_check, inject, method_or_none
@@ -116,6 +116,7 @@ def init_persistent_system(
     basedir: PathLike | None = None,
     *,
     recovery: Literal["salvage"],
+    until: int | datetime | None = None,
     durability: Literal["buffered", "sync"] = "buffered",
     secret: Secret | None = None,
     snapshot_compression: str | None = None,
@@ -133,6 +134,7 @@ def init_persistent_system(
     basedir: PathLike | None = None,
     *,
     recovery: Literal["salvage"],
+    until: int | datetime | None = None,
     durability: Literal["buffered", "sync"] = "buffered",
     secret: Secret | None = None,
     snapshot_compression: str | None = None,
@@ -181,6 +183,7 @@ def init_persistent_system(
     basedir: PathLike | None = None,
     *,
     recovery: str = "strict",
+    until: int | datetime | None = None,
     durability: str = "buffered",
     secret: Secret | None = None,
     snapshot_compression: str | None = None,
@@ -200,6 +203,8 @@ def init_persistent_system(
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
     if durability not in ("buffered", "sync"):
         raise ConfigurationError("durability must be 'buffered' or 'sync'")
+    if until is not None and recovery != "salvage":
+        raise ConfigurationError("until requires recovery='salvage'")
     check_policy(validation)
 
     # a system object is needed in order to coopy work
@@ -235,6 +240,7 @@ def init_persistent_system(
             serializer=serializer,
             schemas=schemas,
             state_schemas=state_schemas,
+            until=until,
         )
 
     # check if basedir exists, if not, create it

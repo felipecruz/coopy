@@ -3,6 +3,7 @@
 import copy
 import inspect
 from dataclasses import dataclass, field
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from pickle import Unpickler
@@ -41,6 +42,7 @@ class RecoveryReport:
     expected_failures: int = 0
     legacy_actions: list[RecoveryPosition] = field(default_factory=list)
     stop: RecoveryIssue | None = None
+    bounded: bool = False
 
     @property
     def complete(self):
@@ -74,12 +76,18 @@ def recover(
     serializer=None,
     schemas=None,
     state_schemas=None,
+    until=None,
 ):
     """Replay in order, stopping at the first detected defect.
 
     Strict mode raises without returning state. Salvage returns an inspection
     result, never a writable proxy. A divergent method may already have changed
     that result's state; the report marks it and excludes it from replayed.
+
+    ``until`` limits replay to a point in time. An ``int`` stops after that
+    many actions (one-based); a ``datetime`` stops before the first action
+    whose timestamp exceeds the bound. Bounds before the oldest kept
+    checkpoint raise ``ConfigurationError``.
     """
     from coopy.serialization import ActionSchemas, StateSchemas
 
@@ -88,6 +96,10 @@ def recover(
     validate_secret(secret)
     if mode not in ("strict", "salvage"):
         raise ConfigurationError("recovery must be 'strict' or 'salvage'")
+    if until is not None and not isinstance(until, (int, datetime)):
+        raise ConfigurationError("until must be an int (action count) or a datetime")
+    if isinstance(until, int) and until < 1:
+        raise ConfigurationError("until action count must be >= 1")
     basedir = Path(basedir)
     # Newer formats and mismatched settings fail before anything is decoded.
     manifest.check(basedir, serializer=serializer, secret=secret)
@@ -215,6 +227,14 @@ def recover(
                         )
                         if raised is None:
                             report.legacy_actions.append(position)
+                        # Check point-in-time bound before executing.
+                        if until is not None:
+                            if isinstance(until, int) and report.replayed >= until:
+                                report.bounded = True
+                                return RecoveryResult(recovered, report)
+                            if isinstance(until, datetime) and action.timestamp > until:
+                                report.bounded = True
+                                return RecoveryResult(recovered, report)
                         # A missing method is not an expected domain exception.
                         try:
                             method = getattr(recovered, action.action)
@@ -260,6 +280,46 @@ def recover(
         recovered._clock = current_clock
         if recovered is not None:
             vars(recovered).pop("_env", None)
+
+
+def replay(
+    obj,
+    basedir,
+    *,
+    until=None,
+    secret=None,
+    serializer=None,
+    schemas=None,
+    state_schemas=None,
+):
+    """Rebuild read-only state up to a bound without writing anything.
+
+    ``until`` is an ``int`` (action count, one-based) or a ``datetime``
+    (stop before the first action whose timestamp exceeds the bound).
+    Returns a ``RecoveryResult`` whose ``.system`` is the rebuilt object
+    and ``.report`` describes what was replayed. Nothing is written.
+
+    Raises ``ConfigurationError`` when ``until`` falls before the oldest
+    kept checkpoint.
+    """
+    from coopy.foundation import RecordClock
+    from coopy.utils import inject
+
+    if obj is None:
+        raise ConfigurationError("Must provide a system object or class")
+    if isinstance(obj, type):
+        obj = obj()
+    inject(obj, "_clock", RecordClock())
+    return recover(
+        obj,
+        basedir,
+        mode="salvage",
+        secret=secret,
+        serializer=serializer,
+        schemas=schemas,
+        state_schemas=state_schemas,
+        until=until,
+    )
 
 
 def restore(system, basedir, *, secret=None, serializer=None, schemas=None, state_schemas=None):
