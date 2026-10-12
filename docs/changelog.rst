@@ -3,13 +3,48 @@
 Changelog
 =========
 
-Unreleased
-----------
+0.7.0 (2026-10-12)
+------------------
+
+Migrations, operational tooling, a reworked recorded clock with a recorded
+environment for random values, and transactional rollback.
+
+Upgrading
+~~~~~~~~~
+
+These changes can break existing applications or deployments:
+
+* **On-disk format 2.** Journals now record which clock call produced each
+  value. The first writable open with 0.7.0 moves a directory's ``coopy.json``
+  manifest to format 2; from then on coopy 0.6.0 refuses it with
+  ``FormatError`` before decoding anything. Back up data directories you may
+  need to open with 0.6.0 again. Older journals still replay.
+* **Stricter clock replay.** A replayed method that calls a different clock
+  method, receives a value of the wrong type, or makes more or fewer clock
+  calls than were recorded now raises ``coopy.ClockDivergenceError`` instead of
+  continuing. Recovery of code that changed its clock usage after journaling
+  can therefore stop; use ``recovery="salvage"`` to inspect such a directory.
+* **Per-call clocks.** ``obj._clock.results`` is no longer filled after a call;
+  read the journaled action's ``results`` instead.
+* **More validation warnings.** Aliased and module-qualified
+  ``datetime``/``date`` calls and ``time``, ``random``, ``uuid``,
+  ``os.urandom`` and ``secrets`` calls are now detected. The default
+  ``validation="warn"`` logs them and still rejects only the literal
+  ``datetime.now()``/``date.today()`` form; ``validation="strict"`` rejects
+  them all.
+* **Deprecations.** ``coopy.tests.utils.TestClock`` and ``TestSystemMixin``
+  are deprecated in favour of ``coopy.testing``; together with
+  ``start_master``/``start_slave`` they will be removed in v0.9.
+
+Changes
+~~~~~~~
 
 * ``coopy.replay(..., until=...)`` and ``coopy.open(..., recovery="salvage",
   until=...)`` rebuild read-only state up to an action count or a
-  ``datetime`` without writing. Bounds are applied from the latest checkpoint;
-  see :doc:`usage`.
+  ``datetime`` without writing. Bounded replay starts from the oldest kept
+  checkpoint, so counts start there and any later moment can be reached; a
+  ``datetime`` before that checkpoint raises ``ConfigurationError``. See
+  :doc:`usage`.
 * ``close(snapshot=True)`` and ``coopy.control(system).snapshot_on_close``
   take a snapshot while closing, so the next open replays nothing. The
   default is unchanged. See :doc:`snapshots`.

@@ -292,14 +292,16 @@ bound is accepted by ``coopy.open(..., recovery="salvage", until=...)``;
 writable opens reject it. The result is a ``RecoveryResult`` like salvage, not
 a writable proxy.
 
-.. warning::
-
-   Replay starts from the **latest** checkpoint. An action count is counted
-   from that checkpoint, and a bound earlier than it is not detected yet: the
-   result is the checkpoint's state, not the state at the bound, and
-   ``report.bounded`` is false. Keep older snapshots (see :doc:`snapshots` on
-   pruning) and check ``result.report.checkpoint`` before relying on a bound
-   that may predate the latest checkpoint.
+Bounded replay starts from the **oldest kept** checkpoint and replays every
+later journal, so any moment after that checkpoint can be rebuilt, including
+moments before newer snapshots. Action counts are counted from that
+checkpoint: in a directory that was never pruned, it is the empty state
+created on first open, so ``until=N`` means the first ``N`` actions ever
+recorded. A ``datetime`` earlier than the oldest kept checkpoint raises
+``ConfigurationError``. Pruning (see :doc:`snapshots`) moves that starting
+point forward, so keep older checkpoints for as long as you need to look back.
+Replaying from the oldest checkpoint can take longer than a normal open,
+which starts from the latest one.
 
 Durability policies
 -------------------

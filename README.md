@@ -225,8 +225,8 @@ with coopy.control(coopy.open(TodoList)) as todo:
 ```
 
 `coopy.replay(TodoList, "todolist", until=2)` rebuilds the state after the
-first two actions (or up to a `datetime`) without writing anything; bounds are
-counted from the latest checkpoint.
+first two actions (or up to a `datetime`) without writing anything; it replays
+from the oldest kept checkpoint, so earlier moments stay reachable until pruned.
 
 Old snapshots and journals remain until explicitly pruned. See the
 [checkpoint and retention guide](docs/snapshots.rst) before using

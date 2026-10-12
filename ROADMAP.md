@@ -9,7 +9,7 @@ Evidence reviewed on 2026-10-09: `README.md` first, then implementation and test
 
 History is non-shallow with 122 reachable commits. Review covered the latest 50, older capability-specific diffs, and rename-following README history. The only local tag is `0.4b`, matching its historical package manifest; subsequent manifests reached `0.4.6b`. Current code, README, and changelog declare `0.5.0`, but there is no local 0.5.0 tag or verified publication. CI defines testing on Python 3.10–3.14 for Linux/macOS and tag-triggered PyPI publishing; configuration is not evidence of successful runs or releases. Core persistence already exists in the initial import, so its original implementation provenance cannot be reconstructed. Old planning files only ask for a stable release and finished documentation. The proposed priority is therefore recoverable local persistence before wider replication use.
 
-**Release plan (updated 2026-10-10).** PyPI's latest release is still 0.3.1; `0.4b` exists only as a git tag, and 0.5.0 was declared in code but never tagged or published. The next release is **0.6.0**. It ships everything already implemented below (F1–F21) together with the release blockers F22–F25. Development milestones that were numbered v0.5.1, v0.6.0 and v0.7.0 while that work was planned are kept as subsections of the 0.6.0 release, so their history and evidence stay intact. Migrations and operational tooling follow in v0.7.0, and transactional rollback in v0.8.0. Distribution and decentralization stay in [FUTURE.md](FUTURE.md) Parts 2 and 3.
+**Release plan (updated 2026-10-12).** 0.6.0 was published to PyPI on 2026-10-10 (tag `v0.6.0`). The next release is **0.7.0**: it ships F26–F42, the work planned as v0.7.0, v0.7.1 and v0.8.0, which is kept below as subsections of the 0.7.0 release. Before 0.6.0, PyPI's latest release was 0.3.1; `0.4b` exists only as a git tag, and 0.5.0 was declared in code but never tagged or published. The next release is **0.6.0**. It ships everything already implemented below (F1–F21) together with the release blockers F22–F25. Development milestones that were numbered v0.5.1, v0.6.0 and v0.7.0 while that work was planned are kept as subsections of the 0.6.0 release, so their history and evidence stay intact. Distribution and decentralization stay in [FUTURE.md](FUTURE.md) Parts 2 and 3.
 
 Checked items record verified implemented behavior. AIFlow also uses checks as request selections: clear the completed selections and select the desired planned items before copying an implementation request. Done timestamps record this audit date, not release dates.
 
@@ -414,9 +414,13 @@ These items change the on-disk format or protect data, so they must land before 
   | Next step | Check the Codecov dashboard for felipecruz/coopy and fix the default branch or upload settings if the badge stays "unknown". |
   | Next step | Create a GitHub release for `v0.6.0` with the changelog's Upgrading section. |
 
-## v0.7.0 — Migrations and operations
+## v0.7.0 — Migrations, operations, clock and transactions
 
-Planned. Goal: users can evolve their data, manage disk usage and inspect storage without writing custom scripts. Exit criterion: each item meets its acceptance checks with documentation and tests against stored fixtures from 0.6.0.
+Next release. It contains the migrations and operations work (F26–F32), the clock improvements (F34–F41), transactional rollback (F33) and the demo (F42). Exit criterion: the full hosted CI matrix is green on the release commit, the changelog has a dated 0.7.0 entry with upgrade notes (format 2, stricter clock replay), and the `v0.7.0` tag publishes to PyPI.
+
+### Implemented: migrations and operations
+
+Originally planned as v0.7.0. Goal: users can evolve their data, manage disk usage and inspect storage without writing custom scripts. Exit criterion: each item meets its acceptance checks with documentation and tests against stored fixtures from 0.6.0.
 
 - [x] **F26 — Migrate snapshot state with registered upgraders.** Record a domain state version in each snapshot (from a class attribute such as `__coopy_version__`) and let applications register upgraders, mirroring F17's `ActionSchemas`: `StateSchemas().register(TodoList, from_version=1, upgrade=fn)`. Recovery applies upgraders in order before replay; unknown or missing versions fail through the recovery policy. Acceptance: 0.6.0 snapshot fixtures upgrade across several versions; strict mode fails on a missing upgrader and salvage reports it; F24's `__setstate__` pattern keeps working.
 
@@ -505,6 +509,7 @@ Planned. Goal: users can evolve their data, manage disk usage and inspect storag
   | Commit | `2dcb772fd030622309b3fb0cf1b2d50fec9ce406` — implements F31.; `02103669e6584dd3ba5c3518fee8920334d0d6e5` |
   | Validation | 20 dedicated tests in `tests/functional/test_point_in_time.py` covering action count bounds, datetime bounds, `replay()` function, validation errors, post-snapshot replay, and nothing-written checks. Full suite: 640 passed, 31 skipped. |
   | Limitation | Datetime bounds use the action's recording timestamp (`Action.timestamp`), not domain clock values; actions recorded within the same wall-clock instant may all be included or excluded together. |
+  | Limitation | Fixed 2026-10-12 during release preparation: the first implementation always replayed from the latest checkpoint, so a bound earlier than it silently returned the newer state (`until=datetime(2000, 1, 1)` returned the full state with `bounded` false) and counts started after it. Bounded replay now starts from the oldest kept checkpoint and replays every later journal; counts start there, and a datetime before that checkpoint's write time raises `ConfigurationError`. Unbounded opens still start from the latest checkpoint. Five regression tests cover bounds between checkpoints, pruning and signed storage. |
   | Next step | Support `ActionRef` as a named reference type beyond raw int for clearer API ergonomics. |
 
 - [x] **F32 — Optionally snapshot on close.** `close()` never takes a snapshot, so every restart replays the whole journal since the last checkpoint. Add `close(snapshot=True)` and a matching context-manager option, keeping the current default. Acceptance: with the option, the next open replays no actions; snapshot failures during close are reported and leave the previous checkpoint usable.
@@ -518,9 +523,9 @@ Planned. Goal: users can evolve their data, manage disk usage and inspect storag
   | Commit | `f0a4b7e2b50ed3e427865757b07397eaef25e58e` — implements F32.; `02103669e6584dd3ba5c3518fee8920334d0d6e5` |
   | Validation | 9 dedicated tests in `tests/functional/test_snapshot_on_close.py` covering default no-snapshot, close with snapshot, snapshot failure recovery, idempotent double close, context-manager path, and PersistenceControl. Full suite: 640 passed, 31 skipped. |
 
-## v0.7.1 — Clock improvements
+### Implemented: clock improvements (planned as v0.7.1)
 
-Planned. Goal: the recorded clock is correct on replay, visible to type checkers, easy to test with, and covers the other common sources of non-determinism. Findings below were reproduced against `coopy/foundation.py` and `coopy/validation.py` on 2026-10-11. Exit criterion: each item meets its acceptance checks, existing journals with bare clock values still replay, and the README, docs and IDEAS.md examples use the new public clock type.
+Goal: the recorded clock is correct on replay, visible to type checkers, easy to test with, and covers the other common sources of non-determinism. Findings below were reproduced against `coopy/foundation.py` and `coopy/validation.py` on 2026-10-11. Exit criterion: each item meets its acceptance checks, existing journals with bare clock values still replay, and the README, docs and IDEAS.md examples use the new public clock type.
 
 - [x] **F34 — Fix replay clock checks and divergence errors.** `RestoreClock` checks only the type of the next recorded value, not which method recorded it: a method that recorded `now()` but calls `today()` on replay silently receives the `datetime`, because `datetime` subclasses `date`. A type mismatch raises `TypeError: This call returns a <class 'type'>` because the message formats `datetime.__class__`. When replay makes more clock calls than were recorded (for example after a code change), it raises a bare `IndexError: list index out of range`. Raise a `ClockDivergenceError` (a `RecoveryError`-reportable subclass of `CoopyError`) naming the method, the expected and actual call, and the call index; strict recovery reports it and salvage stops there. Detect `today()` receiving a `datetime` value. Acceptance: fixtures for wrong method, wrong type, too many and too few clock calls fail with the new error in strict mode, salvage reports the position, replicas become unsynchronized with the same message, and correct journals replay unchanged.
 
@@ -646,9 +651,9 @@ Planned. Goal: the recorded clock is correct on replay, visible to type checkers
   | Limitation | Reading `obj._clock.results` after a call no longer returns that call's values; tools must use the journaled `Action.results`. |
   | Next step | Serialize journal publication for mutating `@unlocked` calls (lock only around publish) so concurrent unlocked writers cannot interleave journal records. |
 
-## v0.8.0 — Transactions
+### Implemented: transactions (planned as v0.8.0)
 
-Planned. Goal: domain methods that fail can leave state unchanged instead of partially mutated. Exit criterion: the chosen design is documented with its cost, and the opt-in mechanism passes fault tests.
+Goal: domain methods that fail can leave state unchanged instead of partially mutated. Exit criterion: the chosen design is documented with its cost, and the opt-in mechanism passes fault tests.
 
 - [x] **F33 — Roll back in-memory changes when a call fails.** `@abort_exception` keeps a failing call out of the journal but leaves its in-memory mutations in place, and synchronous-durability persistence failures can likewise leave memory changed. Evaluate copy-on-write or snapshot-and-restore rollback, choose an opt-in mechanism (for example `@transactional` or a per-system policy), and document its memory and latency cost. Acceptance: a failing transactional call leaves state equal to the state before the call, live and after restart; non-transactional behavior is unchanged; nested calls and replicas are defined.
 
