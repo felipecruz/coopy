@@ -1,7 +1,7 @@
 Persistence performance measurements
 ====================================
 
-F18 adds group commit, optional snapshot compression, and an opt-in POSIX fork
+coopy offers group commit, optional snapshot compression, and an opt-in POSIX fork
 path. These are workload-dependent options, not a throughput or pause guarantee.
 See :doc:`usage` for acknowledgment semantics and :doc:`snapshots` for fork safety.
 
@@ -23,7 +23,7 @@ to select a filesystem; otherwise storage uses the system temporary directory.
 Repeat both commands with ``--workers 1 --writes 1000 --actions 10000`` for the
 single-caller latency trade-off. Install the package/test environment as usual;
 the benchmark itself uses only the standard library. The after revision is the
-F18 implementation commit explicitly recorded in ``ROADMAP.md``.
+commit that introduced these options, recorded under F18 in ``ROADMAP.md``.
 
 The default workload measures three runs of 4,000 mutations with eight concurrent
 callers for each durability policy. Calls go through the proxy and return only

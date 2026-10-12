@@ -54,7 +54,7 @@ They cover close/reopen, checkpoint plus journal recovery, all recorded clock
 methods, readonly copies, decorator failures, and experimental replication.
 They also exercise snapshot-state migration and recorded random values.
 A separate process also reopens the tutorial's importable domain. The replication
-example needs local socket access. F13 acceptance tests additionally cover
+example needs local socket access. Replication bootstrap tests additionally cover
 concurrent catch-up with recorded clocks, fragmented and interrupted packets,
 authentication rejection, shutdown guards, and explicit reconnect.
 CI runs these tests and the Sphinx build. The generated guide is at

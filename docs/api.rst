@@ -17,6 +17,7 @@ Persistence and async controls
    coopy.open
    coopy.init_persistent_system
    coopy.control
+   coopy.replay
    coopy.convert
    coopy.prune
    coopy.prune.PruneReport

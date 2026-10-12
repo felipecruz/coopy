@@ -14,5 +14,4 @@ that respect it; it does not make arbitrary application code thread-safe.
 
 The historical Pyro example used obsolete APIs and is no longer maintained.
 No RPC framework integration is currently tested here. Network replication is
-a separate, experimental feature; see :doc:`replication` for its limitations
-and F13 status.
+a separate, experimental feature; see :doc:`replication` for its limitations.

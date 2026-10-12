@@ -274,6 +274,33 @@ policy below. An interrupted first initialization can leave an identity with
 no checkpoint: preserve it for inspection and initialize a separate empty
 directory rather than treating incomplete signed storage as a fresh system.
 
+Point-in-time inspection
+------------------------
+
+``coopy.replay`` rebuilds the state at an earlier point and returns it without
+writing anything, so it is safe to run next to a writer that holds the
+directory lock::
+
+    result = coopy.replay(TodoList, "data", until=2)        # first 2 actions
+    result = coopy.replay(TodoList, "data", until=moment)   # a datetime
+    result.system.pending()
+    result.report.bounded    # True when the bound stopped replay early
+
+``until`` is either an action count (one-based) or a ``datetime``; with a
+``datetime``, replay stops before the first action recorded after it. The same
+bound is accepted by ``coopy.open(..., recovery="salvage", until=...)``;
+writable opens reject it. The result is a ``RecoveryResult`` like salvage, not
+a writable proxy.
+
+.. warning::
+
+   Replay starts from the **latest** checkpoint. An action count is counted
+   from that checkpoint, and a bound earlier than it is not detected yet: the
+   result is the checkpoint's state, not the state at the bound, and
+   ``report.bounded`` is false. Keep older snapshots (see :doc:`snapshots` on
+   pruning) and check ``result.report.checkpoint`` before relying on a bound
+   that may predate the latest checkpoint.
+
 Durability policies
 -------------------
 

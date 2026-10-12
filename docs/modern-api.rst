@@ -247,7 +247,7 @@ backup.
 Trust boundaries
 ~~~~~~~~~~~~~~~~
 
-Never load arbitrary pickle. F14 HMAC integrity authenticates bytes before any
+Never load arbitrary pickle. HMAC integrity (``secret=``) authenticates bytes before any
 codec runs, but **does not make arbitrary pickle safe**, encrypt data, or prove
 freshness. A trusted signer can still produce an executable malicious pickle.
 Keep secrets outside storage. JSON never imports a class named by input, but

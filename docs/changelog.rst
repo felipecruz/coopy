@@ -6,6 +6,16 @@ Changelog
 Unreleased
 ----------
 
+* ``coopy.replay(..., until=...)`` and ``coopy.open(..., recovery="salvage",
+  until=...)`` rebuild read-only state up to an action count or a
+  ``datetime`` without writing. Bounds are applied from the latest checkpoint;
+  see :doc:`usage`.
+* ``close(snapshot=True)`` and ``coopy.control(system).snapshot_on_close``
+  take a snapshot while closing, so the next open replays nothing. The
+  default is unchanged. See :doc:`snapshots`.
+* ``docs/examples/todo_demo.py`` is an interactive todo-list demo with
+  ``snapshot``, ``inspect``, ``journal`` and ``reopen`` commands. See
+  :doc:`tutorial`.
 * ``@transactional`` (``coopy.decorators``): a failed call leaves the domain
   as it was before the call, live and after a restart. The proxy deep-copies
   the domain's attributes before each call and restores them in place when the

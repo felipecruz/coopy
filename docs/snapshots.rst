@@ -70,6 +70,30 @@ See :doc:`usage` for synchronous acknowledgments, strict recovery, and salvage.
 Mutations that bypass the proxy lock (including ``@unlocked`` methods) remain
 outside this checkpoint guarantee.
 
+.. _snapshot-on-close:
+
+Snapshot on close
+-----------------
+
+``close()`` does not take a snapshot by default, so the next open replays every
+action journaled since the last checkpoint. To checkpoint while closing::
+
+    persistence = coopy.control(todo)
+    persistence.close(snapshot=True)
+
+For a ``with`` block, set the option on the control handle; the snapshot is
+taken when the block exits::
+
+    with coopy.control(coopy.open(TodoList, "data")) as todo:
+        coopy.control(todo).snapshot_on_close = True
+        todo.add("milk")
+    # the next open replays no actions
+
+The snapshot is taken under the proxy lock before journals are closed. If it
+fails, the error is raised after the remaining cleanup, and the previous
+checkpoint and journals stay usable. A system opened without a snapshot
+manager has nothing to take, so the option is ignored there.
+
 Pruning old checkpoints
 -----------------------
 

@@ -115,7 +115,8 @@ closed (network filesystems may not honor the lock). The directory's
 `coopy.json` manifest records its format version, serializer and signing, and
 reopening with different settings or with an older coopy than the format needs
 raises `FormatError` before anything is decoded. Stop writers
-before leaving the context, which closes the proxy without taking a snapshot.
+before leaving the context, which closes the proxy. Closing takes no snapshot
+unless you set `coopy.control(todo).snapshot_on_close = True`.
 Running the writes above again adds more items to the existing list.
 
 Logging is application-controlled; opening a system does not create a log file.
@@ -223,6 +224,10 @@ with coopy.control(coopy.open(TodoList)) as todo:
 # Context exit closes storage and stops the snapshot timer.
 ```
 
+`coopy.replay(TodoList, "todolist", until=2)` rebuilds the state after the
+first two actions (or up to a `datetime`) without writing anything; bounds are
+counted from the latest checkpoint.
+
 Old snapshots and journals remain until explicitly pruned. See the
 [checkpoint and retention guide](docs/snapshots.rst) before using
 `coopy.control(todo).prune(keep=3)` on an open system.
@@ -283,6 +288,13 @@ files. Preserve a backup first; salvage is not a repair operation. Read the
 ## Documentation
 
 Full docs: https://coopy.readthedocs.io
+
+Want to see it working first? Run the interactive todo-list demo from a
+source checkout and try `add`, `journal`, `snapshot` and `reopen`:
+
+```sh
+python docs/examples/todo_demo.py ./my-todos
+```
 
 The checkout includes an [executable tutorial](docs/tutorial.rst),
 [decorator semantics](docs/method_decorators.rst), and

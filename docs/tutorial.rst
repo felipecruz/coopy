@@ -31,8 +31,24 @@ Both ``Wiki`` (a no-argument class) and ``Wiki()`` (an instance) are accepted by
 real application; the temporary directory here is deleted when the example
 finishes. Reopening from another process requires the same importable domain
 module and compatible code and dependencies. Always stop application writers
-and call ``close()`` before reopening; close does not take a final snapshot.
+and call ``close()`` before reopening. Closing does not take a snapshot unless
+you ask for one (see :ref:`snapshot-on-close`).
 
 For the storage contract and recovery precautions, read :doc:`usage` and
 :doc:`snapshots`. See :doc:`method_decorators` for failure behavior and
 :doc:`use_clock` for deterministic time handling.
+
+Interactive demo
+----------------
+
+``docs/examples/todo_demo.py`` is a small todo-list shell built on coopy. Run it
+from a source checkout and pass a directory to keep the data between runs::
+
+    python docs/examples/todo_demo.py ./my-todos
+
+Besides ``add``, ``done``, ``edit``, ``delete``, ``search`` and ``list``, it has
+persistence commands that show what coopy does underneath: ``snapshot`` takes a
+checkpoint, ``inspect`` shows the data directory, ``journal`` lists the
+recorded method calls, and ``reopen`` closes the system and recovers it from
+disk. Type ``help`` for the full list. Without a directory argument, the demo
+uses a temporary directory that is removed on exit.
