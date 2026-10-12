@@ -2,6 +2,7 @@
 
 import copy
 import inspect
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from io import BytesIO
@@ -67,6 +68,44 @@ class RecoveryError(CoopyError, RuntimeError):
         )
 
 
+def _replay_start(basedir, until):
+    """Return functions naming the checkpoint to load and the journals to replay.
+
+    Normal recovery starts from the latest checkpoint. A bounded replay starts
+    from the oldest kept one so that every later point can be reached; journals
+    after it are kept by pruning, and later checkpoints only save replay work.
+    """
+    if until is None:
+        # Looked up lazily so read errors become recovery stops, as before.
+        return (
+            lambda: fileutils.last_snapshot_file(basedir),
+            lambda: fileutils.last_log_files(basedir) or [],
+        )
+    snapshots = fileutils.list_snapshot_files(basedir) if basedir.is_dir() else None
+    if not snapshots:
+        return lambda: None, lambda: []
+    oldest = snapshots[0]
+    if isinstance(until, datetime):
+        written = datetime.fromtimestamp(os.path.getmtime(basedir / oldest))
+        if until.tzinfo is not None:
+            written = written.astimezone()
+        if until < written:
+            raise ConfigurationError(
+                f"until {until.isoformat()} is before the oldest kept checkpoint "
+                f"{oldest} (written {written.isoformat()})"
+            )
+    start = fileutils.get_number(oldest)
+
+    def journals():
+        return [
+            str(basedir / name)
+            for name in fileutils.list_log_files(basedir) or []
+            if fileutils.get_number(name) > start
+        ]
+
+    return lambda: oldest, journals
+
+
 def recover(
     system,
     basedir,
@@ -86,8 +125,9 @@ def recover(
 
     ``until`` limits replay to a point in time. An ``int`` stops after that
     many actions (one-based); a ``datetime`` stops before the first action
-    whose timestamp exceeds the bound. Bounds before the oldest kept
-    checkpoint raise ``ConfigurationError``.
+    whose timestamp exceeds the bound. A bounded replay starts from the
+    oldest kept checkpoint, so action counts are counted from it; a datetime
+    before that checkpoint was written raises ``ConfigurationError``.
     """
     from coopy.serialization import ActionSchemas, StateSchemas
 
@@ -103,6 +143,7 @@ def recover(
     basedir = Path(basedir)
     # Newer formats and mismatched settings fail before anything is decoded.
     manifest.check(basedir, serializer=serializer, secret=secret)
+    select_checkpoint, select_journals = _replay_start(basedir, until)
     current_clock = system._clock
     report = RecoveryReport()
     recovered = None
@@ -121,7 +162,7 @@ def recover(
         position = RecoveryPosition(str(basedir / IDENTITY_FILE), 0, 0)
         try:
             integrity = Integrity.open(basedir, secret)
-            report.checkpoint = fileutils.last_snapshot_file(basedir)
+            report.checkpoint = select_checkpoint()
             position = RecoveryPosition(str(basedir / (report.checkpoint or "")), 0, 0)
             if report.checkpoint is None:
                 raise IntegrityError("Missing signed checkpoint")
@@ -130,7 +171,7 @@ def recover(
             snapshot_payload = integrity.read(snapshot, position.file)
             if snapshot.read(1):
                 raise IntegrityError("Trailing bytes after signed snapshot")
-            files = fileutils.last_log_files(basedir) or []
+            files = select_journals()
             for filename in files:
                 position = RecoveryPosition(filename, 0, 1)
                 with open(filename, "rb") as file:
@@ -147,8 +188,12 @@ def recover(
 
     try:
         if integrity is None:
-            report.checkpoint = fileutils.last_snapshot_file(basedir)
-            stored = SnapshotManager(basedir, serializer=serializer).recover_snapshot()
+            report.checkpoint = select_checkpoint()
+            stored = (
+                SnapshotManager(basedir, serializer=serializer).recover_snapshot(report.checkpoint)
+                if report.checkpoint
+                else None
+            )
         else:
             stored = SnapshotManager(basedir, serializer=serializer).load_payload(snapshot_payload)
         if stored is None:
@@ -162,11 +207,7 @@ def recover(
 
     try:
         try:
-            files = (
-                list(verified_journals)
-                if integrity is not None
-                else fileutils.last_log_files(basedir) or []
-            )
+            files = list(verified_journals) if integrity is not None else select_journals()
         except Exception as error:
             return stop(RecoveryPosition(str(basedir), 0, 0), "read", error)
         for filename in files:

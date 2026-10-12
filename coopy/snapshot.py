@@ -217,8 +217,8 @@ class SnapshotManager(object):
                         "Unable to remove incomplete snapshot %s", temporary, exc_info=True
                     )
 
-    def recover_snapshot(self):
-        last_snapshot = fu.last_snapshot_file(self.basedir)
+    def recover_snapshot(self, name=None):
+        last_snapshot = name or fu.last_snapshot_file(self.basedir)
         if not last_snapshot:
             return None
         with open(path.join(self.basedir, last_snapshot), "rb") as file:

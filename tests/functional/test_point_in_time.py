@@ -88,19 +88,21 @@ class TestUntilDatetime:
         assert result.system.value == 3
         assert result.report.bounded is False
 
-    def test_replay_none_with_past_bound(self, tmp_path):
+    def test_bound_before_oldest_checkpoint_fails(self, tmp_path):
         populate(tmp_path, 3)
         past = datetime(2000, 1, 1)
-        result = init_persistent_system(Counter, str(tmp_path), recovery="salvage", until=past)
-        assert result.system.value == 0
-        assert result.report.replayed == 0
-        assert result.report.bounded is True
+        with pytest.raises(ConfigurationError, match="before the oldest kept checkpoint"):
+            init_persistent_system(Counter, str(tmp_path), recovery="salvage", until=past)
 
     def test_nothing_written(self, tmp_path):
         populate(tmp_path, 3)
         before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+        with pytest.raises(ConfigurationError):
+            init_persistent_system(
+                Counter, str(tmp_path), recovery="salvage", until=datetime(2000, 1, 1)
+            )
         init_persistent_system(
-            Counter, str(tmp_path), recovery="salvage", until=datetime(2000, 1, 1)
+            Counter, str(tmp_path), recovery="salvage", until=datetime(2099, 1, 1)
         )
         after = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
         assert before == after
@@ -179,11 +181,12 @@ class TestPointInTimeAfterSnapshot:
         proxy.increment()
         proxy.close()
 
-        # Replay 4 actions total: 2 pre-snapshot (in snapshot state) + 2 post
-        result = replay(Counter, str(tmp_path), until=2)
-        # The snapshot contains value=2, and we replay 2 post-snapshot actions
+        # Bounded replay starts from the oldest checkpoint, so counts include
+        # actions that a later snapshot already contains.
+        result = replay(Counter, str(tmp_path), until=4)
         assert result.system.value == 4
-        assert result.report.replayed == 2
+        assert result.report.replayed == 4
+        assert result.report.checkpoint == "snapshot_000000000000002.dat"
 
     def test_replay_zero_post_snapshot(self, tmp_path):
         """With until=0 invalid, but until=N where N covers snapshot state only."""
@@ -197,7 +200,60 @@ class TestPointInTimeAfterSnapshot:
         # Replay with datetime before the post-snapshot action
         ts = proxy.obj.timestamps[1]  # timestamp of second action (in snapshot)
         result = replay(Counter, str(tmp_path), until=ts)
-        # Snapshot state is value=2, post-snapshot action has later timestamp
+        # Replayed from the initial checkpoint up to the second action.
         assert result.system.value == 2
-        assert result.report.replayed == 0
+        assert result.report.replayed == 2
         assert result.report.bounded is True
+
+
+class TestBoundsBeforeLatestCheckpoint:
+    """Bounds earlier than the latest snapshot must not return its newer state."""
+
+    def build(self, tmp_path):
+        proxy = init_persistent_system(Counter, str(tmp_path))
+        proxy.increment()
+        proxy.increment()
+        proxy.take_snapshot()
+        proxy.increment()
+        proxy.take_snapshot()
+        proxy.increment()
+        timestamps = list(proxy.obj.timestamps)
+        proxy.close()
+        return timestamps
+
+    def test_count_before_latest_checkpoint(self, tmp_path):
+        self.build(tmp_path)
+        assert replay(Counter, str(tmp_path), until=1).system.value == 1
+        assert replay(Counter, str(tmp_path), until=3).system.value == 3
+        assert replay(Counter, str(tmp_path), until=1).report.bounded is True
+
+    def test_datetime_before_latest_checkpoint(self, tmp_path):
+        timestamps = self.build(tmp_path)
+        assert replay(Counter, str(tmp_path), until=timestamps[0]).system.value == 1
+        assert replay(Counter, str(tmp_path), until=timestamps[2]).system.value == 3
+
+    def test_unbounded_open_still_uses_latest_checkpoint(self, tmp_path):
+        self.build(tmp_path)
+        proxy = init_persistent_system(Counter, str(tmp_path))
+        assert proxy.value == 4
+        assert coopy.control(proxy).recovery_report.replayed == 1
+        proxy.close()
+
+    def test_counts_start_at_oldest_kept_checkpoint_after_pruning(self, tmp_path):
+        self.build(tmp_path)
+        proxy = init_persistent_system(Counter, str(tmp_path))
+        coopy.control(proxy).prune(keep=1)
+        proxy.close()
+        result = replay(Counter, str(tmp_path), until=1)
+        assert result.report.checkpoint != "snapshot_000000000000002.dat"
+        with pytest.raises(ConfigurationError, match="before the oldest kept checkpoint"):
+            replay(Counter, str(tmp_path), until=datetime(2000, 1, 1))
+
+    def test_signed_bounded_replay(self, tmp_path):
+        proxy = init_persistent_system(Counter, str(tmp_path), secret=b"key")
+        proxy.increment()
+        proxy.take_snapshot()
+        proxy.increment()
+        proxy.close()
+        result = replay(Counter, str(tmp_path), until=1, secret=b"key")
+        assert result.system.value == 1
