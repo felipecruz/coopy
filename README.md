@@ -274,7 +274,7 @@ files. Preserve a backup first; salvage is not a repair operation. Read the
 
 ## Documentation
 
-Full docs: http://coopy.readthedocs.org
+Full docs: https://coopy.readthedocs.io
 
 The checkout includes an [executable tutorial](docs/tutorial.rst),
 [decorator semantics](docs/method_decorators.rst), and

@@ -71,7 +71,7 @@ class TestCoopy(unittest.TestCase):
         """
         Because calls to datetime.{now(),utcnow()} or to date.today()
         aren't allowed. Use the clock:
-        http://coopy.readthedocs.org/en/latest/use_clock.html
+        https://coopy.readthedocs.io/en/latest/use_clock.html
         """
         import coopy.base
         from coopy.error import PrevalentError

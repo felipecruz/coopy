@@ -34,7 +34,7 @@ lz4 = ["lz4>=4.3"]
 
 [project.urls]
 Homepage = "https://github.com/felipecruz/coopy"
-Documentation = "http://coopy.readthedocs.org"
+Documentation = "https://coopy.readthedocs.io"
 
 [tool.setuptools.dynamic]
 version = { attr = "coopy.__version__" }
