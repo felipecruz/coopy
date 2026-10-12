@@ -8,7 +8,7 @@ import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from types import ModuleType
+from types import BuiltinFunctionType, FunctionType, MethodType, ModuleType
 from typing import Any
 
 from .error import ConfigurationError, NonDeterministicCallError
@@ -141,6 +141,11 @@ def imports_of(tree: ast.AST) -> dict[str, str]:
 def _global_name(value: Any) -> str | None:
     if isinstance(value, ModuleType):
         return _MODULE_ALIASES.get(value.__name__, value.__name__)
+    # Only classes and functions can name a tracked source. Reading attributes
+    # of other module globals would run arbitrary __getattr__ code, such as a
+    # closed coopy proxy raising LifecycleError.
+    if not isinstance(value, (type, FunctionType, BuiltinFunctionType, MethodType)):
+        return None
     module = getattr(value, "__module__", None)
     name = getattr(value, "__name__", None)
     if not isinstance(module, str) or not isinstance(name, str):

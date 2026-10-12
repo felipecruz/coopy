@@ -33,7 +33,7 @@ from coopy.journal import DiskJournal, discard_failed_record
 from coopy.locking import DirectoryLock
 from coopy.network.default_select import CopyNet, CopyNetSlave
 from coopy.prune import PruneReport, prune_files, validate_prune
-from coopy.restore import RecoveryReport, RecoveryResult, recover, replay
+from coopy.restore import RecoveryReport, RecoveryResult, recover
 from coopy.serialization import ActionSchemas, Serializer, StateSchemas
 from coopy.snapshot import SnapshotJob, SnapshotManager, SnapshotTimer, fork_supported
 from coopy.utils import action_check, inject, method_or_none

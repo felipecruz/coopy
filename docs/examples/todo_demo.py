@@ -29,6 +29,7 @@ from coopy.decorators import readonly
 # Domain
 # ---------------------------------------------------------------------------
 
+
 class TodoList:
     """A persistent todo list.  All mutating methods are journaled by coopy."""
 
@@ -42,12 +43,14 @@ class TodoList:
 
     def add(self, text: str) -> int:
         item_id = self._next_id
-        self.items.append({
-            "id": item_id,
-            "text": text,
-            "done": False,
-            "created": self._clock.now(),
-        })
+        self.items.append(
+            {
+                "id": item_id,
+                "text": text,
+                "done": False,
+                "created": self._clock.now(),
+            }
+        )
         self._next_id += 1
         return item_id
 
@@ -289,6 +292,7 @@ def _require_id(args: list[str]) -> int:
 # ---------------------------------------------------------------------------
 # Persistence inspection
 # ---------------------------------------------------------------------------
+
 
 def _inspect(basedir: Path) -> None:
     print(f"  {c(BOLD, 'Data directory:')} {basedir}")

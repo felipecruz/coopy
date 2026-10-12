@@ -82,3 +82,19 @@ def test_validate_system_without_source():
     exec("class NoSource(object):\n    def method(self):\n        return 1\n", namespace)
 
     assert validate_system(namespace["NoSource"]())
+
+
+def test_module_globals_with_raising_getattr_are_ignored():
+    """A module global whose __getattr__ raises (e.g. a closed proxy) is skipped."""
+    from coopy.validation import module_imports
+
+    class Exploding:
+        def __getattr__(self, name):
+            raise RuntimeError("must not be touched")
+
+    namespace = {"closed_proxy": Exploding(), "__name__": "validation_globals"}
+    exec("import time\ndef method(self):\n    return time.time()\n", namespace)
+
+    names = module_imports(namespace["method"])
+    assert "closed_proxy" not in names
+    assert names["time"] == "time"

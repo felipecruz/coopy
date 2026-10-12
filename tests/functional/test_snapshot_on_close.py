@@ -3,7 +3,7 @@
 import pytest
 
 from coopy import fileutils
-from coopy.base import CoopyProxy, init_persistent_system, control
+from coopy.base import control, init_persistent_system
 
 
 class Accumulator:
@@ -48,10 +48,11 @@ class TestCloseWithSnapshot:
     def test_close_snapshot_failure_leaves_previous_usable(self, tmp_path):
         proxy = init_persistent_system(Accumulator, str(tmp_path))
         proxy.add(42)
+
         # Sabotage the snapshot manager to simulate a failure
-        original_take = proxy.snapshot_manager.take_snapshot
         def fail_take(*a, **kw):
             raise OSError("disk full")
+
         proxy.snapshot_manager.take_snapshot = fail_take
         # close(snapshot=True) should report the error but still close cleanly
         with pytest.raises(OSError, match="disk full"):
