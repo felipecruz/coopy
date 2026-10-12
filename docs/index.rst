@@ -1,10 +1,5 @@
-.. coopy documentation master file, created by
-   sphinx-quickstart on Tue May 18 18:06:23 2010.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 coopy
--------
+=====
 
 **coopy** persists plain Python objects using snapshots and method-call
 journals. It is released under the `BSD License`_.
@@ -65,28 +60,49 @@ Source and issue tracking: https://github.com/felipecruz/coopy
 See :doc:`installation`, :doc:`tests` and :doc:`development` to set up a checkout
 and validate changes.
 
-Contents
---------
-
 .. toctree::
+   :caption: Getting started
    :maxdepth: 2
+   :hidden:
 
    installation
    tutorial
+
+.. toctree::
+   :caption: User guide
+   :maxdepth: 2
+   :hidden:
+
    usage
-   cli
    basics
    use_clock
    use_env
    method_decorators
    snapshots
    migrations
-   util_api
+   modern-api
+   concurrency
+   cli
    client_server
    replication
+
+.. toctree::
+   :caption: Reference
+   :maxdepth: 2
+   :hidden:
+
+   api
+   util_api
+   performance
+
+.. toctree::
+   :caption: Project
+   :maxdepth: 1
+   :hidden:
+
+   development
    tests
-   roadmap
    changelog
-   todo
+   roadmap
 
 .. _BSD License: http://www.opensource.org/licenses/bsd-license.php

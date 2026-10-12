@@ -1,7 +1,7 @@
 .. _replication:
 
-Master/slave replication
-============================
+Primary/replica replication
+===========================
 
 .. warning::
 

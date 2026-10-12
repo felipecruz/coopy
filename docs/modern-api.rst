@@ -1,14 +1,9 @@
 Typed domain objects and persistence controls
 =============================================
 
-Async callers and concurrent-reader guarantees are covered in:
-
-.. toctree::
-   :maxdepth: 1
-
-   concurrency
-   api
-   development
+Async callers and concurrent-reader guarantees are covered in
+:doc:`concurrency`; :doc:`api` lists every signature, and :doc:`development`
+describes the type-checking setup.
 
 Both ``coopy.init_persistent_system(Todo, directory)`` and
 ``coopy.init_persistent_system(Todo(), directory)`` retain the domain type for

@@ -28,7 +28,7 @@ classifiers = [
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "hypothesis>=6.100,<7", "mypy>=1.14,<2"]
 dev = ["ruff==0.14.0", "pre-commit>=4,<5"]
-docs = ["sphinx>=7,<9"]
+docs = ["sphinx>=7,<9", "furo>=2024.8.6"]
 zstd = ["zstandard>=0.22"]
 lz4 = ["lz4>=4.3"]
 

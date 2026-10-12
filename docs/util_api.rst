@@ -1,9 +1,9 @@
 .. _util_api:
 
-Utilitary API
-=============
+Testing and utilities
+=====================
 
-There are some utilitary methods to help you.
+Helpers for tests and for locating a system's storage.
 
 Given::
 
@@ -124,7 +124,4 @@ value unchanged) and ``enable_clock(system)`` calls
 ``install_clock(system, None)``. Replace them with ``FrozenClock`` and
 ``install_clock``.
 
-.. toctree::
-   :maxdepth: 1
-
-   modern-api
+See :doc:`modern-api` for typed domain objects and persistence controls.
