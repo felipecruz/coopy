@@ -494,9 +494,29 @@ Planned. Goal: users can evolve their data, manage disk usage and inspect storag
   | Next step | Add `--json` output to `inspect`, `verify` and `log` for scripting. |
   | Next step | Add a `[project.scripts]` `coopy` entry point so the tool runs without `python -m`. |
 
-- [ ] **F31 — Restore to a point in time.** The journal already holds everything needed to rebuild past states. Add read-only recovery up to a bound: `coopy.open(..., recovery="salvage", until=ActionRef | datetime)` or a dedicated `coopy.replay(..., until=...)`, using recorded clock values for time bounds. Acceptance: state at action N or time T matches a live capture taken at that point; bounds before the oldest kept checkpoint fail clearly; nothing is written.
+- [x] **F31 — Restore to a point in time.** The journal already holds everything needed to rebuild past states. Add read-only recovery up to a bound: `coopy.open(..., recovery="salvage", until=ActionRef | datetime)` or a dedicated `coopy.replay(..., until=...)`, using recorded clock values for time bounds. Acceptance: state at action N or time T matches a live capture taken at that point; bounds before the oldest kept checkpoint fail clearly; nothing is written.
 
-- [ ] **F32 — Optionally snapshot on close.** `close()` never takes a snapshot, so every restart replays the whole journal since the last checkpoint. Add `close(snapshot=True)` and a matching context-manager option, keeping the current default. Acceptance: with the option, the next open replays no actions; snapshot failures during close are reported and leave the previous checkpoint usable.
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-12 |
+  | Complexity | M |
+  | Details | Added `until` parameter (int action count or datetime) to `recover()` and `init_persistent_system(..., recovery="salvage")`. Added `coopy.replay()` convenience function for read-only point-in-time recovery. `RecoveryReport.bounded` flag indicates when replay stopped at a bound. Nothing is written to storage. |
+  | Commit | `2dcb772fd030622309b3fb0cf1b2d50fec9ce406` — implements F31. |
+  | Validation | 20 dedicated tests in `tests/functional/test_point_in_time.py` covering action count bounds, datetime bounds, `replay()` function, validation errors, post-snapshot replay, and nothing-written checks. Full suite: 640 passed, 31 skipped. |
+  | Limitation | Datetime bounds use the action's recording timestamp (`Action.timestamp`), not domain clock values; actions recorded within the same wall-clock instant may all be included or excluded together. |
+  | Next step | Support `ActionRef` as a named reference type beyond raw int for clearer API ergonomics. |
+
+- [x] **F32 — Optionally snapshot on close.** `close()` never takes a snapshot, so every restart replays the whole journal since the last checkpoint. Add `close(snapshot=True)` and a matching context-manager option, keeping the current default. Acceptance: with the option, the next open replays no actions; snapshot failures during close are reported and leave the previous checkpoint usable.
+
+  | Item | Content |
+  | --- | --- |
+  | Status | Done |
+  | Timestamp | 2026-10-12 |
+  | Complexity | S |
+  | Details | Added `close(snapshot=True)` to `CoopyProxy` and `PersistenceControl`. Added `snapshot_on_close` property on `PersistenceControl` for the context-manager path. Snapshot failures during close are reported and leave the previous checkpoint usable. Default remains `snapshot=False`. |
+  | Commit | `f0a4b7e2b50ed3e427865757b07397eaef25e58e` — implements F32. |
+  | Validation | 9 dedicated tests in `tests/functional/test_snapshot_on_close.py` covering default no-snapshot, close with snapshot, snapshot failure recovery, idempotent double close, context-manager path, and PersistenceControl. Full suite: 640 passed, 31 skipped. |
 
 ## v0.7.1 — Clock improvements
 
@@ -638,7 +658,7 @@ Planned. Goal: domain methods that fail can leave state unchanged instead of par
   | Timestamp | 2026-10-11 |
   | Complexity | M |
   | Details | New opt-in `@transactional` (`coopy/decorators.py`): the proxy deep-copies `vars(obj)` (minus injected `_clock`/`_env`, root identity kept) before the call and restores it in place on any exception; the failed call is not journaled, replicated or sent to `receive_exception`. `DiskJournal` truncates a record that fails before it is complete on disk (only for transactional calls, via a context variable) and flags `PersistenceError.record_discarded`, so the proxy rolls back sync-durability failures too; complete records stay and are not rolled back. Rejected with `@readonly`/`@unlocked` (`ConfigurationError`); uncopyable state refuses the call. Nested `self` calls are one unit; re-entrant proxy calls roll back to their own start; recovery/replicas never roll back. Copy-on-write rejected (needs tracking proxies for every container). Cost measured and documented: ~1 µs per copied entry, 0.12 ms floor, 120 ms at 100k entries, peak memory up to 2x state. Spec clear; ambiguity was which persistence failures can be undone (chose: only records provably cut off disk). Docs: method_decorators, usage, replication, api, changelog, README, example. 13 files. |
-  | Commit | `9bfa8c9a535685e258512d952201311ca9965e53` — implements F33. |
+  | Commit | `9bfa8c9a535685e258512d952201311ca9965e53` — implements F33.; `52055e76e1f605e36aba66af26a986f3e4b87910` |
   | Validation | New `tests/functional/test_transactional.py` (14 tests): failed calls equal pre-call state live, after restart and after a snapshot; success keeps identity; abort/plain failures unchanged; nested and re-entrant calls; KeyboardInterrupt; readonly/unlocked rejected; uncopyable state; sync fsync failure discards record and rolls back; plain-call failure keeps record; complete record not rolled back; buffered bytes cut on close (fails without fix); replica never sees failed call. 611 passed/31 skipped (`-W error::DeprecationWarning`), coverage 95.09%, ruff, mypy, `scripts/check_typing.py`, Sphinx -W clean. |
   | Limitation | Every transactional call copies the whole domain state, so latency and peak memory scale with state size, not with the change. |
   | Limitation | With group commit (`group_commit_delay` > 0), a failed batch sync is not rolled back; references obtained before a rolled-back call point at discarded objects. |
