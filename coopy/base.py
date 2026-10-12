@@ -406,6 +406,8 @@ class CoopyProxy:
         # domain method bodies running now; _env is injected only while any is
         self._calls = 0
         self._calls_lock = threading.Lock()
+        # context-manager snapshot-on-close setting
+        self._snapshot_on_close = False
 
     def start_snapshot_manager(self, snapshot_time: float) -> None:
         # the timer waits snapshot_time before the first snapshot, so this
@@ -692,17 +694,22 @@ class CoopyProxy:
         traceback: TracebackType | None,
     ) -> None:
         try:
-            CoopyProxy.close(self)
+            CoopyProxy.close(self, snapshot=self._snapshot_on_close)
         except Exception:
             if exc is None:
                 raise
             logger.exception("Cleanup failed while propagating context exception")
 
-    def close(self) -> None:
+    def close(self, *, snapshot: bool = False) -> None:
         errors: list[Exception] = []
         with self.lock:
             if self._closed:
                 return
+            if snapshot and self.snapshot_manager is not None:
+                try:
+                    CoopyProxy.take_snapshot(self)
+                except Exception as error:
+                    errors.append(error)
             for journal in self.publisher.subscribers:
                 if isinstance(journal, DiskJournal) and journal.failure is None:
                     try:
@@ -802,6 +809,14 @@ class PersistenceControl(Generic[T]):
         self._proxy.__exit__(exc_type, exc, traceback)
 
     @property
+    def snapshot_on_close(self) -> bool:
+        return self._proxy._snapshot_on_close
+
+    @snapshot_on_close.setter
+    def snapshot_on_close(self, value: bool) -> None:
+        self._proxy._snapshot_on_close = value
+
+    @property
     def recovery_report(self) -> RecoveryReport:
         return self._proxy.recovery_report
 
@@ -810,8 +825,8 @@ class PersistenceControl(Generic[T]):
     ) -> SnapshotJob | None:
         return CoopyProxy.take_snapshot(self._proxy, mode=mode, fork_safe=fork_safe)
 
-    def close(self) -> None:
-        CoopyProxy.close(self._proxy)
+    def close(self, *, snapshot: bool = False) -> None:
+        CoopyProxy.close(self._proxy, snapshot=snapshot)
 
     def prune(self, *, keep: int, keep_for: timedelta | None = None) -> PruneReport:
         """Delete checkpoints older than the newest ``keep`` and unneeded journals.
