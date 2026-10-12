@@ -28,6 +28,7 @@ def run_example(tmp_path, *arguments):
 @pytest.mark.parametrize(
     "example",
     [
+        "quickstart.py",
         "persistence.py",
         "decorator_semantics.py",
         "replication.py",

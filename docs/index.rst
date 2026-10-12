@@ -1,64 +1,98 @@
 coopy
 =====
 
-**coopy** persists plain Python objects using snapshots and method-call
-journals. It is released under the `BSD License`_.
+**Persistence for plain Python objects.** No database, no ORM, no schema: wrap
+an object once, keep calling its methods, and it survives restarts.
 
-Wrap your domain object with ``coopy.open`` (also available as
-``coopy.base.init_persistent_system``) and call
-methods on the returned proxy. No domain base class or ORM mapping is required.
-The object graph stays in memory, so it must fit in memory. Reopening loads
-the latest snapshot and replays subsequent journaled calls.
+What is it?
+-----------
 
-Request snapshots manually or schedule them through the proxy. Snapshots
-reduce recovery work; old snapshots and journals are retained until you prune
-them with ``coopy.control(system).prune(keep=N)`` or ``python -m coopy prune``
-(see :doc:`cli`).
+Most applications keep their data in a database and copy it into objects when
+they need it. coopy turns this around: **your objects live in memory, and the
+disk is just a log of what happened to them.** The technique is called
+`object prevalence`_.
 
-Using
------
+coopy wraps your object in a proxy. Every time you call a method that changes
+state, the call itself (method name and arguments) is appended to a journal on
+disk before the result is returned. Every so often, coopy saves a snapshot of the
+whole object so the journal stays short. When your program starts again, coopy
+loads the latest snapshot and replays the calls made after it: same calls, same
+order, same state.
 
-Follow the executable :doc:`tutorial` to open a persistent domain, record
-mutations and clock values, take a checkpoint, close, and reopen it. Read
-:doc:`usage` for the current durability and recovery contract and :doc:`basics`
-for the storage model. Domain classes can be fully type-annotated; see
-:doc:`modern-api` for how the proxy keeps their types.
+.. code-block:: text
 
-Use :doc:`concurrency` for asyncio callers and thread-safety guarantees,
-:doc:`migrations` for evolving stored state, and :doc:`cli` for inspecting,
-verifying and converting closed data directories. The :doc:`api` lists current
-signatures and available controls.
+    your code ──► proxy ──► your object (in memory)
+                    │
+                    └──► journal:  deposit("alice", 100)
+                                   transfer("alice", "bob", 30)
+                                   ...
 
-Restrictions
-------------
+    restart:   latest snapshot ──► replay the journal ──► the same object
 
-Mutate state through proxy methods and keep their behavior deterministic.
-Use the :doc:`recorded clock <use_clock>` for time and the
-:doc:`recorded environment <use_env>` for random numbers, UUIDs and tokens,
-pass other external inputs as arguments, and keep external effects outside replayed methods. Direct
-changes to exposed mutable objects are not journaled.
+A complete example
+------------------
 
-Use one process and one persistent proxy per data directory; a second writable
-open raises ``LockError``. Only load trusted
-snapshots and journals: the default pickle serializer can execute code while
-loading them. Opt-in JSON storage requires registered domain types
-(see :doc:`modern-api`); replication always uses pickle. The
-:doc:`persistence guide <usage>` describes strict recovery, salvage inspection,
-and buffered versus synchronous durability.
+A bank whose accounts survive a restart. ``Bank`` is an ordinary class; the
+only coopy-specific line is ``coopy.open``:
 
-Status
-------
+.. literalinclude:: examples/quickstart.py
+   :language: python
+   :lines: 3-
 
-coopy requires Python 3.10 or newer. :doc:`replication` is experimental; it
-does not provide durable replica journaling or automatic failover.
+Run it with ``python docs/examples/quickstart.py``. Install coopy with
+``python -m pip install coopy`` (Python 3.10 or newer); see :doc:`installation`.
 
-Contribute
+Why coopy
+---------
+
+* **Your code stays yours.** Domain classes are plain Python: no base class,
+  no mapping layer, no queries. Type checkers see the proxy as your class.
+* **Memory speed.** Reads are attribute access. A query is a Python
+  expression over your own objects.
+* **History for free.** The journal records every change as a named command
+  with its arguments and recorded time. :doc:`Rebuild any earlier moment <usage>`
+  or inspect it with the :doc:`command-line tool <cli>`.
+* **Safe by default.** Calls are serialized under a lock, a data directory has
+  one writer, recovery stops on corruption instead of guessing, and
+  ``durability="sync"`` acknowledges a call only after it is on disk.
+* **Grows with you.** Snapshots, pruning, migrations, signed storage, JSON
+  storage, async callers, ``@transactional`` rollback and experimental
+  :doc:`replication`.
+
+The one rule: replay must give the same result
+----------------------------------------------
+
+Recovery runs your methods again, so they must be deterministic:
+
+* Change state only by calling methods on the proxy.
+* Use ``self._clock.now()`` instead of ``datetime.now()``, and ``self._env``
+  for random numbers, UUIDs and tokens. coopy records the values and returns
+  the same ones on replay (see :doc:`use_clock` and :doc:`use_env`).
+* Do network calls, file reads and other side effects outside, and pass the
+  results in as arguments.
+
+coopy checks your methods for the usual mistakes when it opens a system.
+
+When not to use it
+------------------
+
+Your data must fit in memory, one process writes to a data directory, and
+snapshots and journals use ``pickle`` by default, so only load data you
+trust. If you need ad-hoc SQL from other teams or data larger than RAM, use a
+database.
+
+Where next
 ----------
 
-Source and issue tracking: https://github.com/felipecruz/coopy
+* :doc:`tutorial`: open, checkpoint, close and reopen a system step by step,
+  then try the interactive todo-list demo.
+* :doc:`usage`: the durability and recovery contract.
+* :doc:`snapshots`, :doc:`migrations` and :doc:`cli` for running coopy in
+  production.
+* :doc:`modern-api` and :doc:`api` for typed APIs and the full reference.
 
-See :doc:`installation`, :doc:`tests` and :doc:`development` to set up a checkout
-and validate changes.
+coopy is released under the `BSD License`_. Source and issues:
+https://github.com/felipecruz/coopy
 
 .. toctree::
    :caption: Getting started
@@ -106,3 +140,4 @@ and validate changes.
    roadmap
 
 .. _BSD License: http://www.opensource.org/licenses/bsd-license.php
+.. _object prevalence: https://en.wikipedia.org/wiki/System_prevalence
